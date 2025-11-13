@@ -1,0 +1,5 @@
+题型	题目	选项A	选项B	选项C	选项D	分值	正确选项	解析
+1	Python的发明者是谁？	Guido van Rossum	James Gosling	Larry Page	Sergey Brin	2	A	Guido van Rossum是Python的创始人
+1	以下哪个不是Python的关键字？	for	while	if	print	2	D	print是Python的内置函数，不是关键字
+2	Python中的数据类型包括？	整数	浮点数	字符串	列表	3	ABCD	Python支持多种数据类型
+1	Python中用于定义函数的关键字是？	def	func	function	define	2	A	def关键字用于定义函数

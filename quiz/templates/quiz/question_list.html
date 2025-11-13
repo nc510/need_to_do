@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>题目列表</title>
+    <style>
+            body { max-width: 800px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif; }
+            h1 { text-align: center; color: #333; }
+            .import-btn {
+                background-color: #4CAF50;
+                color: white;
+                padding: 8px 15px;
+                text-decoration: none;
+                border-radius: 3px;
+                margin-bottom: 20px;
+                display: inline-block;
+            }
+            .import-btn:hover {
+                background-color: #45a049;
+            }
+            .question-item { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
+            .question-type { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+            .question-content { font-size: 1.1em; margin-bottom: 15px; }
+            .view-btn { display: inline-block; padding: 8px 16px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 3px; }
+            .view-btn:hover { background-color: #45a049; }
+        </style>
+</head>
+<body>
+    <h1>题目列表</h1>
+        <a href="{% url 'import_questions' %}" class="import-btn">批量导入题目</a>
+    {% for question in questions %}
+        <div class="question-item">
+            <div class="question-type">
+                {{ question.get_type_display }} - 题目 {{ question.id }}
+            </div>
+            <div class="question-content">{{ question.content }}</div>
+            <a href="{% url 'question_detail' question.id %}" class="view-btn">查看题目</a>
+        </div>
+    {% empty %}
+        <p>暂无题目</p>
+    {% endfor %}
+</body>
+</html>
