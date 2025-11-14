@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>试卷列表</title>
+    <style>
+        /* 全局样式 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 容器样式 */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-top: 50px;
+        }
+
+        /* 标题样式 */
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* 试卷列表样式 */
+        .test-paper-list {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .test-paper-item {
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: #fafafa;
+            border-radius: 8px;
+            border-left: 4px solid #2ecc71;
+        }
+
+        .test-paper-item:hover {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 试卷标题 */
+        .test-paper-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        /* 试卷描述 */
+        .test-paper-description {
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        /* 试卷信息 */
+        .test-paper-info {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+
+        /* 查看按钮 */
+        .view-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #2ecc71;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+
+        .view-btn:hover {
+            background-color: #27ae60;
+        }
+
+        /* 返回按钮 */
+        .back-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        /* 分页样式 */
+        .pagination {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .pagination a {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #2ecc71;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            margin: 0 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        .pagination a:hover {
+            background-color: #27ae60;
+        }
+
+        .pagination .current {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 14px;
+            margin: 0 5px;
+        }
+
+        .pagination .disabled {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #ddd;
+            color: #666;
+            border-radius: 4px;
+            font-size: 14px;
+            margin: 0 5px;
+            pointer-events: none;
+        }
+
+        .back-btn:hover {
+            background-color: #2980b9;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            color: #666;
+            font-size: 18px;
+            margin: 50px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">返回首页</a>
+        <h1>试卷列表</h1>
+
+        {% if test_papers %}
+            <ul class="test-paper-list">
+                {% for paper in test_papers %}
+                    <li class="test-paper-item">
+                        <div class="test-paper-title"><span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>{{ paper.title }}</div>
+                        {% if paper.description %}
+                            <div class="test-paper-description">{{ paper.description }}</div>
+                        {% endif %}
+                        <div class="test-paper-info">
+                            总分: {{ paper.total_score }}分 | 出题人: {{ paper.created_by }} | 创建时间: {{ paper.created_at|date:"Y-m-d H:i" }}
+                        </div>
+                        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">查看试卷</a>
+                    </li>
+                {% endfor %}
+            </ul>
+
+    <!-- 分页控件 -->
+    <div class="pagination">
+        {% if test_papers.has_previous %}
+            <a href="?page={{ test_papers.previous_page_number }}">上一页</a>
+        {% else %}
+            <span class="disabled">上一页</span>
+        {% endif %}
+
+        {% for num in test_papers.paginator.page_range %}
+            {% if num == test_papers.number %}
+                <span class="current">{{ num }}</span>
+            {% else %}
+                <a href="?page={{ num }}">{{ num }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if test_papers.has_next %}
+            <a href="?page={{ test_papers.next_page_number }}">下一页</a>
+        {% else %}
+            <span class="disabled">下一页</span>
+        {% endif %}
+    </div>
+
+        {% else %}
+            <div class="empty-state">暂无已发布的试卷</div>
+        {% endif %}
+    </div>
+</body>
+</html>

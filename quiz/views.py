@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
-from .models import Question
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from .models import Question, TestPaper
 import pandas as pd
 import json
 
@@ -85,3 +86,75 @@ def import_questions(request):
         return redirect('question_list')
     
     return render(request, 'quiz/import_questions.html')
+
+# 试卷列表视图（仅显示已发布的试卷）
+def test_paper_list(request):
+    test_papers = TestPaper.objects.filter(is_published=True).order_by('-created_at')
+    # 实现分页，每页显示20套试卷
+    paginator = Paginator(test_papers, 20)
+    page_num = request.GET.get('page')
+    try:
+        paginated_test_papers = paginator.page(page_num)
+    except PageNotAnInteger:
+        # 如果页码不是整数，返回第一页
+        paginated_test_papers = paginator.page(1)
+    except EmptyPage:
+        # 如果页码超出范围，返回最后一页
+        paginated_test_papers = paginator.page(paginator.num_pages)
+    return render(request, 'quiz/test_paper_list.html', {'test_papers': paginated_test_papers})
+
+# 试卷详情视图
+
+def test_paper_detail(request, paper_id):
+    test_paper = get_object_or_404(TestPaper, pk=paper_id)
+    # 确保只显示已发布的试卷
+    if not test_paper.is_published:
+        return redirect('test_paper_list')
+    return render(request, 'quiz/testpaper/test_paper_detail.html', {'test_paper': test_paper})
+
+# 试卷提交处理视图
+def submit_test_paper(request, paper_id):
+    test_paper = get_object_or_404(TestPaper, pk=paper_id)
+    if request.method == 'POST':
+        total_score = 0
+        user_answers = {}
+        correct_count = 0
+        question_results = []
+        
+        # 收集用户答案并计算得分
+        for question in test_paper.questions.all():
+            question_num = question.id
+            user_answer = request.POST.get(f'question_{question_num}')
+            user_answers[question_num] = user_answer
+            
+            # 检查用户答案是否正确：忽略大小写并去除两端空格
+            if user_answer and user_answer.strip().lower() == question.correct_answer.strip().lower():
+                total_score += question.score
+                correct_count += 1
+                result = '正确'
+            elif user_answer is None:
+                result = '未答'  # 用户未回答
+            else:
+                result = '错误'
+            
+            question_results.append({
+                'question': question,
+                'user_answer': user_answer,
+                'correct_answer': question.correct_answer,
+                'result': result,
+                'score': question.score
+            })
+        
+        total_questions = test_paper.questions.count()
+        wrong_count = total_questions - correct_count
+        
+        return render(request, 'quiz/test_paper_result.html', {
+            'test_paper': test_paper,
+            'total_score': total_score,
+            'user_answers': user_answers,
+            'correct_count': correct_count,
+            'wrong_count': wrong_count,
+            'total_questions': total_questions,
+            'question_results': question_results
+        })
+    return redirect('test_paper_detail', paper_id=paper_id)
