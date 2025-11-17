@@ -3,12 +3,18 @@ from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django import forms
-from .models import Question, TestPaper
+from .models import Question, TestPaper, Profile
 import pandas as pd
 import json
 
 class QuestionImportForm(forms.Form):
     excel_file = forms.FileField(label='Excel文件')
+
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ('user', 'approval_status', 'created_at', 'updated_at')
+    list_filter = ('approval_status', 'created_at')
+    search_fields = ('user__username', 'user__email')
+    ordering = ('-created_at',)
 
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ('id', 'type', 'content', 'score', 'created_at')
@@ -29,16 +35,25 @@ class QuestionAdmin(admin.ModelAdmin):
                     
                     # 遍历每行数据，创建题目
                     for index, row in df.iterrows(): 
+                        # Skip empty rows
+                        if row.isnull().all():
+                            continue
                         # 转换选项为JSON格式
                         options = {} 
-                        if '选项A' in row and pd.notnull(row['选项A']):
-                            options['A'] = row['选项A']
-                        if '选项B' in row and pd.notnull(row['选项B']):
-                            options['B'] = row['选项B']
-                        if '选项C' in row and pd.notnull(row['选项C']):
-                            options['C'] = row['选项C']
-                        if '选项D' in row and pd.notnull(row['选项D']):
-                            options['D'] = row['选项D']
+                        # 检查中英文两种列名格式
+                        for option_key in ['A', 'B', 'C', 'D']:
+                            # 先检查中文列名（例如：选项A）
+                            ch_column_name = f'选项{option_key}'
+                            if ch_column_name in row and pd.notnull(row[ch_column_name]):
+                                options[option_key] = row[ch_column_name]
+                            # 再检查英文列名（例如：A）
+                            elif option_key in row and pd.notnull(row[option_key]):
+                                options[option_key] = row[option_key]
+                            # 还可以检查其他可能的列名格式
+                            elif f'Option {option_key}' in row and pd.notnull(row[f'Option {option_key}']):
+                                options[option_key] = row[f'Option {option_key}']
+                            elif f'option_{option_key}' in row and pd.notnull(row[f'option_{option_key}']):
+                                options[option_key] = row[f'option_{option_key}']
 
                         # 处理题型：支持数字或字符串格式
                         question_type = row['题型']
@@ -63,7 +78,7 @@ class QuestionAdmin(admin.ModelAdmin):
                         question = Question(
                             type=question_type_int,
                             content=row['题目'],
-                            options=options if options else None,
+                            options=options,
                             correct_answer=row['正确选项'],
                             score=row.get('分值', 1),
                             explanation=row.get('解析', ''),
@@ -95,26 +110,34 @@ class TestPaperAdmin(admin.ModelAdmin):
                 try:
                     df = pd.read_excel(uploaded_file)
                     for index, row in df.iterrows():
+                        # Skip empty rows
+                        if row.isnull().all():
+                            continue
                         # Handle question type mapping
                         question_type_mapping = {'单选题': 1, '多选题': 2, '判断题': 3, '填空题': 4, '简答题': 5, '论述题': 6}
                         question_type = row.get('类型', '单选题')
                         question_type_int = question_type_mapping.get(question_type, 1)
                         
-                        # Handle options
-                        options = row.get('选项', '')
-                        options_list = options.split('\n') if options else []
-                        options_json = {}
-                        for option in options_list:
-                            if option.strip():
-                                if len(option) > 2 and option[1] in [':', '：']:
-                                    key = option[0].strip()
-                                    value = option[2:].strip()
-                                    options_json[key] = value
-                        
+                        # 转换选项为JSON格式
+                        options = {}
+                        # 检查中英文两种列名格式
+                        for option_key in ['A', 'B', 'C', 'D']:
+                            # 先检查中文列名（例如：选项A）
+                            ch_column_name = f'选项{option_key}'
+                            if ch_column_name in row and pd.notnull(row[ch_column_name]):
+                                options[option_key] = row[ch_column_name]
+                            # 再检查英文列名（例如：A）
+                            elif option_key in row and pd.notnull(row[option_key]):
+                                options[option_key] = row[option_key]
+                            # 还可以检查其他可能的列名格式
+                            elif f'Option {option_key}' in row and pd.notnull(row[f'Option {option_key}']):
+                                options[option_key] = row[f'Option {option_key}']
+                            elif f'option_{option_key}' in row and pd.notnull(row[f'option_{option_key}']):
+                                options[option_key] = row[f'option_{option_key}']
                         question = Question(
                             type=question_type_int,
                             content=row.get('题目', ''),
-                            options=options_json,
+                            options=options,
                             correct_answer=row.get('正确选项', ''),
                             score=row.get('分值', 1),
                             explanation=row.get('解析', '')
@@ -140,3 +163,4 @@ class TestPaperAdmin(admin.ModelAdmin):
 
 admin.site.register(Question, QuestionAdmin)
 admin.site.register(TestPaper, TestPaperAdmin)
+admin.site.register(Profile, ProfileAdmin)

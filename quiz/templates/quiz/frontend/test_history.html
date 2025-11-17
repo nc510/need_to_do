@@ -1,0 +1,42 @@
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}答题历史记录{% endblock %}
+{% block content %}
+    <h1>答题历史记录</h1>
+    
+    {% if test_records %}    
+        {% for record in test_records %}
+            <div class="history-record">
+                <h4>{{ record.test_paper.title }}</h4>
+                <p>得分：{{ record.score }}/{{ record.total_score }}</p>
+                <p>完成时间：{{ record.completed_at }}</p>
+            </div>
+        {% endfor %}
+        
+        <!-- 分页 -->
+        {% if test_records.has_other_pages %}
+            <div class="pagination">
+                {% if test_records.has_previous %}
+                    <a href="?page={{ test_records.previous_page_number }}">&laquo;</a>
+                {% else %}
+                    <span>&laquo;</span>
+                {% endif %}
+                
+                {% for i in test_records.paginator.page_range %}
+                    {% if test_records.number == i %}
+                        <span>{{ i }}</span>
+                    {% else %}
+                        <a href="?page={{ i }}">{{ i }}</a>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if test_records.has_next %}
+                    <a href="?page={{ test_records.next_page_number }}">&raquo;</a>
+                {% else %}
+                    <span>&raquo;</span>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p>您还没有答题记录。</p>
+    {% endif %}
+{% endblock %}

@@ -1,10 +1,7 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>考试结果</title>
-    <style>
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}考试结果{% endblock %}
+{% block extra_styles %}
+<style>
         /* 全局样式 */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -223,5 +220,4 @@
             {% endfor %}
         </div>
     </div>
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}错题本试卷结果{% endblock %}
+{% block content %}
+    <h1>错题本试卷结果</h1>
+    <div class="test-paper">
+        <h2>答题结果</h2>
+        <p>总分：{{ total_score }}</p>
+        <p>正确题数：{{ correct_count }}</p>
+        <p>错题数：{{ wrong_count }}</p>
+        <p>总题数：{{ total_questions }}</p>
+        
+        <h3>详细答题情况</h3>
+        {% for result in question_results %}
+            <div class="question">
+                <h4>{{ forloop.counter }}. {{ result.question.content }}</h4>
+                <div>
+                    <strong>您的答案：</strong> {{ result.user_answer|default:"未答" }}
+                </div>
+                <div>
+                    <strong>正确答案：</strong> {{ result.correct_answer }}
+                </div>
+                <div>
+                    <strong>结果：</strong> {{ result.result }}
+                </div>
+                <div>
+                    <strong>得分：</strong> {{ result.score if result.result == '正确' else 0 }}
+                </div>
+                
+                {% if result.question.explanation %}
+                    <div>
+                        <strong>解析：</strong> {{ result.question.explanation }}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        
+        <div class="form-group">
+            <a href="{% url 'wrong_question_notebook' %}">
+                <input type="button" value="返回错题本">
+            </a>
+        </div>
+    </div>
+{% endblock %}

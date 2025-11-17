@@ -1,28 +1,31 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>试卷列表</title>
-    <style>
-        /* 全局样式 */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-        }
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}试卷列表{% endblock %}
 
-        /* 容器样式 */
-        .container {
+{% block extra_styles %}
+<style>
+        /* 页面容器 */
+        .container { 
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            margin-top: 50px;
         }
+        /* 登录状态区域样式 */
+        .login-status {
+            text-align: right;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .login-status a {
+            color: #2ecc71;
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        .login-status a:hover {
+            text-decoration: underline;
+        }
+        .login-status span {
+            color: #666;
+        }
+
 
         /* 标题样式 */
         h1 {
@@ -155,11 +158,19 @@
             margin: 50px 0;
         }
     </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/" class="back-btn">返回首页</a>
-        <h1>试卷列表</h1>
+{% endblock %}
+
+{% block content %}
+        <div class="login-status">
+            {% if user.is_authenticated %}
+                <span>欢迎, {{ user.username }}</span>
+                <a href="{% url 'logout' %}">退出登录</a>
+            {% else %}
+                <a href="{% url 'login' %}">登录</a>
+                <a href="{% url 'register' %}">注册</a>
+            {% endif %}
+        </div>
+
 
         {% if test_papers %}
             <ul class="test-paper-list">
@@ -203,6 +214,4 @@
         {% else %}
             <div class="empty-state">暂无已发布的试卷</div>
         {% endif %}
-    </div>
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}错题本{% endblock %}
+{% block content %}
+    <h1>错题本</h1>
+    
+    {% if wrong_questions %}
+        <div class="form-group">
+            <a href="{% url 'create_wrong_question_paper' %}">
+                <input type="button" value="将错题组成试卷重新答题">
+            </a>
+        </div>
+        
+        {% for wrong_question in wrong_questions %}
+            <div class="wrong-question">
+                <h4>{{ forloop.counter }}. {{ wrong_question.question.content }}</h4>
+                
+                {% if wrong_question.question.type == 1 %} <!-- 选择题 -->
+                    <div class="question-options">
+                        {% for key, value in wrong_question.question.options.items %}
+                            <div>
+                                <strong>{{ key }}:</strong> {{ value }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <div>
+                    <strong>正确答案:</strong> {{ wrong_question.question.correct_answer }}
+                </div>
+                
+                {% if wrong_question.question.explanation %}
+                    <div>
+                        <strong>解析:</strong> {{ wrong_question.question.explanation }}
+                    </div>
+                {% endif %}
+                
+                <div>
+                    <strong>添加时间:</strong> {{ wrong_question.added_at }}
+                </div>
+            </div>
+        {% endfor %}
+        
+        <!-- 分页 -->
+        {% if wrong_questions.has_other_pages %}
+            <div class="pagination">
+                {% if wrong_questions.has_previous %}
+                    <a href="?page={{ wrong_questions.previous_page_number }}">&laquo;</a>
+                {% else %}
+                    <span>&laquo;</span>
+                {% endif %}
+                
+                {% for i in wrong_questions.paginator.page_range %}
+                    {% if wrong_questions.number == i %}
+                        <span>{{ i }}</span>
+                    {% else %}
+                        <a href="?page={{ i }}">{{ i }}</a>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if wrong_questions.has_next %}
+                    <a href="?page={{ wrong_questions.next_page_number }}">&raquo;</a>
+                {% else %}
+                    <span>&raquo;</span>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% else %}
+        <p>您的错题本中没有题目。</p>
+    {% endif %}
+{% endblock %}

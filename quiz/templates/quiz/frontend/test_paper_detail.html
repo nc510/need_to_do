@@ -1,9 +1,6 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>试卷详情</title>
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}试卷详情{% endblock %}
+{% block extra_styles %}
     <style>
         /* 全局样式 */
         body {
@@ -14,7 +11,7 @@
         }
 
         /* 容器样式 */
-        .container {
+        .paper-container {
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
@@ -31,6 +28,13 @@
             text-align: center;
         }
 
+        /* 试卷基本信息 */
+    </style>
+{% endblock %}
+
+{% block content %}
+
+<style>
         /* 试卷基本信息 */
         .paper-info {
             background-color: #fafafa;
@@ -173,15 +177,13 @@
             transition: background-color 0.3s ease;
             margin-top: 20px;
         }
-
+        /* 提交按钮 */
         .submit-btn:hover {
             background-color: #27ae60;
         }
     </style>
-</head>
-<body>
-    <div class="container">
-        <a href="{% url 'test_paper_list' %}" class="back-btn">返回试卷列表</a>
+    <div class="paper-container">
+
         <h1>{{ test_paper.title }}</h1>
         
         <div class="paper-info">
@@ -200,7 +202,7 @@
         </div>
         <style>.test-mode-selector { margin-bottom: 20px; font-size: 16px; }</style>
 
-        <form method="POST" action="{% url 'submit_test_paper' test_paper.id %}">
+        <form id="test_paper_form" method="POST" action="{% url 'submit_test_paper' test_paper.id %}">
             {% csrf_token %}
             <div class="question-list">
                 {% for question in test_paper.questions.all %}
@@ -221,17 +223,25 @@
                                 <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C" style="display: none;">
                                 <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D" style="display: none;">
                                 <!-- Visual options -->
-                                {% if question.options.A %}
+                                {% if 'A' in question.options %}
                                     <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                                {% elif 'a' in question.options %}
+                                    <div class="option" data-option="A">A. {{ question.options.a }}</div>
                                 {% endif %}
-                                {% if question.options.B %}
+                                {% if 'B' in question.options %}
                                     <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                                {% elif 'b' in question.options %}
+                                    <div class="option" data-option="B">B. {{ question.options.b }}</div>
                                 {% endif %}
-                                {% if question.options.C %}
+                                {% if 'C' in question.options %}
                                     <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                                {% elif 'c' in question.options %}
+                                    <div class="option" data-option="C">C. {{ question.options.c }}</div>
                                 {% endif %}
-                                {% if question.options.D %}
+                                {% if 'D' in question.options %}
                                     <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                                {% elif 'd' in question.options %}
+                                    <div class="option" data-option="D">D. {{ question.options.d }}</div>
                                 {% endif %}
                             {% else %} <!-- 判断题 -->
                                 <!-- Hidden radio inputs -->
@@ -350,39 +360,55 @@
                 showSingleQuestion(currentQuestionIndex);
             }
         });
+    </script>
+{% endblock %}
 
-        // 选择题选项点击事件
-        document.querySelectorAll('.options').forEach(optionsDiv => {
-            const questionType = optionsDiv.closest('.question-item').querySelector('.question-type').textContent;
-            const questionId = optionsDiv.closest('.question-item').dataset.questionId;
-            
-            optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
-                const optionText = optionDiv.dataset.option;
-                const optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
-                const labelElement = document.querySelector(`label[for="id_question_${questionId}_${optionText.toLowerCase()}"]`);
+{% block scripts %}
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 选择题选项点击事件
+            document.querySelectorAll('.options').forEach(optionsDiv => {
+                const questionId = optionsDiv.closest('.question-item').dataset.questionId;
                 
-                // 页面加载时检查是否默认选中
-                if (optionElement && optionElement.checked) {
-                    optionDiv.classList.add('selected');
-                }
-                
-                // 选项点击事件
-                optionDiv.addEventListener('click', () => {
-                    // 清除所有选项的选中状态
-                    optionsDiv.querySelectorAll('.option').forEach(opt => {
-                        opt.classList.remove('selected');
-                    });
+                optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
+                    const optionText = optionDiv.dataset.option;
+                    const optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
                     
-                    // 设置当前选项为选中状态
-                    optionDiv.classList.add('selected');
-                    
-                    // 同步更新隐藏的单选按钮状态
-                    if (optionElement) {
-                        optionElement.checked = true;
+                    // 页面加载时检查是否默认选中
+                    if (optionElement && optionElement.checked) {
+                        optionDiv.classList.add('selected');
                     }
+                    
+                    // 选项点击事件
+                    optionDiv.addEventListener('click', () => {
+                        // 清除所有选项的选中状态
+                        optionsDiv.querySelectorAll('.option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        
+                        // 设置当前选项为选中状态
+                        optionDiv.classList.add('selected');
+                        
+                        // 同步更新隐藏的单选按钮状态
+                        if (optionElement) {
+                            optionElement.checked = true;
+                        }
+                    });
                 });
+            });
+
+
+
+            // 表单提交验证
+            const form = document.getElementById('test_paper_form');
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                // 显示提交确认
+                if (confirm('确定要提交试卷吗？')) {
+                    form.submit();
+                }
             });
         });
     </script>
-</body>
-</html>
+{% endblock %}
