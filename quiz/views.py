@@ -8,7 +8,7 @@ import json
 # 题目列表视图
 def question_list(request):
     questions = Question.objects.all()
-    return render(request, 'quiz/question_list.html', {'questions': questions})
+    return render(request, 'quiz/frontend/question_list.html', {'questions': questions})
 
 # 答题视图
 def question_detail(request, question_id):
@@ -19,13 +19,13 @@ def question_detail(request, question_id):
             result = '正确'
         else:
             result = '错误'
-        return render(request, 'quiz/answer_result.html', {
+        return render(request, 'quiz/frontend/answer_result.html', {
             'question': question,
             'user_answer': user_answer,
             'result': result,
             'correct_answer': question.correct_answer
         })
-    return render(request, 'quiz/question_detail.html', {'question': question})
+    return render(request, 'quiz/frontend/question_detail.html', {'question': question})
 
 def import_questions(request):
     if request.method == 'POST':
@@ -85,7 +85,7 @@ def import_questions(request):
         
         return redirect('question_list')
     
-    return render(request, 'quiz/import_questions.html')
+    return render(request, 'quiz/backend/import_questions.html')
 
 # 试卷列表视图（仅显示已发布的试卷）
 def test_paper_list(request):
@@ -101,7 +101,7 @@ def test_paper_list(request):
     except EmptyPage:
         # 如果页码超出范围，返回最后一页
         paginated_test_papers = paginator.page(paginator.num_pages)
-    return render(request, 'quiz/test_paper_list.html', {'test_papers': paginated_test_papers})
+    return render(request, 'quiz/frontend/test_paper_list.html', {'test_papers': paginated_test_papers})
 
 # 试卷详情视图
 
@@ -110,7 +110,7 @@ def test_paper_detail(request, paper_id):
     # 确保只显示已发布的试卷
     if not test_paper.is_published:
         return redirect('test_paper_list')
-    return render(request, 'quiz/testpaper/test_paper_detail.html', {'test_paper': test_paper})
+    return render(request, 'quiz/frontend/test_paper_detail.html', {'test_paper': test_paper})
 
 # 试卷提交处理视图
 def submit_test_paper(request, paper_id):
@@ -148,7 +148,7 @@ def submit_test_paper(request, paper_id):
         total_questions = test_paper.questions.count()
         wrong_count = total_questions - correct_count
         
-        return render(request, 'quiz/test_paper_result.html', {
+        return render(request, 'quiz/frontend/test_paper_result.html', {
             'test_paper': test_paper,
             'total_score': total_score,
             'user_answers': user_answers,
