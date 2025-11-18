@@ -62,6 +62,8 @@ class Profile(models.Model):
     # 审核状态：0-未审核，1-审核通过，2-审核拒绝
     APPROVAL_STATUS = (0, '未审核'), (1, '审核通过'), (2, '审核拒绝')
     approval_status = models.IntegerField(choices=APPROVAL_STATUS, default=0, verbose_name='审核状态')
+    phone_number = models.CharField(max_length=11, verbose_name='手机号码', blank=True, null=True, unique=True)
+    qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -108,6 +110,12 @@ class AnswerRecord(models.Model):
     user_answer = models.CharField(max_length=10, verbose_name='用户答案', null=True, blank=True)
     correct_answer = models.CharField(max_length=10, verbose_name='正确答案')
     is_correct = models.BooleanField(verbose_name='是否正确')
+    
+    # 原始题目信息（保留答题时的题目内容）
+    original_question_content = models.TextField(verbose_name='原始题目内容', null=True, blank=True)
+    original_question_type = models.IntegerField(verbose_name='原始题目类型', choices=Question.TYPE_CHOICE, null=True, blank=True)
+    original_options = models.JSONField(verbose_name='原始选项', default=dict, blank=True, help_text='原始选择题选项，格式：{"A":"选项内容","B":"选项内容"}')
+    original_explanation = models.TextField(verbose_name='原始解析', null=True, blank=True)
 
     class Meta:
         verbose_name = '每题答题记录'
@@ -117,6 +125,7 @@ class WrongQuestion(models.Model):
     # 错题本
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='题目')
+    user_answer = models.CharField(max_length=10, verbose_name='用户错误答案', null=True, blank=True)
     added_at = models.DateTimeField(auto_now_add=True, verbose_name='添加时间')
 
     class Meta:

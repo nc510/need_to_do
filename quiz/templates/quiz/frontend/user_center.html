@@ -3,6 +3,11 @@
 
 {% block extra_styles %}
 <style>
+    h1 {
+        color: #333;
+        margin-bottom: 20px;
+        text-align: center;
+    }
     .user-info {
         background-color: #fafafa;
         padding: 20px;
@@ -62,7 +67,7 @@
         <ul>
             <li><a href="{% url 'test_history' %}">答题历史</a></li>
             <li><a href="{% url 'wrong_question_notebook' %}">查看错题本</a></li>
-            <li><a href="{% url 'create_wrong_question_paper' %}">错题本组卷</a></li>
+
         </ul>
     </div>
 {% endblock %}

@@ -12,7 +12,7 @@
             
             {% for wrong_question in wrong_questions %}
                 <div class="question">
-                    <h4>{{ forloop.counter }}. {{ wrong_question.question.content }}</h4>
+                    <h4>{{ forloop.counter }}. (ID: {{ wrong_question.question.id }}) {{ wrong_question.question.content }}</h4>
                     <input type="hidden" name="question_id" value="{{ wrong_question.question.id }}">
                     
                     {% if wrong_question.question.type == 1 %} <!-- 选择题 -->

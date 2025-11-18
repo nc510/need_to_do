@@ -1,5 +1,5 @@
 {% extends 'quiz/frontend/base.html' %}
-{% block title %}错题本试卷结果{% endblock %}
+{% block title %}答题记录详情{% endblock %}
 {% block extra_styles %}
 <style>
         .record-container {
@@ -26,7 +26,6 @@
             font-size: 24px;
             color: #2c3e50;
             font-weight: 600;
-            text-align: center;
         }
         .record-header p {
             margin: 8px 0;
@@ -47,6 +46,9 @@
             border-radius: 8px;
             background-color: #ffffff;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .question-item:last-child {
+            margin-bottom: 0;
         }
         .question-header {
             display: flex;
@@ -157,47 +159,30 @@
             color: #f44336;
             font-weight: bold;
         }
-        .btn {
-            display: inline-block;
-            padding: 12px 24px;
-            background-color: #3498db;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 16px;
-            transition: background-color 0.3s ease;
-        }
-        .btn:hover {
-            background-color: #2980b9;
-        }
 </style>
 {% endblock %}
 {% block content %}
-    <h1>错题本试卷结果</h1>
+    <h1>答题记录详情</h1>
+    
     <div class="record-container">
         <div class="record-header">
-            <h2>答题结果</h2>
-        <p>总分：{{ total_score }}</p>
-        <p>得分：{{ obtained_score }}</p>
-        <p>正确题数：{{ correct_count }}</p>
-        <p>错题数：{{ wrong_count }}</p>
-        <p>总题数：{{ total_questions }}</p>
+            <h2>{{ test_record.test_paper.title }}</h2>
+            <p>得分：{{ test_record.score }}/{{ test_record.total_score }}</p>
+            <p>完成时间：{{ test_record.completed_at }}</p>
         </div>
-        
         <div class="questions-container">
-            <h3>详细答题情况</h3>
-            {% for result in question_results %}
+            {% for answer_record in answer_records %}
                 <div class="question-item">
                     <div class="question-header">
                         <div class="question-number">{{ forloop.counter }}</div>
-                        <div class="question-content">{{ result.question.content }}</div>
-                        <div class="question-type">{% if result.question.type == 1 %}选择题{% else %}判断题{% endif %}</div>
+                        <div class="question-content">{{ answer_record.original_question_content }}</div>
+                        <div class="question-type">{% if answer_record.original_question_type == 1 %}选择题{% else %}判断题{% endif %}</div>
                     </div>
                     
-                    {% if result.question.type == 1 and result.question.options %}
+                    {% if answer_record.original_question_type == 1 and answer_record.original_options %}
                         <div class="options">
-                            {% for option_key, option_value in result.question.options.items %}
-                                <div class="option {% if option_key == result.user_answer %}user-selected{% endif %} {% if option_key == result.correct_answer %}correct{% endif %}" data-option="{{ option_key }}">
+                            {% for option_key, option_value in answer_record.original_options.items %}
+                                <div class="option {% if option_key == answer_record.user_answer %}user-selected{% endif %} {% if option_key == answer_record.correct_answer %}correct{% endif %}" data-option="{{ option_key }}">
                                     <span>{{ option_value }}</span>
                                 </div>
                             {% endfor %}
@@ -205,26 +190,19 @@
                     {% endif %}
                     
                     <div class="answers">
-                        <p><strong>您的答案：</strong> {{ result.user_answer|default:"未答" }}</p>
-                        <p><strong>正确答案：</strong> {{ result.correct_answer }}</p>
-                        <p><strong>结果：</strong> {{ result.result }}</p>
-                        <p><strong>得分：</strong> {% if result.result == '正确' %}{{ result.score }}{% else %}0{% endif %}</p>
+                        <p><strong>你的答案：</strong>{{ answer_record.user_answer|default:'未答' }}</p>
+                        <p><strong>正确答案：</strong>{{ answer_record.correct_answer }}</p>
+                        <p><strong>结果：</strong>{% if answer_record.is_correct %}<span class="correct">正确</span>{% else %}<span class="incorrect">错误</span>{% endif %}</p>
                     </div>
                     
-                    {% if result.question.explanation %}
+                    {% if answer_record.original_explanation %}
                         <div class="explanation">
                             <strong>解析：</strong>
-                            <p>{{ result.question.explanation }}</p>
+                            <p>{{ answer_record.original_explanation }}</p>
                         </div>
                     {% endif %}
                 </div>
             {% endfor %}
-        </div>
-        
-        <div class="form-group">
-            <a href="{% url 'wrong_question_notebook' %}" class="btn">
-                返回错题本
-            </a>
         </div>
     </div>
 {% endblock %}

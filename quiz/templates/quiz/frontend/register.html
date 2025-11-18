@@ -13,12 +13,24 @@
             <input type="email" name="email" id="email" required>
         </div>
         <div class="form-group">
+            <label for="phone_number">手机号码</label>
+            <input type="text" name="phone_number" id="phone_number" maxlength="11">
+        </div>
+        <div class="form-group">
+            <label for="qq_number">QQ号码</label>
+            <input type="text" name="qq_number" id="qq_number" maxlength="20">
+        </div>
+        <div class="form-group">
             <label for="password">密码</label>
             <input type="password" name="password" id="password" required>
+        </div>
+        <div class="form-group">
+            <label for="password_confirm">确认密码</label>
+            <input type="password" name="password_confirm" id="password_confirm" required>
         </div>
         <div class="form-group">
             <input type="submit" value="注册">
         </div>
     </form>
-    <p>已拥有账号？<a href="{% url 'login' %}">立即登录</a></p>
+
 {% endblock %}

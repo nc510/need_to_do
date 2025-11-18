@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion
 import pandas as pd
 import json
+import re
 
 # 答题视图
 def question_detail(request, question_id):
@@ -30,8 +31,8 @@ def question_detail(request, question_id):
 # 试卷列表视图（仅显示已发布的试卷）
 def test_paper_list(request):
     test_papers = TestPaper.objects.filter(is_published=True).order_by('-created_at')
-    # 实现分页，每页显示20套试卷
-    paginator = Paginator(test_papers, 20)
+    # 实现分页，每页显示9套试卷
+    paginator = Paginator(test_papers, 9)
     page_num = request.GET.get('page')
     try:
         paginated_test_papers = paginator.page(page_num)
@@ -52,8 +53,8 @@ def test_paper_detail(request, paper_id):
     
     # 检查用户是否登录
     if not request.user.is_authenticated:
-        # 未登录用户跳转到注册页面
-        return redirect('register')
+        # 未登录用户跳转到登录页面
+        return redirect('login')
     
     # 检查用户是否已审核通过
     if request.user.profile.approval_status != 1:
@@ -138,16 +139,24 @@ def submit_test_paper(request, paper_id):
                 question=question,
                 user_answer=user_answer,
                 correct_answer=question.correct_answer,
-                is_correct=is_correct
+                is_correct=is_correct,
+                original_question_content=question.content,
+                original_question_type=question.type,
+                original_options=question.options,
+                original_explanation=question.explanation
             )
         
         # 将错题添加到错题本
         for question in wrong_questions:
+            # 查找该题对应的用户答案
+            user_answer = user_answers.get(question.id)
             try:
-                WrongQuestion.objects.create(user=request.user, question=question)
+                WrongQuestion.objects.create(user=request.user, question=question, user_answer=user_answer)
             except IntegrityError:
-                # 如果错题已经存在于错题本中，忽略
-                pass
+                # 如果错题已经存在于错题本中，更新用户答案
+                wrong_question = WrongQuestion.objects.get(user=request.user, question=question)
+                wrong_question.user_answer = user_answer
+                wrong_question.save()
         
         return render(request, 'quiz/frontend/test_paper_result.html', {
             'test_paper': test_paper,
@@ -165,10 +174,36 @@ def register(request):
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
+        password_confirm = request.POST.get('password_confirm')
         email = request.POST.get('email')
+        phone_number = request.POST.get('phone_number')
+        qq_number = request.POST.get('qq_number')
         
-        if not username or not password or not email:
+        # 检查必填字段
+        if not username or not password or not password_confirm or not email:
             messages.error(request, '请填写完整的注册信息')
+            return render(request, 'quiz/frontend/register.html')
+        
+        # 验证密码一致性
+        if password != password_confirm:
+            messages.error(request, '两次输入的密码不一致')
+            return render(request, 'quiz/frontend/register.html')
+        
+        # 验证手机号码格式
+        if phone_number:
+            phone_regex = re.compile(r'^1[3-9]\d{9}$')
+            if not phone_regex.match(phone_number):
+                messages.error(request, '手机号码格式不正确')
+                return render(request, 'quiz/frontend/register.html')
+            
+            # 检查手机号码唯一性
+            if Profile.objects.filter(phone_number=phone_number).exists():
+                messages.error(request, '用户名或者手机号码已存在')
+                return render(request, 'quiz/frontend/register.html')
+        
+        # 检查邮箱唯一性
+        if User.objects.filter(email=email).exists():
+            messages.error(request, '邮箱已存在')
             return render(request, 'quiz/frontend/register.html')
         
         try:
@@ -178,10 +213,18 @@ def register(request):
                 password=password,
                 email=email
             )
+            
+            # 保存手机号码和QQ号码到Profile
+            if phone_number:
+                user.profile.phone_number = phone_number
+            if qq_number:
+                user.profile.qq_number = qq_number
+            user.profile.save()
+            
             messages.success(request, '注册成功，请等待管理员审核')
             return redirect('login')
         except IntegrityError:
-            messages.error(request, '用户名已存在')
+            messages.error(request, '用户名或者手机号码akEMAIL已存在')
             return render(request, 'quiz/frontend/register.html')
     
     return render(request, 'quiz/frontend/register.html')
@@ -189,17 +232,40 @@ def register(request):
 # 登录视图
 def login_view(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
+        username_or_phone = request.POST.get('username')
         password = request.POST.get('password')
         
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
+        # 首先尝试通过用户名登录
+        user = authenticate(request, username=username_or_phone, password=password)
+        
+        # 如果用户名登录失败，尝试通过手机号码登录
+        if user is None:
+            try:
+                # 通过手机号码查找对应的Profile
+                profile = Profile.objects.get(phone_number=username_or_phone)
+                # 获取对应的用户对象
+                user = profile.user
+                # 验证密码
+                if user.check_password(password):
+                    # 密码正确，登录用户
+                    login(request, user)
+                    messages.success(request, '登录成功')
+                    return redirect('test_paper_list')
+            except Profile.DoesNotExist:
+                # 手机号码不存在
+                pass
+            except:
+                # 其他错误
+                pass
+            
+        # 如果两种方式都登录失败
+        if user is None:
+            messages.error(request, '用户名/手机号码或密码错误')
+            return render(request, 'quiz/frontend/login.html')
+        else:
             login(request, user)
             messages.success(request, '登录成功')
             return redirect('test_paper_list')
-        else:
-            messages.error(request, '用户名或密码错误')
-            return render(request, 'quiz/frontend/login.html')
     
     return render(request, 'quiz/frontend/login.html')
 
@@ -221,7 +287,7 @@ def test_history(request):
     test_records = TestRecord.objects.filter(user=request.user).order_by('-completed_at')
     
     # 实现分页
-    paginator = Paginator(test_records, 10)  # 每页显示10条记录
+    paginator = Paginator(test_records, 9)  # 每页显示9条记录
     page_num = request.GET.get('page')
     
     try:
@@ -235,14 +301,32 @@ def test_history(request):
         'test_records': paginated_records
     })
 
+@login_required
+def test_history_detail(request, record_id):
+    # 获取答题记录
+    test_record = get_object_or_404(TestRecord, pk=record_id)
+    
+    # 确保当前用户只能查看自己的答题记录
+    if test_record.user != request.user:
+        messages.error(request, '您没有权限查看此答题记录')
+        return redirect('test_history')
+    
+    # 获取该答题记录的所有每题答题记录
+    answer_records = AnswerRecord.objects.filter(test_record=test_record)
+    
+    return render(request, 'quiz/frontend/test_history_detail.html', {
+        'test_record': test_record,
+        'answer_records': answer_records
+    })
+
 # 错题本视图
 @login_required
 def wrong_question_notebook(request):
     # 获取当前用户的所有错题
     wrong_questions = WrongQuestion.objects.filter(user=request.user).order_by('-added_at')
     
-    # 实现分页
-    paginator = Paginator(wrong_questions, 10)  # 每页显示10条错题
+    # 实现分页，每页显示50条错题
+    paginator = Paginator(wrong_questions, 50)
     page_num = request.GET.get('page')
     
     try:
@@ -259,8 +343,22 @@ def wrong_question_notebook(request):
 # 错题本组卷视图
 @login_required
 def create_wrong_question_paper(request):
-    # 获取当前用户的所有错题
-    wrong_questions = WrongQuestion.objects.filter(user=request.user)
+    if request.method == 'POST':
+        # 获取选中的题目ID列表
+        selected_question_ids = request.POST.getlist('selected_questions')
+        
+        if not selected_question_ids:
+            messages.error(request, '请至少选择一道错题')
+            return redirect('wrong_question_notebook')
+        
+        # 获取当前用户选中的错题，按添加时间倒序排序
+        wrong_questions = WrongQuestion.objects.filter(
+            user=request.user,
+            question_id__in=selected_question_ids
+        ).order_by('-added_at')
+    else:
+        # 默认情况下显示所有错题
+        wrong_questions = WrongQuestion.objects.filter(user=request.user).order_by('-added_at')
     
     if wrong_questions.count() == 0:
         messages.info(request, '您的错题本中没有题目')
@@ -270,29 +368,42 @@ def create_wrong_question_paper(request):
         'wrong_questions': wrong_questions
     })
 
+# 删除错题视图
+@login_required
+def delete_wrong_question(request, wrong_question_id):
+    wrong_question = get_object_or_404(WrongQuestion, pk=wrong_question_id)
+    # 检查是否是当前用户的错题
+    if wrong_question.user == request.user:
+        wrong_question.delete()
+        messages.success(request, '错题已删除')
+    else:
+        messages.error(request, '您没有权限删除这道错题')
+    return redirect('wrong_question_notebook')
+
 # 错题本试卷提交视图
 @login_required
 def submit_wrong_question_paper(request):
     if request.method == 'POST':
-        total_score = 0
+        user_score = 0  # 用户实际得分
+        total_possible_score = 0  # 总分（所有题目分数之和）
         correct_count = 0
         question_results = []
-        wrong_questions_to_remove = []  # 用于收集已经答对的错题
         
         # 获取所有题目ID
         question_ids = request.POST.getlist('question_id')
         
         for question_id in question_ids:
             question = get_object_or_404(Question, pk=question_id)
+            total_possible_score += question.score  # 累加总分
+            
             user_answer = request.POST.get(f'question_{question_id}')
             
             # 检查用户答案是否正确
             if user_answer and user_answer.strip().lower() == question.correct_answer.strip().lower():
                 is_correct = True
-                total_score += question.score
+                user_score += question.score  # 累加用户得分
                 correct_count += 1
                 result = '正确'
-                wrong_questions_to_remove.append(question)  # 答对的错题可以移除
             elif user_answer is None:
                 is_correct = False
                 result = '未答'
@@ -311,12 +422,9 @@ def submit_wrong_question_paper(request):
         total_questions = len(question_ids)
         wrong_count = total_questions - correct_count
         
-        # 移除已经答对的错题
-        for question in wrong_questions_to_remove:
-            WrongQuestion.objects.filter(user=request.user, question=question).delete()
-        
         return render(request, 'quiz/frontend/wrong_question_paper_result.html', {
-            'total_score': total_score,
+            'total_score': total_possible_score,
+            'obtained_score': user_score,
             'correct_count': correct_count,
             'wrong_count': wrong_count,
             'total_questions': total_questions,
