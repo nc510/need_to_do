@@ -1,0 +1,14 @@
+# Python
+*.pyc
+__pycache__/
+
+# Virtual Environment
+venv/
+
+# Django
+staticfiles/
+*.log
+media/
+
+# Excel files
+test_questions.xlsx
