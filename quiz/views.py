@@ -224,7 +224,7 @@ def register(request):
             messages.success(request, '注册成功，请等待管理员审核')
             return redirect('login')
         except IntegrityError:
-            messages.error(request, '用户名或者手机号码akEMAIL已存在')
+            messages.error(request, '用户名或者手机号码已存在')
             return render(request, 'quiz/frontend/register.html')
     
     return render(request, 'quiz/frontend/register.html')

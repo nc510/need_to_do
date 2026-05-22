@@ -76,16 +76,9 @@ class Profile(models.Model):
 
 # 创建User时自动创建Profile
 @receiver(post_save, sender=User)
-def ensure_profile_exists(sender, instance, **kwargs):
-    try:
-        instance.profile
-    except Profile.DoesNotExist:
-        Profile.objects.create(user=instance)
-
-# 保存User时自动保存Profile
-@receiver(post_save, sender=User)
-def save_profile(sender, instance, **kwargs):
-    instance.profile.save()
+def ensure_profile_exists(sender, instance, created, **kwargs):
+    if created:
+        Profile.objects.get_or_create(user=instance)
 
 class TestRecord(models.Model):
     # 答题记录
