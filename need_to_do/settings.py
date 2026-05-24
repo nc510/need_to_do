@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-3zwd_-@qck6g1%na&4c$uewlgrne7px8%s7$*jv2u7#t#@!=rz'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
@@ -31,6 +31,7 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    'simpleui',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -79,7 +80,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'need_to_do',
         'USER': 'root',
-        'PASSWORD': 'newpassword',
+        'PASSWORD': 'Netsky121666880!',
         'HOST': '127.0.0.1',
         'PORT': '3306',
     }
@@ -133,3 +134,79 @@ STATICFILES_FINDERS = [
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# SimpleUI 配置 - 现代化后台管理界面
+SIMPLEUI_HOME_TITLE = '在线考试系统管理后台'
+SIMPLEUI_HOME_ICON = 'fa-solid fa-graduation-cap'
+
+SIMPLEUI_DEFAULT_THEME = 'admin.lte.css'
+
+SIMPLEUI_CONFIG = {
+    'system_keep': False,
+    'menus': [
+        {
+            'name': '用户管理',
+            'icon': 'fa-solid fa-users',
+            'models': [
+                {
+                    'name': '用户列表',
+                    'icon': 'fa-solid fa-user',
+                    'url': 'auth/user/'
+                },
+                {
+                    'name': '用户组',
+                    'icon': 'fa-solid fa-user-group',
+                    'url': 'auth/group/'
+                },
+                {
+                    'name': '会员信息',
+                    'icon': 'fa-solid fa-id-card',
+                    'url': 'quiz/profile/'
+                }
+            ]
+        },
+        {
+            'name': '题库管理',
+            'icon': 'fa-solid fa-book-open',
+            'models': [
+                {
+                    'name': '题目管理',
+                    'icon': 'fa-solid fa-file-lines',
+                    'url': 'quiz/question/'
+                }
+            ]
+        },
+        {
+            'name': '试卷管理',
+            'icon': 'fa-solid fa-file-text',
+            'models': [
+                {
+                    'name': '试卷列表',
+                    'icon': 'fa-solid fa-scroll',
+                    'url': 'quiz/testpaper/'
+                }
+            ]
+        },
+        {
+            'name': '答题记录',
+            'icon': 'fa-solid fa-history',
+            'models': [
+                {
+                    'name': '答题记录',
+                    'icon': 'fa-solid fa-chart-bar',
+                    'url': 'quiz/testrecord/'
+                },
+                {
+                    'name': '每题答题记录',
+                    'icon': 'fa-solid fa-list-checks',
+                    'url': 'quiz/answerrecord/'
+                },
+                {
+                    'name': '错题本',
+                    'icon': 'fa-solid fa-circle-exclamation',
+                    'url': 'quiz/wrongquestion/'
+                }
+            ]
+        }
+    ]
+}
