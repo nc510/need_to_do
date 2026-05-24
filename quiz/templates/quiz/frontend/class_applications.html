@@ -1,0 +1,205 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}班级申请列表 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .section {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin: 0 0 20px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .pending-badge {
+        background: #dc3545;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+    }
+    
+    .approved-badge {
+        background: #28a745;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+    }
+    
+    .application-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        transition: background 0.3s ease;
+    }
+    
+    .application-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .application-item .info h4 {
+        margin: 0 0 5px 0;
+        color: #2c3e50;
+    }
+    
+    .application-item .info p {
+        margin: 0;
+        font-size: 13px;
+        color: #888;
+    }
+    
+    .application-item .actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-success:hover {
+        background: #218838;
+    }
+    
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background: #c82333;
+    }
+    
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+    
+    .btn-secondary:hover {
+        background: #eee;
+    }
+    
+    .empty-list {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+    }
+    
+    .history-item {
+        padding: 12px 16px;
+        border-left: 3px solid #ddd;
+        margin-bottom: 12px;
+        background: #f8f9fa;
+        border-radius: 0 8px 8px 0;
+    }
+    
+    .history-item h5 {
+        margin: 0 0 5px 0;
+        color: #2c3e50;
+    }
+    
+    .history-item p {
+        margin: 0;
+        font-size: 12px;
+        color: #888;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="section">
+    <h2 class="section-title">
+        📋 待审核申请
+        {% if pending_applications %}
+            <span class="pending-badge">{{ pending_applications.count }} 个</span>
+        {% endif %}
+    </h2>
+    
+    {% if pending_applications %}
+        {% for app in pending_applications %}
+            <div class="application-item">
+                <div class="info">
+                    <h4>👤 {{ app.user.username }}</h4>
+                    <p>
+                        邮箱：{{ app.user.email }} ·
+                        申请时间：{{ app.created_at|date:"Y-m-d H:i" }}
+                        {% if app.message %}
+                            <br>留言：{{ app.message }}
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="actions">
+                    <a href="{% url 'approve_application' class_id=class_obj.id application_id=app.id %}" class="btn btn-success">✓ 通过</a>
+                    <a href="{% url 'reject_application' class_id=class_obj.id application_id=app.id %}" class="btn btn-danger">✕ 拒绝</a>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-list">
+            <span style="font-size: 40px;">✓</span>
+            <p>暂无待审核的申请</p>
+        </div>
+    {% endif %}
+</div>
+
+{% if processed_applications %}
+<div class="section">
+    <h2 class="section-title">
+        📜 审核历史
+        <span class="approved-badge">最近 20 条</span>
+    </h2>
+    
+    {% for app in processed_applications %}
+        <div class="history-item">
+            <h5>👤 {{ app.user.username }}
+                {% if app.status == 1 %}
+                    <span style="color: #28a745;">✓ 已通过</span>
+                {% else %}
+                    <span style="color: #dc3545;">✕ 已拒绝</span>
+                {% endif %}
+            </h5>
+            <p>
+                申请时间：{{ app.created_at|date:"Y-m-d H:i" }} ·
+                审核时间：{{ app.reviewed_at|date:"Y-m-d H:i" }} ·
+                审核人：{{ app.reviewed_by.username }}
+            </p>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-secondary">← 返回班级详情</a>
+</div>
+{% endblock %}

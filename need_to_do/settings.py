@@ -51,6 +51,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+LOGIN_URL = '/quiz/login/'
+
 ROOT_URLCONF = 'need_to_do.urls'
 
 TEMPLATES = [
@@ -109,15 +111,20 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'zh-hans'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Shanghai'
 
 USE_I18N = True
 
 USE_L10N = True
 
 USE_TZ = True
+
+LANGUAGES = [
+    ('zh-hans', '简体中文'),
+    ('en', 'English'),
+]
 
 
 # Static files (CSS, JavaScript, Images)
@@ -136,75 +143,94 @@ STATICFILES_FINDERS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # SimpleUI 配置 - 现代化后台管理界面
-SIMPLEUI_HOME_TITLE = '在线考试系统管理后台'
+SIMPLEUI_HOME_TITLE = '📚 在线考试系统管理后台'
 SIMPLEUI_HOME_ICON = 'fa-solid fa-graduation-cap'
+SIMPLEUI_LOGIN_LOGO = '/static/admin/simpleui-x/logo.png'
+SIMPLEUI_LOGO = '/static/admin/simpleui-x/logo.png'
 
 SIMPLEUI_DEFAULT_THEME = 'admin.lte.css'
 
 SIMPLEUI_CONFIG = {
     'system_keep': False,
+    'menu_style': 'sidebar',  # 侧边栏菜单样式
     'menus': [
         {
-            'name': '用户管理',
+            'name': '👥 用户管理',
             'icon': 'fa-solid fa-users',
             'models': [
                 {
-                    'name': '用户列表',
-                    'icon': 'fa-solid fa-user',
+                    'name': '👤 用户列表',
+                    'icon': 'fa-solid fa-user-pen',
                     'url': 'auth/user/'
                 },
                 {
-                    'name': '用户组',
+                    'name': '👥 用户组',
                     'icon': 'fa-solid fa-user-group',
                     'url': 'auth/group/'
                 },
                 {
-                    'name': '会员信息',
+                    'name': '🎫 会员信息',
                     'icon': 'fa-solid fa-id-card',
                     'url': 'quiz/profile/'
                 }
             ]
         },
         {
-            'name': '题库管理',
+            'name': '📝 题库管理',
             'icon': 'fa-solid fa-book-open',
             'models': [
                 {
-                    'name': '题目管理',
+                    'name': '📄 题目管理',
                     'icon': 'fa-solid fa-file-lines',
                     'url': 'quiz/question/'
                 }
             ]
         },
         {
-            'name': '试卷管理',
+            'name': '📋 试卷管理',
             'icon': 'fa-solid fa-file-text',
             'models': [
                 {
-                    'name': '试卷列表',
+                    'name': '📜 试卷列表',
                     'icon': 'fa-solid fa-scroll',
                     'url': 'quiz/testpaper/'
                 }
             ]
         },
         {
-            'name': '答题记录',
-            'icon': 'fa-solid fa-history',
+            'name': '📊 答题记录',
+            'icon': 'fa-solid fa-chart-line',
             'models': [
                 {
-                    'name': '答题记录',
+                    'name': '📈 答题记录',
                     'icon': 'fa-solid fa-chart-bar',
                     'url': 'quiz/testrecord/'
                 },
                 {
-                    'name': '每题答题记录',
-                    'icon': 'fa-solid fa-list-checks',
+                    'name': '✅ 每题答题记录',
+                    'icon': 'fa-solid fa-list-check',
                     'url': 'quiz/answerrecord/'
                 },
                 {
-                    'name': '错题本',
+                    'name': '❌ 错题本',
                     'icon': 'fa-solid fa-circle-exclamation',
                     'url': 'quiz/wrongquestion/'
+                }
+            ]
+        },
+        {
+            'name': '🏫 班级管理',
+            'icon': 'fa-solid fa-school',
+            'models': [
+                {
+                    'name': '🏠 班级列表',
+                    'icon': 'fa-solid fa-building',
+                    'url': 'quiz/class/'
+                },
+                {
+                    'name': '📝 班级申请',
+                    'icon': 'fa-solid fa-file-signature',
+                    'url': 'quiz/classapplication/'
                 }
             ]
         }

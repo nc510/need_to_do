@@ -2,164 +2,561 @@
 {% block title %}错题本{% endblock %}
 {% block extra_styles %}
 <style>
-    .question {
-        margin: 20px 0;
-        padding: 15px;
-        border: 1px solid #eee;
-        border-radius: 5px;
-        background-color: #f9f9f9;
+    .page-header {
+        text-align: center;
+        margin-bottom: 35px;
     }
-    .question-options {
-        margin: 10px 0 20px 20px;
+    .page-header h1 {
+        font-size: 32px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0 0 10px 0;
     }
-    .question-options div {
-        margin: 5px 0;
+    .page-header p {
+        color: #7f8c8d;
+        font-size: 16px;
+        margin: 0;
     }
-    .form-group {
-        margin: 20px 0;
-        padding: 15px;
-        background-color: #e9ecef;
-        border-radius: 5px;
+    
+    .action-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 15px;
+        padding: 20px 25px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        margin-bottom: 25px;
     }
-    .delete-btn {
-        padding: 6px 12px;
-        background-color: #dc3545;
-        color: white;
+    
+    .select-all-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    .select-all-wrapper input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .select-all-label {
+        font-size: 15px;
+        color: #2c3e50;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    
+    .selected-count {
+        font-size: 13px;
+        color: #7f8c8d;
+        padding: 6px 14px;
+        background-color: #f0f2f5;
+        border-radius: 20px;
+    }
+    
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
         text-decoration: none;
-        border-radius: 5px;
+        border: none;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    .action-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .question-list {
+        list-style-type: none;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .question-card {
+        padding: 25px;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .question-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+    }
+    
+    .question-card:hover {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    .question-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .question-checkbox {
+        flex-shrink: 0;
+    }
+    
+    .question-checkbox input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        cursor: pointer;
+        accent-color: #667eea;
+    }
+    
+    .question-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+        font-weight: 700;
         font-size: 14px;
     }
-    .delete-btn:hover {
-        background-color: #c82333;
+    
+    .question-content {
+        font-size: 16px;
+        color: #2c3e50;
+        font-weight: 500;
+        line-height: 1.6;
+        flex: 1;
     }
-    .pagination {
-        margin-top: 30px;
-        text-align: center;
+    
+    .question-type {
+        padding: 4px 12px;
+        background-color: #f0f2f5;
+        color: #7f8c8d;
+        border-radius: 20px;
+        font-size: 12px;
     }
-    .pagination a, .pagination span {
-        padding: 8px 12px;
-        margin: 0 4px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        text-decoration: none;
-        color: #007bff;
+    
+    .question-options {
+        margin: 15px 0 20px 50px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 10px;
     }
-    .pagination span.current {
-        border: 1px solid #007bff;
-        background-color: #007bff;
+    
+    .option-item {
+        padding: 10px 15px;
+        margin: 8px 0;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .option-item.correct {
+        background-color: #e8f5e9;
+        border: 1px solid #4caf50;
+    }
+    
+    .option-item.wrong {
+        background-color: #ffebee;
+        border: 1px solid #f44336;
+    }
+    
+    .option-item.neutral {
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+    }
+    
+    .option-key {
+        font-weight: 700;
+        color: #2c3e50;
+        min-width: 24px;
+    }
+    
+    .option-value {
+        color: #555;
+        flex: 1;
+    }
+    
+    .option-tag {
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+    
+    .option-tag.correct-tag {
+        background-color: #4caf50;
         color: white;
     }
-    h1 {
-        color: #2c3e50;
+    
+    .option-tag.wrong-tag {
+        background-color: #f44336;
+        color: white;
+    }
+    
+    .answer-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        padding: 15px 20px;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        margin-left: 50px;
+    }
+    
+    .answer-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .answer-label {
+        font-size: 13px;
+        color: #7f8c8d;
+    }
+    
+    .answer-value {
+        font-size: 15px;
+        font-weight: 600;
+    }
+    
+    .answer-value.correct { color: #4caf50; }
+    .answer-value.wrong { color: #f44336; }
+    
+    .explanation-box {
+        margin: 15px 0 15px 50px;
+        padding: 15px 20px;
+        background: linear-gradient(135deg, #e3f2fd 0%, #e1bee7 100%);
+        border-left: 4px solid #2196f3;
+        border-radius: 0 10px 10px 0;
+    }
+    
+    .explanation-box strong {
+        color: #1976d2;
+        display: block;
+        margin-bottom: 5px;
+    }
+    
+    .explanation-box p {
+        margin: 0;
+        color: #333;
+        line-height: 1.6;
+    }
+    
+    .card-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+    
+    .delete-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 18px;
+        background-color: #ffebee;
+        color: #f44336;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    .delete-btn:hover {
+        background-color: #f44336;
+        color: white;
+    }
+    
+    .pagination {
+        margin-top: 40px;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+    
+    .pagination a,
+    .pagination span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        height: 44px;
+        padding: 0 16px;
+        background-color: #fff;
+        color: #667eea;
+        text-decoration: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+    
+    .pagination a:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        transform: translateY(-2px);
+    }
+    
+    .pagination .current {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+    }
+    
+    .pagination .disabled {
+        background-color: #f0f0f0;
+        color: #ccc;
+        pointer-events: none;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 80px 20px;
+        background-color: #fff;
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+    .empty-state .icon {
+        font-size: 64px;
         margin-bottom: 20px;
+    }
+    .empty-state h3 {
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+        font-size: 22px;
+    }
+    .empty-state p {
+        margin: 0 0 25px 0;
+        color: #7f8c8d;
+        font-size: 16px;
+    }
+    .empty-state .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 28px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        text-decoration: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .empty-state .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    @media (max-width: 768px) {
+        .page-header h1 {
+            font-size: 26px;
+        }
+        .action-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .select-all-wrapper {
+            justify-content: space-between;
+        }
+        .action-btn {
+            width: 100%;
+            justify-content: center;
+        }
+        .question-options,
+        .answer-section,
+        .explanation-box {
+            margin-left: 0;
+        }
     }
 </style>
 {% endblock %}
 {% block content %}
-    <h1>错题本</h1>
+    <div class="page-header">
+        <h1>📚 错题本</h1>
+        <p>复习和巩固您做错的题目，查漏补缺</p>
+    </div>
     
     {% if wrong_questions %}
         <form method="post" action="{% url 'create_wrong_question_paper' %}">
             {% csrf_token %}
-            <div class="form-group">
-                <input type="checkbox" id="select-all"> <strong>全选</strong>
-                <input type="submit" value="将所选错题组成试卷重新答题" style="margin-left: 20px; padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            <div class="action-bar">
+                <div class="select-all-wrapper">
+                    <input type="checkbox" id="select-all">
+                    <label for="select-all" class="select-all-label">全选</label>
+                    <span class="selected-count">已选 <span id="selected-count">0</span> / {{ wrong_questions|length }} 题</span>
+                </div>
+                <button type="submit" class="action-btn" id="retry-btn" disabled>
+                    🔄 组卷重做
+                </button>
             </div>
             
-            {% for wrong_question in wrong_questions %}
-                <div class="question">
-                    <h4>{{ forloop.counter }}. (ID: {{ wrong_question.question.id }})
-                        <input type="checkbox" name="selected_questions" value="{{ wrong_question.question.id }}" id="question-{{ wrong_question.question.id }}" style="margin-right: 10px; margin-left: 10px;">
-                        <label for="question-{{ wrong_question.question.id }}">{{ wrong_question.question.content }}</label>
-                    </h4>
-                    <input type="hidden" name="question_id" value="{{ wrong_question.question.id }}">
-                    
-                    {% if wrong_question.question.type == 1 %} <!-- 选择题 -->
-                        <div class="question-options">
-                            {% for key, value in wrong_question.question.options.items %}
-                                <div>
-                                    <strong>{{ key }}.</strong> {{ value }}
-                                    {% if key == wrong_question.question.correct_answer %}
-                                        <span style="color: #4CAF50; margin-left: 10px;">(正确答案)</span>
-                                    {% elif key == wrong_question.user_answer %}
-                                        <span style="color: #f44336; margin-left: 10px;">(您的答案)</span>
+            <ul class="question-list">
+                {% for wrong_question in wrong_questions %}
+                    <li class="question-card">
+                        <div class="question-header">
+                            <div class="question-checkbox">
+                                <input type="checkbox" name="selected_questions" value="{{ wrong_question.question.id }}" id="question-{{ wrong_question.question.id }}" class="question-select">
+                            </div>
+                            <span class="question-number">{{ forloop.counter }}</span>
+                            <span class="question-content">{{ wrong_question.question.content }}</span>
+                            <span class="question-type">{% if wrong_question.question.type == 1 %}选择题{% else %}判断题{% endif %}</span>
+                        </div>
+                        
+                        {% if wrong_question.question.type == 1 and wrong_question.question.options %}
+                            <div class="question-options">
+                                {% for key, value in wrong_question.question.options.items %}
+                                    <div class="option-item 
+                                        {% if key == wrong_question.question.correct_answer %}correct{% endif %}
+                                        {% if key == wrong_question.user_answer and key != wrong_question.question.correct_answer %}wrong{% endif %}">
+                                        <span class="option-key">{{ key }}.</span>
+                                        <span class="option-value">{{ value }}</span>
+                                        {% if key == wrong_question.question.correct_answer %}
+                                            <span class="option-tag correct-tag">正确答案</span>
+                                        {% elif key == wrong_question.user_answer %}
+                                            <span class="option-tag wrong-tag">您的答案</span>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% elif wrong_question.question.type == 2 %}
+                            <div class="question-options">
+                                <div class="option-item {% if '对' == wrong_question.question.correct_answer %}correct{% endif %} {% if '对' == wrong_question.user_answer and '对' != wrong_question.question.correct_answer %}wrong{% endif %}">
+                                    <span class="option-key">对</span>
+                                    {% if '对' == wrong_question.question.correct_answer %}
+                                        <span class="option-tag correct-tag">正确答案</span>
+                                    {% elif '对' == wrong_question.user_answer %}
+                                        <span class="option-tag wrong-tag">您的答案</span>
                                     {% endif %}
                                 </div>
-                            {% endfor %}
-                        </div>
-                    {% elif wrong_question.question.type == 2 %} <!-- 判断题 -->
-                        <div class="question-options">
-                            <div>
-                                <strong>对.</strong> 
-                                {% if '对' == wrong_question.question.correct_answer %}
-                                    <span style="color: #4CAF50; margin-left: 10px;">(正确答案)</span>
-                                {% elif '对' == wrong_question.user_answer %}
-                                    <span style="color: #f44336; margin-left: 10px;">(您的答案)</span>
-                                {% endif %}
+                                <div class="option-item {% if '错' == wrong_question.question.correct_answer %}correct{% endif %} {% if '错' == wrong_question.user_answer and '错' != wrong_question.question.correct_answer %}wrong{% endif %}">
+                                    <span class="option-key">错</span>
+                                    {% if '错' == wrong_question.question.correct_answer %}
+                                        <span class="option-tag correct-tag">正确答案</span>
+                                    {% elif '错' == wrong_question.user_answer %}
+                                        <span class="option-tag wrong-tag">您的答案</span>
+                                    {% endif %}
+                                </div>
                             </div>
-                            <div>
-                                <strong>错.</strong> 
-                                {% if '错' == wrong_question.question.correct_answer %}
-                                    <span style="color: #4CAF50; margin-left: 10px;">(正确答案)</span>
-                                {% elif '错' == wrong_question.user_answer %}
-                                    <span style="color: #f44336; margin-left: 10px;">(您的答案)</span>
-                                {% endif %}
+                        {% endif %}
+                        
+                        <div class="answer-section">
+                            <div class="answer-item">
+                                <span class="answer-label">您的答案：</span>
+                                <span class="answer-value {% if wrong_question.user_answer == wrong_question.question.correct_answer %}correct{% else %}wrong{% endif %}">
+                                    {{ wrong_question.user_answer|default:"未答" }}
+                                </span>
+                            </div>
+                            <div class="answer-item">
+                                <span class="answer-label">正确答案：</span>
+                                <span class="answer-value correct">{{ wrong_question.question.correct_answer }}</span>
+                            </div>
+                            <div class="answer-item">
+                                <span class="answer-label">添加时间：</span>
+                                <span class="answer-value">{{ wrong_question.added_at|date:"Y-m-d" }}</span>
                             </div>
                         </div>
-                    {% endif %}
-                    
-                    <p><strong>您的答案:</strong> {{ wrong_question.user_answer|default:"未答" }}</p>
-                    <p><strong>正确答案:</strong> {{ wrong_question.question.correct_answer }}</p>
-                    <p><strong>添加时间:</strong> {{ wrong_question.added_at }}</p>
-                    
-                    {% if wrong_question.question.explanation %}
-                        <div style="margin-top: 15px; padding: 10px; background-color: #e3f2fd; border-left: 4px solid #2196f3;">
-                            <strong>解析:</strong> {{ wrong_question.question.explanation }}
+                        
+                        {% if wrong_question.question.explanation %}
+                            <div class="explanation-box">
+                                <strong>💡 解析：</strong>
+                                <p>{{ wrong_question.question.explanation }}</p>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="card-actions">
+                            <a href="{% url 'delete_wrong_question' wrong_question.id %}" class="delete-btn" onclick="return confirm('确定要删除这道错题吗？');">
+                                🗑️ 删除
+                            </a>
                         </div>
-                    {% endif %}
-                    
-                    <div style="margin-top: 15px; text-align: right;">
-                        <a href="{% url 'delete_wrong_question' wrong_question.id %}" class="delete-btn" onclick="return confirm('确定要删除这道错题吗？');">删除错题</a>
-                    </div>
-                </div>
-            {% endfor %}
+                    </li>
+                {% endfor %}
+            </ul>
             
-            <!-- 分页 -->
             {% if wrong_questions.has_other_pages %}
                 <div class="pagination">
                     {% if wrong_questions.has_previous %}
-                        <a href="?page={{ wrong_questions.previous_page_number }}">&laquo;</a>
+                        <a href="?page={{ wrong_questions.previous_page_number }}">← 上一页</a>
                     {% else %}
-                        <span>&laquo;</span>
+                        <span class="disabled">← 上一页</span>
                     {% endif %}
                     
                     {% for i in wrong_questions.paginator.page_range %}
                         {% if wrong_questions.number == i %}
                             <span class="current">{{ i }}</span>
-                        {% else %}
+                        {% elif i >= wrong_questions.number|add:'-2' and i <= wrong_questions.number|add:'2' %}
                             <a href="?page={{ i }}">{{ i }}</a>
                         {% endif %}
                     {% endfor %}
                     
                     {% if wrong_questions.has_next %}
-                        <a href="?page={{ wrong_questions.next_page_number }}">&raquo;</a>
+                        <a href="?page={{ wrong_questions.next_page_number }}">下一页 →</a>
                     {% else %}
-                        <span>&raquo;</span>
+                        <span class="disabled">下一页 →</span>
                     {% endif %}
                 </div>
             {% endif %}
         </form>
-    {% else %}
-        <p>您的错题本中没有题目。</p>
-    {% endif %}
-    
-    <script>
-        // 全选功能实现
-        document.getElementById('select-all').addEventListener('click', function() {
-            var checkboxes = document.querySelectorAll('input[name="selected_questions"]');
-            checkboxes.forEach(function(checkbox) {
-                checkbox.checked = document.getElementById('select-all').checked;
+        
+        <script>
+            document.getElementById('select-all').addEventListener('click', function() {
+                var checkboxes = document.querySelectorAll('input[name="selected_questions"]');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = document.getElementById('select-all').checked;
+                });
+                updateSelectedCount();
             });
-        });
-    </script>
+            
+            document.querySelectorAll('.question-select').forEach(function(checkbox) {
+                checkbox.addEventListener('click', updateSelectedCount);
+            });
+            
+            function updateSelectedCount() {
+                var checkboxes = document.querySelectorAll('input[name="selected_questions"]:checked');
+                document.getElementById('selected-count').textContent = checkboxes.length;
+                document.getElementById('retry-btn').disabled = checkboxes.length === 0;
+            }
+            
+            updateSelectedCount();
+        </script>
+    {% else %}
+        <div class="empty-state">
+            <div class="icon">✨</div>
+            <h3>错题本为空</h3>
+            <p>您没有错题记录，保持得很好！</p>
+            <a href="{% url 'test_paper_list' %}" class="action-btn">去做题 →</a>
+        </div>
+    {% endif %}
 {% endblock %}

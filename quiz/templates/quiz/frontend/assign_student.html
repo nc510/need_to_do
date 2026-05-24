@@ -1,0 +1,156 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}分配学生到班级 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .form-container {
+        max-width: 500px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #2c3e50;
+    }
+    
+    .form-group input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 15px;
+        transition: border-color 0.3s ease;
+    }
+    
+    .form-group input:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    
+    .btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 15px;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+        padding: 10px 20px;
+    }
+    
+    .btn-secondary:hover {
+        background: #eee;
+    }
+    
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 25px;
+    }
+    
+    .required {
+        color: #dc3545;
+        margin-left: 4px;
+    }
+    
+    .class-info {
+        background: #d4edda;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .class-info .icon {
+        font-size: 28px;
+    }
+    
+    .class-info .text {
+        color: #155724;
+    }
+    
+    .class-info .text h4 {
+        margin: 0;
+        font-size: 16px;
+    }
+    
+    .class-info .text p {
+        margin: 4px 0 0 0;
+        font-size: 13px;
+        opacity: 0.8;
+    }
+    
+    .hint {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 12px 15px;
+        border-radius: 0 8px 8px 0;
+        margin-top: 10px;
+        font-size: 13px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1 class="page-title" style="margin-bottom: 25px;">➕ 添加学生到班级</h1>
+    
+    <div class="class-info">
+        <span class="icon">🏫</span>
+        <div class="text">
+            <h4>{{ class_obj.name }}</h4>
+            <p>为该班级添加学生</p>
+        </div>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="username_or_phone">用户名或手机号码 <span class="required">*</span></label>
+            <input type="text" id="username_or_phone" name="username_or_phone" placeholder="请输入用户名或手机号码" required>
+            <div class="hint">
+                💡 提示：可以使用用户名或手机号码来查找用户
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-secondary">← 返回</a>
+            <button type="submit" class="btn btn-primary">✓ 添加学生</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

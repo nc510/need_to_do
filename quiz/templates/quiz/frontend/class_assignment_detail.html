@@ -1,0 +1,296 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}{{ assignment.title }} - 作业详情{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .detail-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+    }
+
+    .detail-header h1 {
+        margin: 0 0 10px 0;
+        font-size: 28px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .detail-header p {
+        margin: 5px 0;
+        opacity: 0.9;
+    }
+
+    .section {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin: 0 0 20px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #eee;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+
+    .btn-secondary:hover {
+        background: #eee;
+    }
+
+    .member-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .member-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: #f8f9fa;
+        transition: background 0.3s ease;
+    }
+
+    .member-item:hover {
+        background: #f0f0f0;
+    }
+
+    .member-item .name {
+        font-weight: 500;
+        color: #2c3e50;
+    }
+
+    .member-item .email {
+        font-size: 13px;
+        color: #888;
+        margin-top: 2px;
+    }
+
+    .status-badge {
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+
+    .status-submitted {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-not-submitted {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .score {
+        font-size: 16px;
+        font-weight: 600;
+        color: #667eea;
+    }
+
+    .score.full {
+        color: #28a745;
+    }
+
+    .empty-list {
+        text-align: center;
+        padding: 30px;
+        color: #999;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .stats-row {
+        display: flex;
+        gap: 30px;
+        flex-wrap: wrap;
+    }
+
+    .stat-item {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        min-width: 120px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: #888;
+        margin-top: 5px;
+    }
+
+    .header-actions {
+        margin-top: 20px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .assignment-type {
+        font-size: 14px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        font-weight: 500;
+    }
+
+    .status-badge-lg {
+        font-size: 14px;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-weight: 500;
+        display: inline-block;
+        margin-top: 10px;
+    }
+
+    .status-published {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-unpublished {
+        background: #fff3cd;
+        color: #856404;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="detail-container">
+    <div class="detail-header">
+        <h1>
+            {% if assignment.type == 1 %}📋{% else %}📝{% endif %} {{ assignment.title }}
+            <span class="assignment-type">{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</span>
+        </h1>
+        <p>班级：{{ class_obj.name }} ({{ class_obj.code }})</p>
+        {% if assignment.description %}
+        <p>{{ assignment.description }}</p>
+        {% endif %}
+        <p style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <span>📝 试卷：{{ assignment.test_paper.title }} ({{ assignment.test_paper.total_score }}分)</span>
+            <span>⏰ 截止：{{ assignment.deadline|date:"Y-m-d H:i" }}</span>
+        </p>
+        <span
+            class="status-badge-lg {% if assignment.status == 1 %}status-published{% else %}status-unpublished{% endif %}">
+            {% if assignment.status == 1 %}已发布{% else %}未发布{% endif %}
+        </span>
+        <div class="header-actions">
+            <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回列表</a>
+            {% if assignment.status == 0 %}
+            <a href="{% url 'publish_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}"
+                class="btn btn-primary">🚀 发布作业</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">📊 统计信息</h2>
+        <div class="stats-row">
+            <div class="stat-item">
+                <div class="stat-value">{{ total_students }}</div>
+                <div class="stat-label">班级人数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" style="color: #28a745;">{{ completed_count }}</div>
+                <div class="stat-label">已提交</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" style="color: #dc3545;">{{ not_submitted_count }}</div>
+                <div class="stat-label">未提交</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">👤 学生完成情况</h2>
+        {% if records %}
+        <ul class="member-list">
+            {% for record in records %}
+            <li class="member-item">
+                <div>
+                    <div class="name">{{ record.user.username }}</div>
+                    <div class="email">{{ record.user.email }}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    {% if record.is_submitted %}
+                    <span class="status-badge status-submitted">已提交</span>
+                    <span class="score {% if record.score == assignment.test_paper.total_score %}full{% endif %}">
+                        {{ record.score }}/{{ assignment.test_paper.total_score }}
+                    </span>
+                    {% else %}
+                    <span class="status-badge status-not-submitted">未提交</span>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-list">
+            <span style="font-size: 30px;">🔍</span>
+            <p>暂无学生答题记录</p>
+            {% if assignment.status == 0 %}
+            <p style="font-size: 13px; margin-top: 5px;">发布作业后将为班级学生创建答题记录</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

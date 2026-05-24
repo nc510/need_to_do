@@ -1,0 +1,255 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}创建班级作业 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .form-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+        width: 100%;
+        padding: 12px 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-group .hint {
+        font-size: 12px;
+        color: #888;
+        margin-top: 5px;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 15px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        flex: 1;
+        justify-content: center;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+
+    .btn-secondary:hover {
+        background: #eee;
+    }
+
+    .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0 0 25px 0;
+        text-align: center;
+    }
+
+    .radio-group {
+        display: flex;
+        gap: 20px;
+    }
+
+    .radio-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .radio-group input[type="radio"] {
+        width: auto;
+    }
+
+    .filter-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+    }
+
+    .filter-tab {
+        padding: 8px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        text-decoration: none;
+        color: #666;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .filter-tab:hover {
+        border-color: #667eea;
+        color: #667eea;
+    }
+
+    .filter-tab.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: transparent;
+    }
+
+    .paper-option {
+        padding: 8px 0;
+    }
+
+    .my-paper {
+        font-weight: 600;
+        color: #667eea;
+    }
+
+    .paper-badge {
+        display: inline-block;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: 8px;
+        background: #e8ecf1;
+        color: #666;
+    }
+
+    .my-paper-badge {
+        background: #d4edda;
+        color: #155724;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1 class="page-title">📝 创建班级作业</h1>
+
+    <p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ class_obj.name }} ({{ class_obj.code }})</p>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="title">作业标题 <span style="color: #dc3545;">*</span></label>
+            <input type="text" id="title" name="title" placeholder="请输入作业标题" required>
+        </div>
+
+        <div class="form-group">
+            <label for="type">作业类型</label>
+            <div class="radio-group">
+                <label>
+                    <input type="radio" name="type" value="1" checked>
+                    <span>📋 作业</span>
+                </label>
+                <label>
+                    <input type="radio" name="type" value="2">
+                    <span>📝 考试</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="paper_id">选择试卷 <span style="color: #dc3545;">*</span></label>
+
+            <div class="filter-tabs">
+                <a href="?filter=all" class="filter-tab {% if filter_type == 'all' %}active{% endif %}">
+                    📚 全部试卷
+                </a>
+                <a href="?filter=my" class="filter-tab {% if filter_type == 'my' %}active{% endif %}">
+                    👤 我的试卷
+                </a>
+                <a href="?filter=published" class="filter-tab {% if filter_type == 'published' %}active{% endif %}">
+                    🌐 全站试卷
+                </a>
+            </div>
+
+            <select id="paper_id" name="paper_id" required>
+                <option value="">请选择试卷</option>
+                {% for paper in available_papers %}
+                <option value="{{ paper.id }}" class="paper-option">
+                    {{ paper.title }} ({{ paper.total_score }}分)
+                    {% if paper.created_by == request.user.username %}
+                    <span class="paper-badge my-paper-badge">我的试卷</span>
+                    {% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            {% if not available_papers %}
+            <div class="hint" style="color: #dc3545;">⚠️ 暂无可用试卷，请先创建并发布试卷</div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="deadline">截止时间 <span style="color: #dc3545;">*</span></label>
+            <input type="datetime-local" id="deadline" name="deadline" required>
+            <div class="hint">💡 格式：YYYY-MM-DD HH:MM</div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">作业描述</label>
+            <textarea id="description" name="description" placeholder="请输入作业描述（可选）"></textarea>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回</a>
+            <button type="submit" class="btn btn-primary">✓ 创建作业</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

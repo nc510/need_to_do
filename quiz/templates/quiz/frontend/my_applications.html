@@ -1,0 +1,139 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}我的申请记录 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .application-list {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 20px;
+    }
+    
+    .application-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .application-item:last-child {
+        border-bottom: none;
+    }
+    
+    .application-item .info h4 {
+        margin: 0 0 5px 0;
+        color: #2c3e50;
+    }
+    
+    .application-item .info p {
+        margin: 0;
+        font-size: 13px;
+        color: #888;
+    }
+    
+    .application-item .status {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    
+    .status.pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status.approved {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status.rejected {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+        background: white;
+        border-radius: 12px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+    
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+    
+    .btn-secondary:hover {
+        background: #eee;
+    }
+    
+    .header-actions {
+        margin-bottom: 25px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-actions">
+    <h1 class="page-title">📋 我的申请记录</h1>
+</div>
+
+{% if applications %}
+    {% for app in applications %}
+        <div class="application-list">
+            <div class="application-item">
+                <div class="info">
+                    <h4>📚 {{ app.class_obj.name }}</h4>
+                    <p>
+                        班级编号：{{ app.class_obj.code }} ·
+                        申请时间：{{ app.created_at|date:"Y-m-d H:i" }}
+                        {% if app.message %}
+                            · 留言：{{ app.message }}
+                        {% endif %}
+                    </p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    {% if app.status == 0 %}
+                        <span class="status pending">⏳ 待审核</span>
+                    {% elif app.status == 1 %}
+                        <span class="status approved">✓ 已通过</span>
+                    {% else %}
+                        <span class="status rejected">✕ 已拒绝</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state">
+        <span style="font-size: 60px;">📭</span>
+        <h3>暂无申请记录</h3>
+        <p>您还没有申请过加入任何班级</p>
+    </div>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href="{% url 'class_list' %}" class="btn btn-secondary">← 返回班级列表</a>
+</div>
+{% endblock %}

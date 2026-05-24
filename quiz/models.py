@@ -30,7 +30,7 @@ class TestPaper(models.Model):
     description = models.TextField(verbose_name='试卷描述', null=True, blank=True)
     questions = models.ManyToManyField(Question, verbose_name='包含题目')
     total_score = models.IntegerField(verbose_name='总分', default=0)
-    created_by = models.CharField(max_length=50, verbose_name='出题人', default='admin')
+    created_by = models.CharField(max_length=100, verbose_name='出题人', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     is_published = models.BooleanField(verbose_name='是否发布', default=False)
 
@@ -64,7 +64,8 @@ class Profile(models.Model):
     approval_status = models.IntegerField(choices=APPROVAL_STATUS, default=0, verbose_name='审核状态')
     phone_number = models.CharField(max_length=11, verbose_name='手机号码', blank=True, null=True, unique=True)
     qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)
-    plain_password = models.CharField(max_length=128, verbose_name='明文密码', blank=True, null=True)
+    # 关联班级（允许为空，表示未分配班级）
+    class_obj = models.ForeignKey('Class', on_delete=models.SET_NULL, verbose_name='所属班级', null=True, blank=True, related_name='profiles')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -84,10 +85,11 @@ def ensure_profile_exists(sender, instance, created, **kwargs):
 class TestRecord(models.Model):
     # 答题记录
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
-    test_paper = models.ForeignKey(TestPaper, on_delete=models.CASCADE, verbose_name='试卷')
+    test_paper = models.ForeignKey(TestPaper, on_delete=models.CASCADE, verbose_name='试卷', null=True, blank=True)
     score = models.IntegerField(verbose_name='得分')
     total_score = models.IntegerField(verbose_name='总分')
     completed_at = models.DateTimeField(auto_now_add=True, verbose_name='完成时间')
+    is_wrong_paper = models.BooleanField(default=False, verbose_name='是否错题组卷')
 
     class Meta:
         verbose_name = '答题记录'
@@ -95,17 +97,19 @@ class TestRecord(models.Model):
         ordering = ['-completed_at']
 
     def __str__(self):
-        return f'{self.user.username} - {self.test_paper.title} - {self.score}/{self.total_score}'
+        if self.test_paper:
+            return f'{self.user.username} - {self.test_paper.title} - {self.score}/{self.total_score}'
+        else:
+            return f'{self.user.username} - 错题复习 - {self.score}/{self.total_score}'
 
 class AnswerRecord(models.Model):
-    # 每题答题记录
     test_record = models.ForeignKey(TestRecord, on_delete=models.CASCADE, verbose_name='答题记录')
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='题目')
     user_answer = models.CharField(max_length=10, verbose_name='用户答案', null=True, blank=True)
     correct_answer = models.CharField(max_length=10, verbose_name='正确答案')
     is_correct = models.BooleanField(verbose_name='是否正确')
-    
-    # 原始题目信息（保留答题时的题目内容）
+    answered_at = models.DateTimeField(auto_now_add=True, verbose_name='答题时间')
+
     original_question_content = models.TextField(verbose_name='原始题目内容', null=True, blank=True)
     original_question_type = models.IntegerField(verbose_name='原始题目类型', choices=Question.TYPE_CHOICE, null=True, blank=True)
     original_options = models.JSONField(verbose_name='原始选项', default=dict, blank=True, help_text='原始选择题选项，格式：{"A":"选项内容","B":"选项内容"}')
@@ -114,6 +118,7 @@ class AnswerRecord(models.Model):
     class Meta:
         verbose_name = '每题答题记录'
         verbose_name_plural = '每题答题记录'
+        ordering = ['-answered_at']
 
 class WrongQuestion(models.Model):
     # 错题本
@@ -130,3 +135,125 @@ class WrongQuestion(models.Model):
 
     def __str__(self):
         return f'{self.user.username} - {self.question.content}'
+
+
+class Class(models.Model):
+    code = models.CharField(max_length=20, verbose_name='班级编号', unique=True, help_text='用于学生申请加入班级的编号')
+    name = models.CharField(max_length=100, verbose_name='班级名称')
+    description = models.TextField(verbose_name='班级描述', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        verbose_name = '班级'
+        verbose_name_plural = '班级'
+        ordering = ['code']
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+    def get_admin_users(self):
+        admins = ClassAdmin.objects.filter(class_obj=self)
+        return [admin.user for admin in admins]
+
+    def get_students(self):
+        return User.objects.filter(profile__class_obj=self)
+
+    def get_pending_applications(self):
+        return ClassApplication.objects.filter(class_obj=self, status=0)
+
+
+class ClassAdmin(models.Model):
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, verbose_name='班级', related_name='class_admins')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='管理员用户', related_name='admin_classes')
+
+    class Meta:
+        verbose_name = '班级管理员'
+        verbose_name_plural = '班级管理员'
+        unique_together = ('class_obj', 'user')
+
+    def __str__(self):
+        return f'{self.user.username} - {self.class_obj.name}'
+
+
+class ClassApplication(models.Model):
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, verbose_name='申请班级', related_name='applications')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='申请用户', related_name='class_applications')
+    STATUS_CHOICE = ((0, '待审核'), (1, '已通过'), (2, '已拒绝'))
+    status = models.IntegerField(choices=STATUS_CHOICE, default=0, verbose_name='申请状态')
+    message = models.TextField(verbose_name='申请留言', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='申请时间')
+    reviewed_at = models.DateTimeField(verbose_name='审核时间', null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, verbose_name='审核人', null=True, blank=True, related_name='reviewed_applications')
+
+    class Meta:
+        verbose_name = '班级申请'
+        verbose_name_plural = '班级申请'
+        unique_together = ('class_obj', 'user')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user.username} 申请加入 {self.class_obj.name}'
+
+
+class ClassAssignment(models.Model):
+    """班级作业/考试模型"""
+    # 作业类型：1-作业，2-考试
+    TYPE_CHOICE = ((1, '作业'), (2, '考试'))
+    
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, verbose_name='班级', related_name='assignments')
+    test_paper = models.ForeignKey(TestPaper, on_delete=models.CASCADE, verbose_name='试卷', related_name='class_assignments')
+    title = models.CharField(max_length=100, verbose_name='作业标题')
+    description = models.TextField(verbose_name='作业描述', null=True, blank=True)
+    type = models.IntegerField(choices=TYPE_CHOICE, default=1, verbose_name='作业类型')
+    deadline = models.DateTimeField(verbose_name='截止时间')
+    STATUS_CHOICE = ((0, '未发布'), (1, '已发布'))
+    status = models.IntegerField(choices=STATUS_CHOICE, default=0, verbose_name='状态')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, verbose_name='创建人', null=True, blank=True, related_name='created_assignments')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    published_at = models.DateTimeField(verbose_name='发布时间', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '班级作业'
+        verbose_name_plural = '班级作业'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.class_obj.name} - {self.title}'
+
+    def get_status_display(self):
+        return dict(self.STATUS_CHOICE).get(self.status, '未知')
+
+    def get_type_display(self):
+        return dict(self.TYPE_CHOICE).get(self.type, '未知')
+
+    def get_completed_count(self):
+        """获取已完成人数"""
+        return ClassAssignmentRecord.objects.filter(assignment=self, is_submitted=True).count()
+
+    def get_total_students(self):
+        """获取班级总人数"""
+        return self.class_obj.get_students().count()
+
+    def get_not_submitted_users(self):
+        """获取未提交的学生列表"""
+        submitted_users = ClassAssignmentRecord.objects.filter(assignment=self, is_submitted=True).values_list('user_id', flat=True)
+        return self.class_obj.get_students().exclude(id__in=submitted_users)
+
+
+class ClassAssignmentRecord(models.Model):
+    """班级作业答题记录"""
+    assignment = models.ForeignKey(ClassAssignment, on_delete=models.CASCADE, verbose_name='作业', related_name='records')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='学生', related_name='assignment_records')
+    test_record = models.ForeignKey(TestRecord, on_delete=models.SET_NULL, verbose_name='答题记录', null=True, blank=True, related_name='assignment_record')
+    is_submitted = models.BooleanField(default=False, verbose_name='是否提交')
+    score = models.IntegerField(verbose_name='得分', null=True, blank=True)
+    submitted_at = models.DateTimeField(verbose_name='提交时间', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '班级作业记录'
+        verbose_name_plural = '班级作业记录'
+        unique_together = ('assignment', 'user')
+
+    def __str__(self):
+        return f'{self.user.username} - {self.assignment.title}'

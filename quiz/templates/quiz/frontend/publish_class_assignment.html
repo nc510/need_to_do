@@ -1,0 +1,118 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}发布作业 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .confirm-container {
+        max-width: 500px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        text-align: center;
+    }
+    
+    .warning-icon {
+        font-size: 60px;
+        margin-bottom: 20px;
+    }
+    
+    .warning-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0 0 15px 0;
+    }
+    
+    .warning-text {
+        color: #666;
+        margin: 10px 0;
+        line-height: 1.6;
+    }
+    
+    .info-box {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 20px 0;
+        text-align: left;
+    }
+    
+    .info-box p {
+        margin: 8px 0;
+        color: #555;
+    }
+    
+    .info-box strong {
+        color: #2c3e50;
+    }
+    
+    .btn-group {
+        display: flex;
+        gap: 15px;
+        margin-top: 25px;
+    }
+    
+    .btn {
+        flex: 1;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+    
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background: #c82333;
+    }
+    
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+    
+    .btn-secondary:hover {
+        background: #eee;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="confirm-container">
+    <div class="warning-icon">🚀</div>
+    <h1 class="warning-title">确认发布作业</h1>
+    
+    <p class="warning-text">发布后，班级所有学生将收到作业通知，并可以开始作答。</p>
+    
+    <div class="info-box">
+        <p><strong>作业标题：</strong>{{ assignment.title }}</p>
+        <p><strong>作业类型：</strong>{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</p>
+        <p><strong>试卷：</strong>{{ assignment.test_paper.title }} ({{ assignment.test_paper.total_score }}分)</p>
+        <p><strong>截止时间：</strong>{{ assignment.deadline|date:"Y-m-d H:i" }}</p>
+        <p><strong>班级：</strong>{{ class_obj.name }} ({{ class_obj.code }})</p>
+        <p><strong>班级人数：</strong>{{ class_obj.get_students|length }} 人</p>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        <div class="btn-group">
+            <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回</a>
+            <button type="submit" class="btn btn-danger">确认发布</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

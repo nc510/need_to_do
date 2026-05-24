@@ -1,0 +1,98 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}移除学生 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .confirm-container {
+        max-width: 500px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        text-align: center;
+    }
+    
+    .warning-icon {
+        font-size: 60px;
+        margin-bottom: 20px;
+    }
+    
+    .confirm-container h2 {
+        color: #dc3545;
+        margin: 0 0 15px 0;
+    }
+    
+    .confirm-container p {
+        color: #666;
+        margin: 10px 0;
+    }
+    
+    .btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 15px;
+        margin: 0 10px;
+    }
+    
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .btn-danger:hover {
+        background: #c82333;
+        transform: translateY(-2px);
+    }
+    
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+    
+    .btn-secondary:hover {
+        background: #eee;
+    }
+    
+    .form-actions {
+        margin-top: 30px;
+    }
+    
+    .info-box {
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="confirm-container">
+    <div class="warning-icon">⚠️</div>
+    <h2>确认移除学生</h2>
+    <p>您确定要将 <strong>{{ student.username }}</strong> 从班级 <strong>{{ class_obj.name }}</strong> 中移除吗？</p>
+    
+    <div class="info-box">
+        <strong>注意：</strong>移除后，该学生将不再属于此班级，但学生账户和答题记录不会被删除。
+    </div>
+    
+    <div class="form-actions">
+        <form method="post" style="display: inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">🗑️ 确认移除</button>
+        </form>
+        <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-secondary">← 取消</a>
+    </div>
+</div>
+{% endblock %}

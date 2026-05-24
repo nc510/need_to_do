@@ -2,7 +2,7 @@ from waitress import serve
 from need_to_do.wsgi import application
 import time
 
-HOST = '127.0.0.1'
+HOST = '0.0.0.0'
 PORT = 8090
 
 if __name__ == '__main__':

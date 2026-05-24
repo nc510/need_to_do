@@ -6,8 +6,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import IntegrityError
 from django.contrib.auth.models import User
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion
+from django.utils import timezone
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord
 import pandas as pd
+import datetime
 import json
 import re
 
@@ -278,7 +280,29 @@ def logout_view(request):
 # 用户中心视图
 @login_required
 def user_center(request):
-    return render(request, 'quiz/frontend/user_center.html')
+    # 获取当前用户的所有答题记录
+    test_records = TestRecord.objects.filter(user=request.user)
+    
+    # 统计数据
+    test_count = test_records.count()  # 答题记录数（包含错题组卷）
+    completed_count = test_records.filter(test_paper__isnull=False).count()  # 完成试卷数（排除错题组卷）
+    wrong_count = WrongQuestion.objects.filter(user=request.user).count()  # 错题数量
+    
+    # 使用聚合查询计算正确率
+    answer_records = AnswerRecord.objects.filter(test_record__user=request.user)
+    total_answers = answer_records.count()
+    correct_answers = answer_records.filter(is_correct=True).count()
+    
+    accuracy_rate = 0
+    if total_answers > 0:
+        accuracy_rate = int(round(correct_answers / total_answers * 100))
+    
+    return render(request, 'quiz/frontend/user_center.html', {
+        'test_count': test_count,
+        'completed_count': completed_count,
+        'wrong_count': wrong_count,
+        'accuracy_rate': accuracy_rate
+    })
 
 # 答题历史记录视图
 @login_required
@@ -364,8 +388,12 @@ def create_wrong_question_paper(request):
         messages.info(request, '您的错题本中没有题目')
         return redirect('wrong_question_notebook')
     
+    # 计算总分
+    total_score = sum(wq.question.score for wq in wrong_questions)
+    
     return render(request, 'quiz/frontend/wrong_question_paper.html', {
-        'wrong_questions': wrong_questions
+        'wrong_questions': wrong_questions,
+        'total_score': total_score
     })
 
 # 删除错题视图
@@ -388,6 +416,7 @@ def submit_wrong_question_paper(request):
         total_possible_score = 0  # 总分（所有题目分数之和）
         correct_count = 0
         question_results = []
+        user_answers = {}
         
         # 获取所有题目ID
         question_ids = request.POST.getlist('question_id')
@@ -397,6 +426,7 @@ def submit_wrong_question_paper(request):
             total_possible_score += question.score  # 累加总分
             
             user_answer = request.POST.get(f'question_{question_id}')
+            user_answers[question_id] = user_answer
             
             # 检查用户答案是否正确
             if user_answer and user_answer.strip().lower() == question.correct_answer.strip().lower():
@@ -416,11 +446,54 @@ def submit_wrong_question_paper(request):
                 'user_answer': user_answer,
                 'correct_answer': question.correct_answer,
                 'result': result,
-                'score': question.score
+                'score': question.score,
+                'is_correct': is_correct
             })
         
         total_questions = len(question_ids)
         wrong_count = total_questions - correct_count
+        
+        # 创建测试记录（模拟试卷名称为"错题复习"）
+        test_record = TestRecord.objects.create(
+            user=request.user,
+            test_paper=None,
+            score=user_score,
+            total_score=total_possible_score,
+            is_wrong_paper=True
+        )
+        
+        # 创建每题答题记录并处理错题
+        for question_id in question_ids:
+            question = get_object_or_404(Question, pk=question_id)
+            user_answer = user_answers.get(question_id)
+            
+            # 检查用户答案是否正确
+            if user_answer and user_answer.strip().lower() == question.correct_answer.strip().lower():
+                is_correct = True
+                # 答对的题目从错题本中移除
+                WrongQuestion.objects.filter(user=request.user, question=question).delete()
+            else:
+                is_correct = False
+                # 更新错题记录的用户答案
+                try:
+                    wrong_question = WrongQuestion.objects.get(user=request.user, question=question)
+                    wrong_question.user_answer = user_answer
+                    wrong_question.save()
+                except WrongQuestion.DoesNotExist:
+                    pass
+            
+            # 创建答题记录
+            AnswerRecord.objects.create(
+                test_record=test_record,
+                question=question,
+                user_answer=user_answer,
+                correct_answer=question.correct_answer,
+                is_correct=is_correct,
+                original_question_content=question.content,
+                original_question_type=question.type,
+                original_options=question.options,
+                original_explanation=question.explanation
+            )
         
         return render(request, 'quiz/frontend/wrong_question_paper_result.html', {
             'total_score': total_possible_score,
@@ -432,3 +505,1132 @@ def submit_wrong_question_paper(request):
         })
     
     return redirect('create_wrong_question_paper')
+
+
+# ==================== 班级管理视图 ====================
+
+def is_class_admin(user, class_obj):
+    """检查用户是否是班级管理员"""
+    return ClassAdmin.objects.filter(user=user, class_obj=class_obj).exists()
+
+@login_required
+def class_list(request):
+    """班级列表视图"""
+    classes = Class.objects.all().order_by('name')
+    return render(request, 'quiz/frontend/class_list.html', {'classes': classes})
+
+@login_required
+def class_detail(request, class_id):
+    """班级详情视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    students = User.objects.filter(profile__class_obj=class_obj).order_by('username')
+    admins = ClassAdmin.objects.filter(class_obj=class_obj)
+    is_admin = is_class_admin(request.user, class_obj)
+    pending_count = ClassApplication.objects.filter(class_obj=class_obj, status=0).count()
+    
+    return render(request, 'quiz/frontend/class_detail.html', {
+        'class_obj': class_obj,
+        'students': students,
+        'admins': admins,
+        'is_admin': is_admin,
+        'pending_count': pending_count
+    })
+
+@login_required
+def create_class(request):
+    """创建班级视图"""
+    if not request.user.is_superuser:
+        messages.error(request, '您没有权限创建班级')
+        return redirect('class_list')
+    
+    if request.method == 'POST':
+        code = request.POST.get('code')
+        name = request.POST.get('name')
+        description = request.POST.get('description')
+        
+        if not code or not name:
+            messages.error(request, '班级编号和名称不能为空')
+            return render(request, 'quiz/frontend/create_class.html')
+        
+        if Class.objects.filter(code=code).exists():
+            messages.error(request, '班级编号已存在')
+            return render(request, 'quiz/frontend/create_class.html')
+        
+        Class.objects.create(code=code, name=name, description=description)
+        messages.success(request, '班级创建成功')
+        return redirect('class_list')
+    
+    return render(request, 'quiz/frontend/create_class.html')
+
+@login_required
+def edit_class(request, class_id):
+    """编辑班级视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员可以编辑班级
+    if not request.user.is_superuser:
+        messages.error(request, '您没有权限编辑班级')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description')
+        
+        if not name:
+            messages.error(request, '班级名称不能为空')
+            return render(request, 'quiz/frontend/edit_class.html', {'class_obj': class_obj})
+        
+        class_obj.name = name
+        class_obj.description = description
+        class_obj.save()
+        messages.success(request, '班级信息更新成功')
+        return redirect('class_detail', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/edit_class.html', {'class_obj': class_obj})
+
+@login_required
+def delete_class(request, class_id):
+    """删除班级视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员可以删除班级
+    if not request.user.is_superuser:
+        messages.error(request, '您没有权限删除班级')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        class_obj.delete()
+        messages.success(request, '班级删除成功')
+        return redirect('class_list')
+    
+    return render(request, 'quiz/frontend/delete_class.html', {'class_obj': class_obj})
+
+@login_required
+def add_class_admin(request, class_id):
+    """添加班级管理员视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员可以添加班级管理员
+    if not request.user.is_superuser:
+        messages.error(request, '您没有权限添加班级管理员')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        
+        try:
+            user = User.objects.get(username=username)
+            ClassAdmin.objects.create(class_obj=class_obj, user=user)
+            messages.success(request, f'已将 {username} 设置为班级管理员')
+        except User.DoesNotExist:
+            messages.error(request, '用户不存在')
+        except IntegrityError:
+            messages.error(request, '该用户已是班级管理员')
+        
+        return redirect('class_detail', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/add_class_admin.html', {'class_obj': class_obj})
+
+@login_required
+def remove_class_admin(request, class_id, admin_id):
+    """移除班级管理员视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    class_admin = get_object_or_404(ClassAdmin, pk=admin_id)
+    
+    # 只有超级管理员可以移除班级管理员
+    if not request.user.is_superuser:
+        messages.error(request, '您没有权限移除班级管理员')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        class_admin.delete()
+        messages.success(request, '班级管理员已移除')
+        return redirect('class_detail', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/remove_class_admin.html', {
+        'class_obj': class_obj,
+        'class_admin': class_admin
+    })
+
+@login_required
+def assign_student_to_class(request, class_id):
+    """分配学生到班级视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员或班级管理员可以分配学生
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限分配学生')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        username_or_phone = request.POST.get('username_or_phone')
+        
+        try:
+            # 尝试通过用户名查找
+            user = User.objects.get(username=username_or_phone)
+        except User.DoesNotExist:
+            try:
+                # 尝试通过手机号查找
+                profile = Profile.objects.get(phone_number=username_or_phone)
+                user = profile.user
+            except Profile.DoesNotExist:
+                messages.error(request, '用户不存在')
+                return redirect('class_detail', class_id=class_id)
+        
+        user.profile.class_obj = class_obj
+        user.profile.save()
+        messages.success(request, f'已将 {user.username} 分配到 {class_obj.name}')
+        return redirect('class_detail', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/assign_student.html', {'class_obj': class_obj})
+
+@login_required
+def remove_student_from_class(request, class_id, user_id):
+    """从班级移除学生视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    student = get_object_or_404(User, pk=user_id)
+    
+    # 只有超级管理员或班级管理员可以移除学生
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限移除学生')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        student.profile.class_obj = None
+        student.profile.save()
+        messages.success(request, f'已将 {student.username} 从 {class_obj.name} 移除')
+        return redirect('class_detail', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/remove_student.html', {
+        'class_obj': class_obj,
+        'student': student
+    })
+
+
+# ==================== 班级申请管理视图 ====================
+
+@login_required
+def apply_to_class(request):
+    """申请加入班级视图"""
+    if request.method == 'POST':
+        class_code = request.POST.get('class_code')
+        message = request.POST.get('message', '')
+        
+        try:
+            class_obj = Class.objects.get(code=class_code)
+        except Class.DoesNotExist:
+            messages.error(request, '班级编号不存在，请检查后重新输入')
+            return render(request, 'quiz/frontend/apply_to_class.html')
+        
+        # 检查是否已是班级成员
+        if request.user.profile.class_obj == class_obj:
+            messages.error(request, '您已经是该班级的成员')
+            return redirect('class_detail', class_id=class_obj.id)
+        
+        # 检查是否有待审核的申请
+        existing_application = ClassApplication.objects.filter(
+            class_obj=class_obj, 
+            user=request.user, 
+            status=0
+        ).first()
+        
+        if existing_application:
+            messages.error(request, '您已有待审核的申请，请等待审核')
+            return redirect('class_detail', class_id=class_obj.id)
+        
+        # 检查是否曾经申请过并被拒绝，重新申请
+        old_application = ClassApplication.objects.filter(
+            class_obj=class_obj, 
+            user=request.user
+        ).first()
+        
+        if old_application:
+            if old_application.status == 2:  # 被拒绝
+                old_application.status = 0
+                old_application.message = message
+                old_application.save()
+                messages.success(request, '重新申请已提交，请等待审核')
+            else:
+                messages.error(request, '您已有申请记录')
+        else:
+            ClassApplication.objects.create(
+                class_obj=class_obj,
+                user=request.user,
+                message=message
+            )
+            messages.success(request, '申请已提交，请等待班级管理员审核')
+        
+        return redirect('class_detail', class_id=class_obj.id)
+    
+    return render(request, 'quiz/frontend/apply_to_class.html')
+
+
+@login_required
+def my_applications(request):
+    """我的申请记录视图"""
+    applications = ClassApplication.objects.filter(user=request.user).order_by('-created_at')
+    return render(request, 'quiz/frontend/my_applications.html', {'applications': applications})
+
+
+@login_required
+def class_applications(request, class_id):
+    """班级申请列表视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员或班级管理员可以查看申请列表
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限查看申请列表')
+        return redirect('class_detail', class_id=class_id)
+    
+    pending_applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).order_by('-created_at')
+    processed_applications = ClassApplication.objects.filter(class_obj=class_obj, status__in=[1, 2]).order_by('-created_at')[:20]
+    
+    return render(request, 'quiz/frontend/class_applications.html', {
+        'class_obj': class_obj,
+        'pending_applications': pending_applications,
+        'processed_applications': processed_applications
+    })
+
+
+@login_required
+def approve_application(request, class_id, application_id):
+    """审核通过申请视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    application = get_object_or_404(ClassApplication, pk=application_id)
+    
+    # 只有超级管理员或班级管理员可以审核
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限审核申请')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        application.status = 1
+        application.reviewed_at = timezone.now()
+        application.reviewed_by = request.user
+        application.save()
+        
+        # 自动将学生分配到班级
+        application.user.profile.class_obj = class_obj
+        application.user.profile.save()
+        
+        messages.success(request, f'已通过 {application.user.username} 的加入申请')
+        return redirect('class_applications', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/approve_application.html', {
+        'class_obj': class_obj,
+        'application': application
+    })
+
+
+@login_required
+def reject_application(request, class_id, application_id):
+    """审核拒绝申请视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    application = get_object_or_404(ClassApplication, pk=application_id)
+    
+    # 只有超级管理员或班级管理员可以审核
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限审核申请')
+        return redirect('class_detail', class_id=class_id)
+    
+    if request.method == 'POST':
+        application.status = 2
+        application.reviewed_at = timezone.now()
+        application.reviewed_by = request.user
+        application.save()
+        
+        messages.success(request, f'已拒绝 {application.user.username} 的加入申请')
+        return redirect('class_applications', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/reject_application.html', {
+        'class_obj': class_obj,
+        'application': application
+    })
+
+
+# ==================== 班级作业/考试功能 ====================
+
+@login_required
+def create_class_assignment(request, class_id):
+    """创建班级作业/考试视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员或班级管理员可以创建作业
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限创建班级作业')
+        return redirect('class_detail', class_id=class_id)
+    
+    # 获取筛选参数
+    filter_type = request.GET.get('filter', 'all')
+    
+    # 根据筛选类型获取试卷
+    if filter_type == 'my':
+        available_papers = TestPaper.objects.filter(created_by=request.user.username, is_published=True)
+    elif filter_type == 'published':
+        available_papers = TestPaper.objects.filter(is_published=True)
+    else:  # all
+        # 所有已发布的试卷，优先显示自己的
+        my_papers = TestPaper.objects.filter(created_by=request.user.username, is_published=True)
+        other_papers = TestPaper.objects.filter(is_published=True).exclude(created_by=request.user.username)
+        available_papers = list(my_papers) + list(other_papers)
+    
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        description = request.POST.get('description')
+        paper_id = request.POST.get('paper_id')
+        deadline = request.POST.get('deadline')
+        assignment_type = request.POST.get('type', 1)
+        
+        if not title or not paper_id or not deadline:
+            messages.error(request, '请填写完整信息')
+            return redirect(f"{request.path}?filter={filter_type}")
+        
+        try:
+            test_paper = TestPaper.objects.get(pk=paper_id)
+            # 处理 datetime-local 格式（可能包含 'T'）
+            deadline_clean = deadline.replace('T', ' ')
+            deadline_datetime = datetime.datetime.strptime(deadline_clean, '%Y-%m-%d %H:%M')
+            
+            ClassAssignment.objects.create(
+                class_obj=class_obj,
+                test_paper=test_paper,
+                title=title,
+                description=description,
+                type=int(assignment_type),
+                deadline=deadline_datetime,
+                created_by=request.user
+            )
+            
+            messages.success(request, '班级作业创建成功')
+            return redirect('class_assignments', class_id=class_id)
+        except TestPaper.DoesNotExist:
+            messages.error(request, '试卷不存在')
+        except ValueError:
+            messages.error(request, '时间格式错误')
+    
+    return render(request, 'quiz/frontend/create_class_assignment.html', {
+        'class_obj': class_obj,
+        'available_papers': available_papers,
+        'filter_type': filter_type
+    })
+
+
+@login_required
+def class_assignments(request, class_id):
+    """班级作业列表视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    
+    # 只有超级管理员或班级管理员可以查看作业列表
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限查看班级作业')
+        return redirect('class_detail', class_id=class_id)
+    
+    assignments = ClassAssignment.objects.filter(class_obj=class_obj).order_by('-created_at')
+    
+    return render(request, 'quiz/frontend/class_assignments.html', {
+        'class_obj': class_obj,
+        'assignments': assignments
+    })
+
+
+@login_required
+def class_assignment_detail(request, class_id, assignment_id):
+    """班级作业详情视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
+    
+    # 只有超级管理员或班级管理员可以查看作业详情
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限查看作业详情')
+        return redirect('class_detail', class_id=class_id)
+    
+    # 获取作业记录
+    records = ClassAssignmentRecord.objects.filter(assignment=assignment).select_related('user').order_by('user__username')
+    
+    # 计算统计数据
+    total_students = class_obj.get_students().count()
+    completed_count = records.filter(is_submitted=True).count()
+    not_submitted_count = total_students - completed_count
+    
+    return render(request, 'quiz/frontend/class_assignment_detail.html', {
+        'class_obj': class_obj,
+        'assignment': assignment,
+        'records': records,
+        'total_students': total_students,
+        'completed_count': completed_count,
+        'not_submitted_count': not_submitted_count
+    })
+
+
+@login_required
+def publish_class_assignment(request, class_id, assignment_id):
+    """发布班级作业视图"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
+    
+    # 只有超级管理员或班级管理员可以发布作业
+    if not (request.user.is_superuser or is_class_admin(request.user, class_obj)):
+        messages.error(request, '您没有权限发布班级作业')
+        return redirect('class_assignments', class_id=class_id)
+    
+    if request.method == 'POST':
+        assignment.status = 1
+        assignment.published_at = timezone.now()
+        assignment.save()
+        
+        # 为班级所有学生创建作业记录
+        students = class_obj.get_students()
+        for student in students:
+            ClassAssignmentRecord.objects.get_or_create(
+                assignment=assignment,
+                user=student
+            )
+        
+        messages.success(request, '班级作业已发布')
+        return redirect('class_assignments', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/publish_class_assignment.html', {
+        'class_obj': class_obj,
+        'assignment': assignment
+    })
+
+
+@login_required
+def student_class_assignments(request):
+    """学生查看自己的班级作业视图"""
+    # 获取用户所在班级的已发布作业
+    assignment_list = []
+    if request.user.profile.class_obj:
+        assignments = ClassAssignment.objects.filter(
+            class_obj=request.user.profile.class_obj,
+            status=1
+        ).order_by('-published_at')
+        
+        # 获取学生的作业记录，合并到作业列表中
+        for assignment in assignments:
+            record = ClassAssignmentRecord.objects.filter(
+                assignment=assignment,
+                user=request.user
+            ).first()
+            
+            # 判断状态
+            now = timezone.now()
+            is_overdue = assignment.deadline < now and not (record and record.is_submitted)
+            is_submitted = record and record.is_submitted
+            
+            assignment_list.append({
+                'assignment': assignment,
+                'record': record,
+                'is_overdue': is_overdue,
+                'is_submitted': is_submitted
+            })
+    
+    return render(request, 'quiz/frontend/student_class_assignments.html', {
+        'assignment_list': assignment_list
+    })
+
+
+@login_required
+def do_class_assignment(request, assignment_id):
+    """学生完成班级作业视图"""
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
+    
+    # 检查学生是否有权限完成此作业
+    if request.user.profile.class_obj != assignment.class_obj:
+        messages.error(request, '您没有权限完成此作业')
+        return redirect('student_class_assignments')
+    
+    # 检查作业是否已发布
+    if assignment.status != 1:
+        messages.error(request, '作业尚未发布')
+        return redirect('student_class_assignments')
+    
+    # 检查是否已提交
+    record = ClassAssignmentRecord.objects.filter(
+        assignment=assignment,
+        user=request.user
+    ).first()
+    
+    if record and record.is_submitted:
+        messages.error(request, '您已经提交了此作业')
+        return redirect('student_class_assignments')
+    
+    return render(request, 'quiz/frontend/do_class_assignment.html', {
+        'assignment': assignment,
+        'test_paper': assignment.test_paper
+    })
+
+
+@login_required
+def submit_class_assignment(request, assignment_id):
+    """提交班级作业视图"""
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
+    
+    # 检查学生是否有权限提交此作业
+    if request.user.profile.class_obj != assignment.class_obj:
+        messages.error(request, '您没有权限提交此作业')
+        return redirect('student_class_assignments')
+    
+    # 检查作业是否已发布
+    if assignment.status != 1:
+        messages.error(request, '作业尚未发布')
+        return redirect('student_class_assignments')
+    
+    # 检查是否已提交
+    record = ClassAssignmentRecord.objects.filter(
+        assignment=assignment,
+        user=request.user
+    ).first()
+    
+    if record and record.is_submitted:
+        messages.error(request, '您已经提交了此作业')
+        return redirect('student_class_assignments')
+    
+    if request.method == 'POST':
+        # 创建答题记录
+        test_record = TestRecord.objects.create(
+            user=request.user,
+            test_paper=assignment.test_paper,
+            score=0,
+            total_score=assignment.test_paper.total_score
+        )
+        
+        score = 0
+        for question in assignment.test_paper.questions.all():
+            user_answer = request.POST.get(f'question_{question.id}')
+            is_correct = user_answer == question.correct_answer
+            
+            if is_correct:
+                score += question.score
+            
+            AnswerRecord.objects.create(
+                test_record=test_record,
+                question=question,
+                user_answer=user_answer,
+                correct_answer=question.correct_answer,
+                is_correct=is_correct,
+                original_question_content=question.content,
+                original_question_type=question.type,
+                original_options=question.options,
+                original_explanation=question.explanation
+            )
+            
+            # 添加到错题本
+            if not is_correct:
+                WrongQuestion.objects.get_or_create(
+                    user=request.user,
+                    question=question,
+                    defaults={'user_answer': user_answer}
+                )
+        
+        # 更新答题记录分数
+        test_record.score = score
+        test_record.save()
+        
+        # 更新作业记录
+        if record:
+            record.test_record = test_record
+            record.is_submitted = True
+            record.score = score
+            record.submitted_at = timezone.now()
+            record.save()
+        else:
+            ClassAssignmentRecord.objects.create(
+                assignment=assignment,
+                user=request.user,
+                test_record=test_record,
+                is_submitted=True,
+                score=score,
+                submitted_at=timezone.now()
+            )
+        
+        messages.success(request, f'作业提交成功！得分：{score}/{assignment.test_paper.total_score}')
+        return redirect('student_class_assignments')
+    
+    return redirect('do_class_assignment', assignment_id=assignment_id)
+
+
+@login_required
+def my_test_papers(request):
+    """我的试卷视图 - 显示用户创建的所有试卷"""
+    # 获取用户创建的所有试卷，按创建时间倒序排列
+    test_papers = TestPaper.objects.filter(created_by=request.user.username).order_by('-created_at')
+    
+    # 分页，每页显示9份试卷
+    paginator = Paginator(test_papers, 9)
+    page_num = request.GET.get('page')
+    try:
+        paginated_test_papers = paginator.page(page_num)
+    except PageNotAnInteger:
+        paginated_test_papers = paginator.page(1)
+    except EmptyPage:
+        paginated_test_papers = paginator.page(paginator.num_pages)
+    
+    return render(request, 'quiz/frontend/my_test_papers.html', {
+        'test_papers': paginated_test_papers
+    })
+
+
+@login_required
+def create_test_paper(request):
+    """创建试卷视图 - 支持手动添加题目"""
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        description = request.POST.get('description')
+        question_ids = request.POST.getlist('questions')
+        
+        if title and question_ids:
+            # 创建试卷
+            test_paper = TestPaper.objects.create(
+                title=title,
+                description=description,
+                created_by=request.user.username,
+                is_published=False  # 默认不发布
+            )
+            
+            # 添加题目
+            total_score = 0
+            for q_id in question_ids:
+                try:
+                    question = Question.objects.get(id=q_id)
+                    test_paper.questions.add(question)
+                    total_score += question.score
+                except Question.DoesNotExist:
+                    pass
+            
+            test_paper.total_score = total_score
+            test_paper.save()
+            messages.success(request, f'试卷 "{title}" 创建成功！共 {len(question_ids)} 道题目，总分 {total_score} 分。')
+            return redirect('my_test_papers')
+        else:
+            messages.error(request, '请填写试卷标题并至少选择一道题目')
+    
+    # 获取所有题目供选择
+    questions = Question.objects.all().order_by('id')
+    
+    # 处理options字段，确保是字典格式
+    questions_list = []
+    for q in questions:
+        options_data = q.options
+        if isinstance(options_data, str):
+            import json
+            try:
+                options_data = json.loads(options_data)
+            except:
+                options_data = {}
+        elif not isinstance(options_data, dict):
+            options_data = {}
+        
+        questions_list.append({
+            'id': q.id,
+            'type': q.type,
+            'content': q.content,
+            'options': options_data,
+            'score': q.score,
+            'explanation': q.explanation
+        })
+    
+    return render(request, 'quiz/frontend/create_test_paper.html', {
+        'questions': questions_list
+    })
+
+
+@login_required
+def import_test_paper(request):
+    """导入试卷视图 - 支持从Excel文件导入试卷（两步流程：上传预览 → 确认导入）"""
+    
+    # 处理从预览页面返回并保存编辑数据
+    if request.method == 'POST' and request.POST.get('action') == 'save_and_back':
+        title = request.POST.get('title', '')
+        description = request.POST.get('description', '')
+        questions_json = request.POST.get('questions_json', '')
+        
+        # 保存到session
+        request.session['import_paper_data'] = {
+            'title': title,
+            'description': description,
+            'questions_json': questions_json
+        }
+        request.session.set_expiry(3600)  # 1小时过期
+        
+        return render(request, 'quiz/frontend/import_test_paper.html', {
+            'saved_title': title,
+            'saved_description': description,
+            'saved_questions_json': questions_json,
+            'show_preview_data': True
+        })
+    
+    # 处理从预览页面返回（保留编辑数据）
+    if request.method == 'GET' and request.GET.get('action') == 'back_from_preview':
+        # 从session获取保存的编辑数据
+        saved_data = request.session.get('import_paper_data', {})
+        return render(request, 'quiz/frontend/import_test_paper.html', {
+            'saved_title': saved_data.get('title', ''),
+            'saved_description': saved_data.get('description', ''),
+            'saved_questions_json': saved_data.get('questions_json', ''),
+            'show_preview_data': True
+        })
+    
+    # 处理恢复预览数据
+    if request.method == 'POST' and request.POST.get('action') == 'restore_preview':
+        title = request.POST.get('title', '')
+        description = request.POST.get('description', '')
+        questions_json = request.POST.get('questions_json', '')
+        
+        if questions_json:
+            import json
+            try:
+                questions_data = json.loads(questions_json)
+                valid_count = sum(1 for q in questions_data if q.get('correct_answer') and q.get('score'))
+                missing_count = len(questions_data) - valid_count
+                
+                return render(request, 'quiz/frontend/import_preview.html', {
+                    'title': title,
+                    'description': description,
+                    'questions_data': questions_data,
+                    'questions_json': questions_json,
+                    'total_score': sum(q.get('score', 0) for q in questions_data),
+                    'valid_count': valid_count,
+                    'missing_count': missing_count,
+                    'errors': []
+                })
+            except:
+                messages.error(request, '预览数据解析失败，请重新上传')
+    
+    # 处理确认导入
+    if request.method == 'POST' and request.POST.get('action') == 'confirm_import':
+        title = request.POST.get('title')
+        description = request.POST.get('description')
+        questions_json = request.POST.get('questions_data')
+        
+        if title and questions_json:
+            import json
+            try:
+                questions_data = json.loads(questions_json)
+                
+                if not questions_data:
+                    messages.error(request, '没有有效的题目数据')
+                    return render(request, 'quiz/frontend/import_test_paper.html')
+                
+                # 创建试卷
+                test_paper = TestPaper.objects.create(
+                    title=title,
+                    description=description,
+                    created_by=request.user.username,
+                    is_published=False
+                )
+                
+                # 创建题目并添加到试卷
+                total_score = 0
+                valid_questions = 0
+                for q_data in questions_data:
+                    # 跳过无效题目（缺少关键信息）
+                    if not q_data.get('content') or not q_data.get('correct_answer'):
+                        continue
+                    
+                    # 处理选项：支持字典和字符串格式
+                    options_data = q_data.get('options', {})
+                    if isinstance(options_data, str):
+                        # 如果是字符串格式，转换为字典
+                        try:
+                            options_data = json.loads(options_data)
+                        except:
+                            options_data = {}
+                    
+                    # 获取题目类型，默认为选择题
+                    q_type = int(q_data.get('type', 1))
+                    if q_type not in [1, 2, 3]:
+                        q_type = 1
+                    
+                    # 获取分值，默认为1分
+                    q_score = q_data.get('score', 1)
+                    try:
+                        q_score = int(q_score) if q_score else 1
+                    except:
+                        q_score = 1
+                    
+                    question = Question.objects.create(
+                        type=q_type,
+                        content=q_data['content'],
+                        options=options_data,
+                        correct_answer=q_data['correct_answer'],
+                        score=q_score,
+                        explanation=q_data.get('explanation', '')
+                    )
+                    test_paper.questions.add(question)
+                    total_score += q_score
+                    valid_questions += 1
+                
+                test_paper.total_score = total_score
+                test_paper.save()
+                
+                messages.success(request, f'试卷 "{title}" 导入成功！共导入 {len(questions_data)} 道题目')
+                return redirect('my_test_papers')
+            except Exception as e:
+                messages.error(request, f'导入失败：{str(e)}')
+        else:
+            messages.error(request, '请填写试卷标题并确认导入')
+        return render(request, 'quiz/frontend/import_test_paper.html')
+    
+    # 处理文件上传和预览
+    if request.method == 'POST' and request.FILES.get('paper_file'):
+        title = request.POST.get('title', '')
+        description = request.POST.get('description', '')
+        file = request.FILES.get('paper_file')
+        
+        if not title:
+            messages.error(request, '请填写试卷标题')
+            return render(request, 'quiz/frontend/import_test_paper.html')
+        
+        try:
+            import openpyxl
+            from openpyxl.utils.exceptions import InvalidFileException
+            
+            # 读取 Excel 文件
+            wb = openpyxl.load_workbook(file)
+            ws = wb.active
+            
+            # 验证表头
+            headers = [cell.value for cell in ws[1]]
+            
+            # 灵活的表头匹配
+            header_map = {}
+            for i, header in enumerate(headers):
+                if header:
+                    header_lower = str(header).lower().strip()
+                    # 精确匹配题目内容，排除题型
+                    if 'content' in header_lower or ('题' in header_lower and '题型' not in header_lower):
+                        header_map['content'] = i
+                    elif 'type' in header_lower or '题型' in header_lower:
+                        header_map['type'] = i
+                    elif 'a' == header_lower or '选项a' in header_lower:
+                        header_map['option_a'] = i
+                    elif 'b' == header_lower or '选项b' in header_lower:
+                        header_map['option_b'] = i
+                    elif 'c' == header_lower or '选项c' in header_lower:
+                        header_map['option_c'] = i
+                    elif 'd' == header_lower or '选项d' in header_lower:
+                        header_map['option_d'] = i
+                    elif 'answer' in header_lower or '正确' in header_lower:
+                        header_map['correct_answer'] = i
+                    elif 'score' in header_lower or '分' in header_lower:
+                        header_map['score'] = i
+                    elif 'explanation' in header_lower or '解析' in header_lower:
+                        header_map['explanation'] = i
+            
+            # 检查必需列
+            required_keys = ['content', 'correct_answer', 'score']
+            missing_cols = [k for k in required_keys if k not in header_map]
+            if missing_cols:
+                messages.error(request, f'缺少必需列：{", ".join(missing_cols)}。请下载正确格式的模板')
+                return render(request, 'quiz/frontend/import_test_paper.html')
+            
+            # 解析数据
+            questions_data = []
+            errors = []
+            
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
+                try:
+                    content = str(row[header_map['content']].value or '').strip()
+                    if not content:
+                        continue
+                    
+                    # 处理题型（支持数字和文字）
+                    q_type = 1
+                    if 'type' in header_map:
+                        type_val = row[header_map['type']].value
+                        if type_val is not None:
+                            type_str = str(type_val).strip()
+                            if type_str in ['2', '判断题', '判断', 'judge']:
+                                q_type = 2
+                            elif type_str in ['1', '选择题', '选择', '单选', '多选', 'choice']:
+                                q_type = 1
+                    
+                    # 处理选项（支持分开的多列和合并的选项列）
+                    options = {}
+                    option_cols = ['option_a', 'option_b', 'option_c', 'option_d']
+                    option_letters = ['A', 'B', 'C', 'D']
+                    
+                    for col_key, letter in zip(option_cols, option_letters):
+                        if col_key in header_map:
+                            val = row[header_map[col_key]].value
+                            if val and str(val).strip():
+                                options[letter] = str(val).strip()
+                    
+                    # 如果没有单独的选项列，尝试从'选项'列读取
+                    if not options and 'options' in header_map:
+                        options_str = str(row[header_map['options']].value or '').strip()
+                        if options_str:
+                            # 格式：A.选项1,B.选项2,C.选项3,D.选项4
+                            for item in options_str.split(','):
+                                item = item.strip()
+                                if item and len(item) >= 2:
+                                    letter = item[0].upper()
+                                    if letter in ['A', 'B', 'C', 'D']:
+                                        options[letter] = item[1:].strip()
+                    
+                    # 格式化选项为 {"A": "内容", "B": "内容"}
+                    options_json = options if options else {}
+                    
+                    correct_answer = str(row[header_map['correct_answer']].value or '').strip()
+                    if not correct_answer:
+                        errors.append(f'第{row_idx}行：正确答案为空，请补全')
+                    
+                    try:
+                        score = int(row[header_map['score']].value or '')
+                        if score <= 0:
+                            score = ''
+                    except:
+                        score = ''
+                        errors.append(f'第{row_idx}行：分值格式错误，请补全')
+                    
+                    explanation = ''
+                    if 'explanation' in header_map:
+                        explanation = str(row[header_map['explanation']].value or '').strip()
+                    
+                    questions_data.append({
+                        'content': content,
+                        'type': q_type,
+                        'options': options_json,
+                        'correct_answer': correct_answer,
+                        'score': score,
+                        'explanation': explanation,
+                        'row': row_idx,
+                        'has_error': not correct_answer or not score
+                    })
+                    
+                except Exception as e:
+                    errors.append(f'第{row_idx}行：{str(e)}')
+            
+            if not questions_data:
+                if errors:
+                    for err in errors[:5]:
+                        messages.error(request, err)
+                else:
+                    messages.error(request, '文件中没有有效的题目数据')
+                return render(request, 'quiz/frontend/import_test_paper.html')
+            
+            # 统计有效题目和待补全题目数量
+            valid_count = sum(1 for q in questions_data if q.get('correct_answer') and q.get('score'))
+            missing_count = len(questions_data) - valid_count
+            
+            # 返回预览页面
+            import json
+            return render(request, 'quiz/frontend/import_preview.html', {
+                'title': title,
+                'description': description,
+                'questions_data': questions_data,
+                'questions_json': json.dumps(questions_data, ensure_ascii=False),
+                'total_score': sum(q['score'] for q in questions_data),
+                'valid_count': valid_count,
+                'missing_count': missing_count,
+                'errors': errors[:10] if errors else []
+            })
+            
+        except InvalidFileException:
+            messages.error(request, '文件格式不正确，请上传 .xlsx 格式的 Excel 文件')
+        except Exception as e:
+            messages.error(request, f'读取文件失败：{str(e)}')
+        
+        return render(request, 'quiz/frontend/import_test_paper.html')
+    
+    return render(request, 'quiz/frontend/import_test_paper.html')
+
+
+@login_required
+def publish_test_paper(request, paper_id):
+    """发布/取消发布试卷"""
+    try:
+        paper = TestPaper.objects.get(id=paper_id, created_by=request.user.username)
+        paper.is_published = not paper.is_published
+        paper.save()
+        
+        if paper.is_published:
+            messages.success(request, f'试卷 "{paper.title}" 已发布')
+        else:
+            messages.success(request, f'试卷 "{paper.title}" 已取消发布')
+    except TestPaper.DoesNotExist:
+        messages.error(request, '试卷不存在')
+    
+    return redirect('my_test_papers')
+
+
+@login_required
+def download_import_template(request):
+    """下载导入模板 - 与后台管理格式一致"""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from django.http import HttpResponse
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "题目导入模板"
+    
+    # 设置样式
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="667EEA", end_color="764BA2", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # 写入表头（与后台 Question 模型字段一致）
+    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+    
+    # 写入示例数据（与后台 Question 模型一致）
+    # 题型：选择题、判断题
+    example_data = [
+        ['以下哪个是Python的关键字？', '选择题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字'],
+        ['下列哪些是Python的数据类型？', '选择题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型'],
+        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', 3, 'Python确实是编程语言'],
+    ]
+    
+    for row_idx, row_data in enumerate(example_data, start=2):
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            cell.border = thin_border
+    
+    # 设置列宽
+    ws.column_dimensions['A'].width = 35  # 题目内容
+    ws.column_dimensions['B'].width = 8    # 题型
+    ws.column_dimensions['C'].width = 15  # 选项A
+    ws.column_dimensions['D'].width = 15  # 选项B
+    ws.column_dimensions['E'].width = 15  # 选项C
+    ws.column_dimensions['F'].width = 15  # 选项D
+    ws.column_dimensions['G'].width = 10  # 正确答案
+    ws.column_dimensions['H'].width = 8   # 分值
+    ws.column_dimensions['I'].width = 25  # 解析
+    
+    # 冻结首行
+    ws.freeze_panes = 'A2'
+    
+    # 创建响应
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=题目导入模板.xlsx'
+    wb.save(response)
+    
+    return response
+
+
+@login_required
+def delete_test_paper(request, paper_id):
+    """删除试卷"""
+    try:
+        paper = TestPaper.objects.get(id=paper_id, created_by=request.user.username)
+        paper.delete()
+        messages.success(request, '试卷已删除')
+    except TestPaper.DoesNotExist:
+        messages.error(request, '试卷不存在')
+    
+    return redirect('my_test_papers')

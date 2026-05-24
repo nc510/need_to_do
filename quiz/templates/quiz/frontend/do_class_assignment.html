@@ -1,0 +1,374 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}{{ assignment.title }} - 班级作业{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .paper-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        margin-top: 20px;
+    }
+
+    .paper-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 25px;
+    }
+
+    .paper-header h1 {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .paper-header p {
+        margin: 5px 0;
+        opacity: 0.9;
+        font-size: 14px;
+    }
+
+    .paper-info {
+        background-color: #fafafa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+        border-left: 4px solid #2ecc71;
+    }
+
+    .paper-description {
+        color: #666;
+        margin: 10px 0;
+        font-size: 14px;
+    }
+
+    .paper-meta {
+        color: #999;
+        font-size: 12px;
+        margin-top: 15px;
+    }
+
+    .question-list {
+        margin-bottom: 30px;
+    }
+
+    .question-item {
+        margin-bottom: 25px;
+        padding: 20px;
+        background-color: #fafafa;
+        border-radius: 8px;
+        border-bottom: 2px solid #eee;
+    }
+
+    .question-header {
+        font-weight: bold;
+        margin-bottom: 15px;
+        font-size: 18px;
+        color: #333;
+    }
+
+    .question-type {
+        display: inline-block;
+        padding: 4px 8px;
+        background-color: #3498db;
+        color: #fff;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-right: 10px;
+    }
+
+    .question-content {
+        margin-bottom: 15px;
+        color: #555;
+        line-height: 1.5;
+    }
+
+    .options {
+        margin-bottom: 15px;
+    }
+
+    .option {
+        margin-bottom: 8px;
+        color: #666;
+        padding-left: 35px;
+        position: relative;
+        cursor: pointer;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        border-radius: 6px;
+        transition: background-color 0.2s ease;
+    }
+
+    .option:hover {
+        background-color: #e8f4fd;
+    }
+
+    .option::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 18px;
+        height: 18px;
+        border: 2px solid #3498db;
+        border-radius: 50%;
+        background-color: #fff;
+        transition: all 0.2s ease;
+    }
+
+    .option::before {
+        content: attr(data-option);
+        position: absolute;
+        left: 24px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-weight: bold;
+        color: #3498db;
+        width: 20px;
+        text-align: left;
+    }
+
+    .option.selected::after {
+        background-color: #3498db;
+        box-shadow: inset 0 0 0 3px #fff;
+    }
+
+    .option.selected {
+        background-color: #e8f4fd;
+    }
+
+    .question-score {
+        color: #e74c3c;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+
+    .btn-secondary:hover {
+        background: #eee;
+    }
+
+    .btn-submit {
+        background: #2ecc71;
+        color: white;
+        width: 100%;
+        justify-content: center;
+        margin-top: 30px;
+        font-size: 16px;
+        padding: 15px;
+    }
+
+    .btn-submit:hover {
+        background: #27ae60;
+    }
+
+    .back-btn {
+        margin-bottom: 20px;
+    }
+
+    .deadline-warning {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 12px 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        color: #856404;
+        font-weight: 500;
+    }
+
+    .question-navigation {
+        margin: 20px 0;
+        text-align: center;
+    }
+
+    .question-counter {
+        font-size: 14px;
+        color: #888;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="paper-container">
+    <div class="paper-header">
+        <h1>
+            {% if assignment.type == 1 %}📋{% else %}📝{% endif %} {{ assignment.title }}
+        </h1>
+        <p>班级：{{ assignment.class_obj.name }} ({{ assignment.class_obj.code }})</p>
+        <p>截止时间：{{ assignment.deadline|date:"Y-m-d H:i" }}</p>
+    </div>
+
+    {% now "Y-m-d H:i" as current_time %}
+    {% if assignment.deadline|date:"Y-m-d H:i" > current_time %}
+        {% if assignment.deadline|timeuntil < '1 day' %}
+            <div class="deadline-warning">
+                ⚠️ 注意：作业将在 {{ assignment.deadline|timeuntil }} 后截止，请尽快完成！
+            </div>
+        {% endif %}
+    {% endif %}
+
+    <a href="{% url 'student_class_assignments' %}" class="btn btn-secondary back-btn">← 返回作业列表</a>
+
+    <div class="paper-info">
+        {% if test_paper.description %}
+            <div class="paper-description">{{ test_paper.description }}</div>
+        {% endif %}
+        <div class="paper-meta">
+            总分: {{ test_paper.total_score }}分 | 出题人: {{ test_paper.created_by }} | 题目数: {{ test_paper.questions.count }}题
+        </div>
+    </div>
+
+    <form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}">
+        {% csrf_token %}
+        <div class="question-list">
+            {% for question in test_paper.questions.all %}
+                <div class="question-item" data-question-id="{{ question.id }}">
+                    <div class="question-header">
+                        <span class="question-type">
+                            {% if question.type == 1 %}选择题{% else %}判断题{% endif %}
+                        </span>
+                        <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
+                        {{ question.content }}
+                    </div>
+                    
+                    <div class="options">
+                        {% if question.type == 1 %} <!-- 选择题 -->
+                            <input type="radio" name="question_{{ question.id }}" value="A" id="id_question_{{ question.id }}_A" style="display: none;">
+                            <input type="radio" name="question_{{ question.id }}" value="B" id="id_question_{{ question.id }}_B" style="display: none;">
+                            <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C" style="display: none;">
+                            <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D" style="display: none;">
+                            
+                            {% if 'A' in question.options %}
+                                <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                            {% elif 'a' in question.options %}
+                                <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                            {% endif %}
+                            {% if 'B' in question.options %}
+                                <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                            {% elif 'b' in question.options %}
+                                <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                            {% endif %}
+                            {% if 'C' in question.options %}
+                                <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                            {% elif 'c' in question.options %}
+                                <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                            {% endif %}
+                            {% if 'D' in question.options %}
+                                <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                            {% elif 'd' in question.options %}
+                                <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                            {% endif %}
+                        {% else %} <!-- 判断题 -->
+                            <input type="radio" name="question_{{ question.id }}" value="对" id="id_question_{{ question.id }}_对" style="display: none;">
+                            <input type="radio" name="question_{{ question.id }}" value="错" id="id_question_{{ question.id }}_错" style="display: none;">
+                            
+                            <div class="option" data-option="对">✅ 对</div>
+                            <div class="option" data-option="错">❌ 错</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="question-score">分值: {{ question.score }}分</div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="question-navigation">
+            <span class="question-counter">共 {{ test_paper.questions.count }} 题</span>
+        </div>
+
+        <button type="submit" class="btn btn-submit">📤 提交作业</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.options').forEach(optionsDiv => {
+            const questionId = optionsDiv.closest('.question-item').dataset.questionId;
+            
+            optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
+                const optionText = optionDiv.dataset.option;
+                const optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
+                
+                if (optionElement && optionElement.checked) {
+                    optionDiv.classList.add('selected');
+                }
+                
+                optionDiv.addEventListener('click', () => {
+                    optionsDiv.querySelectorAll('.option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    
+                    optionDiv.classList.add('selected');
+                    
+                    if (optionElement) {
+                        optionElement.checked = true;
+                    }
+                });
+            });
+        });
+
+        const form = document.getElementById('test_paper_form');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const unansweredQuestions = [];
+            document.querySelectorAll('.question-item').forEach((item, index) => {
+                const questionId = item.dataset.questionId;
+                const selectedOption = document.querySelector(`input[name="question_${questionId}"]:checked`);
+                if (!selectedOption) {
+                    unansweredQuestions.push(index + 1);
+                }
+            });
+            
+            if (unansweredQuestions.length > 0) {
+                if (confirm(`您还有 ${unansweredQuestions.length} 题未作答：第 ${unansweredQuestions.join('、')} 题。确定要提交吗？`)) {
+                    form.submit();
+                }
+            } else {
+                if (confirm('确定要提交作业吗？')) {
+                    form.submit();
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

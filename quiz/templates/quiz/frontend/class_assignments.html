@@ -1,0 +1,245 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}班级作业列表 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .assignment-list {
+        margin-top: 20px;
+    }
+    
+    .assignment-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border-left: 4px solid #667eea;
+    }
+    
+    .assignment-card.published {
+        border-left-color: #28a745;
+    }
+    
+    .assignment-card.unpublished {
+        border-left-color: #ffc107;
+    }
+    
+    .assignment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .assignment-header h3 {
+        margin: 0;
+        font-size: 20px;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .assignment-type {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        background: #e7f3ff;
+        color: #0c63e4;
+        font-weight: 500;
+    }
+    
+    .assignment-type.exam {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .assignment-meta {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 15px;
+        color: #888;
+        font-size: 14px;
+        flex-wrap: wrap;
+    }
+    
+    .assignment-meta span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .status-badge {
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    
+    .status-published {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-unpublished {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .assignment-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-success:hover {
+        background: #218838;
+    }
+    
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+    
+    .btn-secondary:hover {
+        background: #eee;
+    }
+    
+    .header-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    
+    .empty-state h3 {
+        margin: 20px 0 10px 0;
+        color: #666;
+    }
+    
+    .progress-info {
+        display: flex;
+        gap: 20px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+        color: #666;
+        font-size: 14px;
+    }
+    
+    .completed {
+        color: #28a745;
+        font-weight: 600;
+    }
+    
+    .total {
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-actions">
+    <div>
+        <h1 class="page-title">📋 班级作业管理</h1>
+        <p style="color: #888; text-align: center; margin-top: -15px;">班级：{{ class_obj.name }} ({{ class_obj.code }})</p>
+    </div>
+    <div>
+        <a href="{% url 'create_class_assignment' class_id=class_obj.id %}" class="btn btn-primary">➕ 创建作业</a>
+        <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-secondary">← 返回班级</a>
+    </div>
+</div>
+
+{% if assignments %}
+    <div class="assignment-list">
+        {% for assignment in assignments %}
+            <div class="assignment-card {% if assignment.status == 1 %}published{% else %}unpublished{% endif %}">
+                <div class="assignment-header">
+                    <h3>
+                        {{ assignment.title }}
+                        <span class="assignment-type {% if assignment.type == 2 %}exam{% endif %}">
+                            {% if assignment.type == 1 %}作业{% else %}考试{% endif %}
+                        </span>
+                    </h3>
+                    <span class="status-badge {% if assignment.status == 1 %}status-published{% else %}status-unpublished{% endif %}">
+                        {% if assignment.status == 1 %}已发布{% else %}未发布{% endif %}
+                    </span>
+                </div>
+                
+                {% if assignment.description %}
+                    <p style="color: #666; margin-bottom: 12px;">{{ assignment.description }}</p>
+                {% endif %}
+                
+                <div class="assignment-meta">
+                    <span>📝 {{ assignment.test_paper.title }} ({{ assignment.test_paper.total_score }}分)</span>
+                    <span>⏰ 截止：{{ assignment.deadline|date:"Y-m-d H:i" }}</span>
+                    <span>👤 {{ assignment.created_by.username }}</span>
+                    <span>📅 {{ assignment.created_at|date:"Y-m-d" }}</span>
+                </div>
+                
+                {% if assignment.status == 1 %}
+                    <div class="progress-info">
+                        <span>完成进度：<span class="completed">{{ assignment.get_completed_count }}</span> / <span class="total">{{ assignment.get_total_students }}</span> 人</span>
+                    </div>
+                {% endif %}
+                
+                <div class="assignment-actions">
+                    <a href="{% url 'class_assignment_detail' class_id=class_obj.id assignment_id=assignment.id %}" class="btn btn-secondary">📊 查看详情</a>
+                    {% if assignment.status == 0 %}
+                        <a href="{% url 'publish_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}" class="btn btn-success">🚀 发布作业</a>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <span style="font-size: 60px;">📭</span>
+        <h3>暂无作业</h3>
+        <p>点击上方按钮创建第一个班级作业</p>
+    </div>
+{% endif %}
+{% endblock %}
