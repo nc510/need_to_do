@@ -1,0 +1,52 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .preview-btn-container {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 15px 0;
+        padding: 12px 15px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+    }
+    .preview-btn-container .btn-preview {
+        background: #2196f3;
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background 0.3s;
+    }
+    .preview-btn-container .btn-preview:hover {
+        background: #1976d2;
+    }
+    .preview-btn-container .preview-info {
+        font-size: 13px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block after_field_sets %}
+{% if original and original.pk %}
+<div class="preview-btn-container">
+    <a href="{% url 'admin_preview_testpaper' original.pk %}" class="btn-preview" target="_blank">
+        👁️ 预览试卷
+    </a>
+    <span class="preview-info">
+        共 {{ original.questions.count }} 题，总分 {{ original.total_score }} 分
+    </span>
+</div>
+{% endif %}
+{% endblock %}

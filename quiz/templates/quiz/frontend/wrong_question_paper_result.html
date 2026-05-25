@@ -191,14 +191,14 @@
                     <div class="question-header">
                         <div class="question-number">{{ forloop.counter }}</div>
                         <div class="question-content">{{ result.question.content }}</div>
-                        <div class="question-type">{% if result.question.type == 1 %}选择题{% else %}判断题{% endif %}</div>
+                        <div class="question-type">{% if result.question.type == 1 %}单选题{% elif result.question.type == 2 %}多选题{% else %}判断题{% endif %}</div>
                     </div>
                     
-                    {% if result.question.type == 1 and result.question.options %}
+                    {% if (result.question.type == 1 or result.question.type == 2) and result.question.options %}
                         <div class="options">
                             {% for option_key, option_value in result.question.options.items %}
-                                <div class="option {% if option_key == result.user_answer %}user-selected{% endif %} {% if option_key == result.correct_answer %}correct{% endif %}" data-option="{{ option_key }}">
-                                    <span>{{ option_value }}</span>
+                                <div class="option {% if option_key in result.user_answer %}user-selected{% endif %} {% if option_key in result.correct_answer %}correct{% endif %}" data-option="{{ option_key }}">
+                                    <span>{{ option_key }}. {{ option_value }}</span>
                                 </div>
                             {% endfor %}
                         </div>

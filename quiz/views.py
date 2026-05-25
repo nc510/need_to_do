@@ -1441,9 +1441,11 @@ def import_test_paper(request):
                         type_val = row[header_map['type']].value
                         if type_val is not None:
                             type_str = str(type_val).strip()
-                            if type_str in ['2', '判断题', '判断', 'judge']:
+                            if type_str in ['3', '判断题', '判断', 'judge']:
+                                q_type = 3
+                            elif type_str in ['2', '多选题', '多选', 'multiple']:
                                 q_type = 2
-                            elif type_str in ['1', '选择题', '选择', '单选', '多选', 'choice']:
+                            elif type_str in ['1', '单选题', '单选', '选择题', '选择', 'choice']:
                                 q_type = 1
                     
                     # 处理选项（支持分开的多列和合并的选项列）
@@ -1516,12 +1518,14 @@ def import_test_paper(request):
             
             # 返回预览页面
             import json
+            # 计算总分，处理空值情况
+            total_score = sum(q['score'] if isinstance(q['score'], int) else 0 for q in questions_data)
             return render(request, 'quiz/frontend/import_preview.html', {
                 'title': title,
                 'description': description,
                 'questions_data': questions_data,
                 'questions_json': json.dumps(questions_data, ensure_ascii=False),
-                'total_score': sum(q['score'] for q in questions_data),
+                'total_score': total_score,
                 'valid_count': valid_count,
                 'missing_count': missing_count,
                 'errors': errors[:10] if errors else []
@@ -1588,10 +1592,10 @@ def download_import_template(request):
         cell.border = thin_border
     
     # 写入示例数据（与后台 Question 模型一致）
-    # 题型：选择题、判断题
+    # 题型：单选题、多选题、判断题
     example_data = [
-        ['以下哪个是Python的关键字？', '选择题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字'],
-        ['下列哪些是Python的数据类型？', '选择题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型'],
+        ['以下哪个是Python的关键字？', '单选题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字'],
+        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型'],
         ['Python是一种编程语言', '判断题', '', '', '', '', '正确', 3, 'Python确实是编程语言'],
     ]
     
@@ -1634,3 +1638,541 @@ def delete_test_paper(request, paper_id):
         messages.error(request, '试卷不存在')
     
     return redirect('my_test_papers')
+
+
+# ========== 后台管理功能 ==========
+from django.contrib.admin.views.decorators import staff_member_required
+import openpyxl
+
+@staff_member_required
+def admin_import_questions(request):
+    """后台导入试题"""
+    if request.method == 'POST':
+        if 'file' in request.FILES:
+            file = request.FILES['file']
+            try:
+                wb = openpyxl.load_workbook(file)
+                ws = wb.active
+                
+                # 解析表头
+                header_row = [cell.value for cell in ws[1]]
+                header_map = {}
+                header_aliases = {
+                    'content': ['content', '题目', '题目内容', 'question', '题干'],
+                    'type': ['type', '题型', '题目类型', '类别'],
+                    'option_a': ['option_a', '选项A', 'A', '选项a'],
+                    'option_b': ['option_b', '选项B', 'B', '选项b'],
+                    'option_c': ['option_c', '选项C', 'C', '选项c'],
+                    'option_d': ['option_d', '选项D', 'D', '选项d'],
+                    'options': ['options', '选项', '所有选项'],
+                    'correct_answer': ['correct_answer', '答案', '正确答案', '参考答案'],
+                    'score': ['score', '分值', '分数', '得分'],
+                    'explanation': ['explanation', '解析', '答案解析', '解析说明']
+                }
+                
+                for idx, header in enumerate(header_row):
+                    if header:
+                        header_str = str(header).strip()
+                        for key, aliases in header_aliases.items():
+                            if header_str in aliases:
+                                header_map[key] = idx
+                                break
+                
+                required_keys = ['content', 'correct_answer', 'score']
+                missing_cols = [k for k in required_keys if k not in header_map]
+                if missing_cols:
+                    messages.error(request, f'缺少必需列：{", ".join(missing_cols)}。请下载正确格式的模板')
+                    return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+                
+                questions_data = []
+                errors = []
+                
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
+                    try:
+                        content = str(row[header_map['content']].value or '').strip()
+                        if not content:
+                            continue
+                        
+                        q_type = 1
+                        if 'type' in header_map:
+                            type_val = row[header_map['type']].value
+                            if type_val is not None:
+                                type_str = str(type_val).strip()
+                                if type_str in ['3', '判断题', '判断', 'judge']:
+                                    q_type = 3
+                                elif type_str in ['2', '多选题', '多选', 'multiple']:
+                                    q_type = 2
+                                elif type_str in ['1', '单选题', '单选', 'single', '选择题']:
+                                    q_type = 1
+                        
+                        options = {}
+                        option_cols = ['option_a', 'option_b', 'option_c', 'option_d']
+                        option_letters = ['A', 'B', 'C', 'D']
+                        
+                        for col_key, letter in zip(option_cols, option_letters):
+                            if col_key in header_map:
+                                val = row[header_map[col_key]].value
+                                if val and str(val).strip():
+                                    options[letter] = str(val).strip()
+                        
+                        if not options and 'options' in header_map:
+                            options_str = str(row[header_map['options']].value or '').strip()
+                            if options_str:
+                                for item in options_str.split(','):
+                                    item = item.strip()
+                                    if item and len(item) >= 2:
+                                        letter = item[0].upper()
+                                        if letter in ['A', 'B', 'C', 'D']:
+                                            options[letter] = item[1:].strip()
+                        
+                        options_json = options if options else {}
+                        
+                        correct_answer = str(row[header_map['correct_answer']].value or '').strip()
+                        if not correct_answer:
+                            errors.append(f'第{row_idx}行：正确答案为空，请补全')
+                        
+                        try:
+                            score = int(row[header_map['score']].value or '')
+                            if score <= 0:
+                                score = ''
+                        except:
+                            score = ''
+                            errors.append(f'第{row_idx}行：分值格式错误，请补全')
+                        
+                        explanation = ''
+                        if 'explanation' in header_map:
+                            explanation = str(row[header_map['explanation']].value or '').strip()
+                        
+                        questions_data.append({
+                            'content': content,
+                            'type': q_type,
+                            'options': options_json,
+                            'correct_answer': correct_answer,
+                            'score': score,
+                            'explanation': explanation,
+                            'row': row_idx,
+                            'has_error': not correct_answer or not score
+                        })
+                        
+                    except Exception as e:
+                        errors.append(f'第{row_idx}行：{str(e)}')
+                
+                if not questions_data:
+                    messages.error(request, '文件中没有有效的题目数据')
+                    return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+                
+                valid_count = sum(1 for q in questions_data if q.get('correct_answer') and q.get('score'))
+                missing_count = len(questions_data) - valid_count
+                total_score = sum(q['score'] if isinstance(q['score'], int) else 0 for q in questions_data)
+                
+                return render(request, 'quiz/admin/import_questions.html', {
+                    'step': 2,
+                    'questions_data': questions_data,
+                    'questions_json': json.dumps(questions_data, ensure_ascii=False),
+                    'total_score': total_score,
+                    'valid_count': valid_count,
+                    'missing_count': missing_count,
+                    'errors': errors[:10] if errors else []
+                })
+            
+            except Exception as e:
+                messages.error(request, f'读取文件失败：{str(e)}')
+                return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+        
+        elif 'questions_json' in request.POST:
+            try:
+                questions_data = json.loads(request.POST['questions_json'])
+                imported_count = 0
+                
+                for q_data in questions_data:
+                    if q_data.get('content') and q_data.get('correct_answer') and q_data.get('score'):
+                        Question.objects.create(
+                            type=q_data['type'],
+                            content=q_data['content'],
+                            options=q_data.get('options', {}),
+                            correct_answer=q_data['correct_answer'],
+                            score=q_data['score'],
+                            explanation=q_data.get('explanation', '')
+                        )
+                        imported_count += 1
+                
+                return render(request, 'quiz/admin/import_questions.html', {
+                    'step': 3,
+                    'imported_count': imported_count
+                })
+            
+            except Exception as e:
+                messages.error(request, f'导入失败：{str(e)}')
+                return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+    
+    return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+
+
+@staff_member_required
+def admin_export_template(request):
+    """下载后台导入模板"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "题目导入模板"
+    
+    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF", size=11)
+    header_fill = openpyxl.styles.PatternFill(start_color="667EEA", end_color="764BA2", fill_type="solid")
+    header_alignment = openpyxl.styles.Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = openpyxl.styles.Border(
+        left=openpyxl.styles.Side(style='thin'),
+        right=openpyxl.styles.Side(style='thin'),
+        top=openpyxl.styles.Side(style='thin'),
+        bottom=openpyxl.styles.Side(style='thin')
+    )
+    
+    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
+    
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+    
+    example_data = [
+        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', '10', 'Python支持多种数据类型'],
+        ['Python中，以下哪个是正确的变量名？', '单选题', '1name', '_name', 'name-1', 'name.1', 'B', '5', '变量名只能以字母或下划线开头'],
+        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', '5', 'Python确实是编程语言']
+    ]
+    
+    for row_idx, row_data in enumerate(example_data, start=2):
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = openpyxl.styles.Alignment(vertical="center", wrap_text=True)
+            cell.border = thin_border
+    
+    ws.column_dimensions['A'].width = 35
+    ws.column_dimensions['B'].width = 8
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['G'].width = 10
+    ws.column_dimensions['H'].width = 8
+    ws.column_dimensions['I'].width = 25
+    
+    ws.freeze_panes = 'A2'
+    
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=题目导入模板.xlsx'
+    wb.save(response)
+    
+    return response
+
+
+@staff_member_required
+def admin_create_testpaper(request):
+    """后台组卷"""
+    all_questions = Question.objects.all()
+    
+    if request.method == 'POST':
+        title = request.POST.get('title')
+        description = request.POST.get('description')
+        is_published = request.POST.get('is_published') == 'on'
+        selected_questions = request.POST.get('selected_questions')
+        
+        if not title:
+            messages.error(request, '请输入试卷标题')
+            return render(request, 'quiz/admin/create_testpaper.html', {'all_questions': all_questions})
+        
+        if not selected_questions:
+            messages.error(request, '请选择题目')
+            return render(request, 'quiz/admin/create_testpaper.html', {'all_questions': all_questions})
+        
+        try:
+            question_ids = json.loads(selected_questions)
+            
+            paper = TestPaper.objects.create(
+                title=title,
+                description=description,
+                is_published=is_published,
+                created_by=request.user.username
+            )
+            
+            for q_id in question_ids:
+                try:
+                    question = Question.objects.get(id=q_id)
+                    paper.questions.add(question)
+                except Question.DoesNotExist:
+                    pass
+            
+            paper.save()
+            
+            messages.success(request, f'试卷 "{title}" 创建成功')
+            return redirect('admin:quiz_testpaper_changelist')
+        
+        except Exception as e:
+            messages.error(request, f'创建试卷失败：{str(e)}')
+            return render(request, 'quiz/admin/create_testpaper.html', {'all_questions': all_questions})
+    
+    return render(request, 'quiz/admin/create_testpaper.html', {'all_questions': all_questions})
+
+
+@staff_member_required
+def admin_import_testpaper(request):
+    """后台导入试卷 - 从Excel导入试卷（同前端import_test_paper统一的方法）"""
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+        
+        # 处理确认导入
+        if action == 'confirm_import':
+            title = request.POST.get('title', '')
+            description = request.POST.get('description', '')
+            questions_json = request.POST.get('questions_data', '')
+            
+            if title and questions_json:
+                try:
+                    questions_data = json.loads(questions_json)
+                    
+                    if not questions_data:
+                        messages.error(request, '没有有效的题目数据')
+                        return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+                    
+                    test_paper = TestPaper.objects.create(
+                        title=title,
+                        description=description,
+                        created_by=request.user.username,
+                        is_published=False
+                    )
+                    
+                    total_score = 0
+                    valid_questions = 0
+                    for q_data in questions_data:
+                        if not q_data.get('content') or not q_data.get('correct_answer'):
+                            continue
+                        
+                        options_data = q_data.get('options', {})
+                        if isinstance(options_data, str):
+                            try:
+                                options_data = json.loads(options_data)
+                            except:
+                                options_data = {}
+                        
+                        q_type = int(q_data.get('type', 1))
+                        if q_type not in [1, 2, 3]:
+                            q_type = 1
+                        
+                        q_score = q_data.get('score', 1)
+                        try:
+                            q_score = int(q_score) if q_score else 1
+                        except:
+                            q_score = 1
+                        
+                        question = Question.objects.create(
+                            type=q_type,
+                            content=q_data['content'],
+                            options=options_data,
+                            correct_answer=q_data['correct_answer'],
+                            score=q_score,
+                            explanation=q_data.get('explanation', '')
+                        )
+                        test_paper.questions.add(question)
+                        total_score += q_score
+                        valid_questions += 1
+                    
+                    test_paper.total_score = total_score
+                    test_paper.save()
+                    
+                    messages.success(request, f'试卷 "{title}" 导入成功！共导入 {len(questions_data)} 道题目')
+                    return redirect('admin:quiz_testpaper_changelist')
+                except Exception as e:
+                    messages.error(request, f'导入失败：{str(e)}')
+            else:
+                messages.error(request, '请填写试卷标题并确认导入')
+            return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+        
+        # 处理文件上传和预览
+        if request.FILES.get('paper_file'):
+            title = request.POST.get('title', '')
+            description = request.POST.get('description', '')
+            file = request.FILES.get('paper_file')
+            
+            if not title:
+                messages.error(request, '请填写试卷标题')
+                return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+            
+            try:
+                import openpyxl
+                from openpyxl.utils.exceptions import InvalidFileException
+                
+                wb = openpyxl.load_workbook(file)
+                ws = wb.active
+                
+                headers = [cell.value for cell in ws[1]]
+                
+                header_map = {}
+                for i, header in enumerate(headers):
+                    if header:
+                        header_lower = str(header).lower().strip()
+                        if 'content' in header_lower or ('题' in header_lower and '题型' not in header_lower):
+                            header_map['content'] = i
+                        elif 'type' in header_lower or '题型' in header_lower:
+                            header_map['type'] = i
+                        elif 'a' == header_lower or '选项a' in header_lower:
+                            header_map['option_a'] = i
+                        elif 'b' == header_lower or '选项b' in header_lower:
+                            header_map['option_b'] = i
+                        elif 'c' == header_lower or '选项c' in header_lower:
+                            header_map['option_c'] = i
+                        elif 'd' == header_lower or '选项d' in header_lower:
+                            header_map['option_d'] = i
+                        elif 'answer' in header_lower or '正确' in header_lower:
+                            header_map['correct_answer'] = i
+                        elif 'score' in header_lower or '分' in header_lower:
+                            header_map['score'] = i
+                        elif 'explanation' in header_lower or '解析' in header_lower:
+                            header_map['explanation'] = i
+                
+                required_keys = ['content', 'correct_answer', 'score']
+                missing_cols = [k for k in required_keys if k not in header_map]
+                if missing_cols:
+                    messages.error(request, f'缺少必需列：{", ".join(missing_cols)}。请下载正确格式的模板')
+                    return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+                
+                questions_data = []
+                errors = []
+                
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
+                    try:
+                        content = str(row[header_map['content']].value or '').strip()
+                        if not content:
+                            continue
+                        
+                        q_type = 1
+                        if 'type' in header_map:
+                            type_val = row[header_map['type']].value
+                            if type_val is not None:
+                                type_str = str(type_val).strip()
+                                if type_str in ['3', '判断题', '判断', 'judge']:
+                                    q_type = 3
+                                elif type_str in ['2', '多选题', '多选', 'multiple']:
+                                    q_type = 2
+                                elif type_str in ['1', '单选题', '单选', '选择题', '选择', 'choice']:
+                                    q_type = 1
+                        
+                        options = {}
+                        option_cols = ['option_a', 'option_b', 'option_c', 'option_d']
+                        option_letters = ['A', 'B', 'C', 'D']
+                        
+                        for col_key, letter in zip(option_cols, option_letters):
+                            if col_key in header_map:
+                                val = row[header_map[col_key]].value
+                                if val and str(val).strip():
+                                    options[letter] = str(val).strip()
+                        
+                        if not options and 'options' in header_map:
+                            options_str = str(row[header_map['options']].value or '').strip()
+                            if options_str:
+                                for item in options_str.split(','):
+                                    item = item.strip()
+                                    if item and len(item) >= 2:
+                                        letter = item[0].upper()
+                                        if letter in ['A', 'B', 'C', 'D']:
+                                            options[letter] = item[1:].strip()
+                        
+                        options_json = options if options else {}
+                        
+                        correct_answer = str(row[header_map['correct_answer']].value or '').strip()
+                        if not correct_answer:
+                            errors.append(f'第{row_idx}行：正确答案为空，请补全')
+                        
+                        try:
+                            score = int(row[header_map['score']].value or '')
+                            if score <= 0:
+                                score = ''
+                        except:
+                            score = ''
+                            errors.append(f'第{row_idx}行：分值格式错误，请补全')
+                        
+                        explanation = ''
+                        if 'explanation' in header_map:
+                            explanation = str(row[header_map['explanation']].value or '').strip()
+                        
+                        questions_data.append({
+                            'content': content,
+                            'type': q_type,
+                            'options': options_json,
+                            'correct_answer': correct_answer,
+                            'score': score,
+                            'explanation': explanation,
+                            'row': row_idx,
+                            'has_error': not correct_answer or not score
+                        })
+                        
+                    except Exception as e:
+                        errors.append(f'第{row_idx}行：{str(e)}')
+                
+                if not questions_data:
+                    if errors:
+                        for err in errors[:5]:
+                            messages.error(request, err)
+                    else:
+                        messages.error(request, '文件中没有有效的题目数据')
+                    return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+                
+                valid_count = sum(1 for q in questions_data if q.get('correct_answer') and q.get('score'))
+                missing_count = len(questions_data) - valid_count
+                total_score = sum(q['score'] if isinstance(q['score'], int) else 0 for q in questions_data)
+                
+                return render(request, 'quiz/admin/import_testpaper.html', {
+                    'step': 2,
+                    'title': title,
+                    'description': description,
+                    'questions_data': questions_data,
+                    'questions_json': json.dumps(questions_data, ensure_ascii=False),
+                    'total_score': total_score,
+                    'valid_count': valid_count,
+                    'missing_count': missing_count,
+                    'errors': errors[:10] if errors else []
+                })
+                
+            except InvalidFileException:
+                messages.error(request, '文件格式不正确，请上传 .xlsx 格式的 Excel 文件')
+            except Exception as e:
+                messages.error(request, f'读取文件失败：{str(e)}')
+            
+            return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+    
+    return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+
+
+@staff_member_required
+def admin_preview_testpaper(request, paper_id):
+    """后台试卷预览"""
+    test_paper = get_object_or_404(TestPaper, pk=paper_id)
+    questions = test_paper.questions.all()
+    
+    question_list = []
+    for idx, q in enumerate(questions, start=1):
+        type_name = {1: '单选题', 2: '多选题', 3: '判断题'}.get(q.type, '未知')
+        options_list = []
+        if q.options:
+            for letter in ['A', 'B', 'C', 'D']:
+                val = q.options.get(letter, '')
+                if val:
+                    options_list.append({'letter': letter, 'content': val})
+        
+        question_list.append({
+            'seq': idx,
+            'id': q.id,
+            'type': q.type,
+            'type_name': type_name,
+            'content': q.content,
+            'options': options_list,
+            'correct_answer': q.correct_answer,
+            'score': q.score,
+            'explanation': q.explanation,
+        })
+    
+    context = {
+        'test_paper': test_paper,
+        'question_list': question_list,
+        'total_questions': len(question_list),
+        'total_score': test_paper.total_score,
+    }
+    return render(request, 'quiz/admin/preview_testpaper.html', context)

@@ -1,0 +1,772 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+
+{% block extrastyle %}
+<style>
+    .create-container {
+        max-width: 1400px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #4caf50;
+        color: #333;
+    }
+    
+    .form-row {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .form-group {
+        flex: 1;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .form-group input, .form-group textarea, .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+    }
+    
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+        border-color: #4caf50;
+        outline: none;
+    }
+    
+    .form-group textarea {
+        min-height: 80px;
+    }
+    
+    .filter-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .filter-row {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    
+    .filter-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .filter-item label {
+        font-weight: 500;
+    }
+    
+    .filter-item select, .filter-item input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .question-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        position: relative;
+        user-select: none;
+    }
+    
+    .selection-box {
+        position: absolute;
+        background: rgba(33, 150, 243, 0.12);
+        border: 1px dashed #2196f3;
+        pointer-events: none;
+        z-index: 100;
+        display: none;
+    }
+    
+    .question-item.box-selecting {
+        background: #bbdefb !important;
+    }
+    
+    .question-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+        transition: background 0.2s;
+        cursor: pointer;
+    }
+    
+    .question-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .question-item.selected {
+        background: #e8f5e9;
+        border-left: 4px solid #4caf50;
+    }
+    
+    .question-item:last-child {
+        border-bottom: none;
+    }
+    
+    .question-checkbox {
+        margin-right: 12px;
+        width: 18px;
+        height: 18px;
+    }
+    
+    .question-content {
+        flex: 1;
+        font-size: 14px;
+        color: #333;
+        max-width: 400px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .question-meta {
+        display: flex;
+        gap: 15px;
+        font-size: 12px;
+        color: #666;
+    }
+    
+    .type-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: white;
+    }
+    
+    .type-single {
+        background: #2196f3;
+    }
+    
+    .type-multi {
+        background: #9c27b0;
+    }
+    
+    .type-judge {
+        background: #ff9800;
+    }
+    
+    .selected-section {
+        background: #fff3e0;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .selected-summary {
+        display: flex;
+        gap: 30px;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+    
+    .selected-summary span {
+        font-weight: 600;
+        color: #e65100;
+    }
+    
+    .selected-list {
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid #ffb74d;
+        border-radius: 8px;
+    }
+    
+    .selected-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #ffe0b2;
+    }
+    
+    .selected-item:last-child {
+        border-bottom: none;
+    }
+    
+    .selected-index {
+        width: 24px;
+        height: 24px;
+        background: #ff9800;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        margin-right: 10px;
+    }
+    
+    .selected-content {
+        flex: 1;
+        font-size: 13px;
+        color: #333;
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .selected-score {
+        color: #e65100;
+        font-weight: 600;
+        margin-right: 15px;
+    }
+    
+    .remove-btn {
+        background: #f44336;
+        color: white;
+        border: none;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+    
+    .remove-btn:hover {
+        background: #d32f2f;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: flex-end;
+        margin-top: 20px;
+    }
+    
+    .btn-primary {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+    }
+    
+    .btn-primary:hover {
+        background: #43a047;
+    }
+    
+    .btn-primary:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.3s;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
+    }
+    
+    .btn-outline {
+        background: white;
+        color: #4caf50;
+        border: 1px solid #4caf50;
+        padding: 12px 30px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.3s;
+    }
+    
+    .btn-outline:hover {
+        background: #e8f5e9;
+    }
+    
+    .two-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+    }
+    
+    .search-box {
+        padding: 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 25px;
+        font-size: 14px;
+        width: 300px;
+        margin-bottom: 15px;
+    }
+    
+    .search-box:focus {
+        border-color: #4caf50;
+        outline: none;
+    }
+    
+    .auto-select-btn {
+        background: #2196f3;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-bottom: 15px;
+        transition: background 0.3s;
+    }
+    
+    .auto-select-btn:hover {
+        background: #1976d2;
+    }
+    
+    .question-counter {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="create-container">
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+        <a href="/admin/quiz/testpaper/" class="btn-secondary" style="padding: 8px 16px; font-size: 14px;">
+            ← 返回试卷列表
+        </a>
+        <h2>📝 后台组卷</h2>
+    </div>
+    
+    <form method="post" id="createForm">
+        {% csrf_token %}
+        
+        <div class="section-title">试卷信息</div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="title">试卷标题 *</label>
+                <input type="text" id="title" name="title" required placeholder="请输入试卷标题">
+            </div>
+            <div class="form-group">
+                <label for="type">试卷类型</label>
+                <select id="type" name="type">
+                    <option value="1">作业</option>
+                    <option value="2">考试</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="description">试卷描述</label>
+            <textarea id="description" name="description" placeholder="请输入试卷描述（可选）"></textarea>
+        </div>
+        
+        <div class="two-columns">
+            <div>
+                <div class="section-title">题目库</div>
+                
+                <div class="filter-section">
+                    <div class="filter-row">
+                        <div class="filter-item">
+                            <label>题型：</label>
+                            <select id="typeFilter">
+                                <option value="all">全部</option>
+                                <option value="1">单选题</option>
+                                <option value="2">多选题</option>
+                                <option value="3">判断题</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label>分值范围：</label>
+                            <input type="number" id="minScore" placeholder="最低分值" min="1" style="width: 80px;">
+                            <span> - </span>
+                            <input type="number" id="maxScore" placeholder="最高分值" min="1" style="width: 80px;">
+                        </div>
+                    </div>
+                </div>
+                
+                <input type="text" id="searchBox" class="search-box" placeholder="搜索题目内容...">
+                
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <button type="button" class="auto-select-btn" onclick="autoSelectQuestions()" style="margin-bottom: 0;">
+                        🎲 随机选题
+                    </button>
+                    <div class="filter-item" style="margin-bottom: 0;">
+                        <label style="font-weight: 500;">数量：</label>
+                        <input type="number" id="randomCount" value="10" min="1" max="999" style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <span style="font-size: 13px; color: #888;">（从当前筛选结果中随机选题，已选题将自动去重）</span>
+                </div>
+                
+                <div class="question-counter">共 <span id="questionCount">{{ all_questions|length }}</span> 道题目</div>
+                
+                <div class="question-list" id="questionList">
+                    {% for q in all_questions %}
+                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" onclick="toggleQuestionItem(this, event)">
+                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" onchange="onCheckboxChange(this)">
+                        <span class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
+                            {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
+                        </span>
+                        <span class="question-content" title="{{ q.content }}">{{ q.content }}</span>
+                        <div class="question-meta">
+                            <span>分值: {{ q.score }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div>
+                <div class="section-title">已选题</div>
+                
+                <div class="selected-section">
+                    <div class="selected-summary">
+                        <p>题目数量：<span id="selectedCount">0</span> 道</p>
+                        <p>总分：<span id="totalScore">0</span> 分</p>
+                    </div>
+                    
+                    <div class="selected-list" id="selectedList">
+                        <div style="text-align: center; padding: 30px; color: #999;">
+                            暂无选题，请从左侧选择题目
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section-title">发布设置</div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="is_published" id="is_published">
+                        立即发布
+                    </label>
+                </div>
+                
+                <div class="action-buttons">
+                    <button type="button" class="btn-secondary" onclick="clearSelection()">清空选题</button>
+                    <button type="submit" class="btn-primary" id="submitBtn" disabled>创建试卷</button>
+                </div>
+            </div>
+        </div>
+        
+        <input type="hidden" name="selected_questions" id="selectedQuestions">
+    </form>
+</div>
+
+<script>
+    let selectedQuestions = [];
+    
+    function toggleQuestionItem(item, event) {
+        if (event.target.type === 'checkbox' || event.target.closest('.remove-btn')) {
+            return;
+        }
+        const checkbox = item.querySelector('.question-checkbox');
+        checkbox.checked = !checkbox.checked;
+        toggleQuestionById(parseInt(checkbox.getAttribute('data-id')), checkbox.checked);
+    }
+    
+    function onCheckboxChange(checkbox) {
+        const questionId = parseInt(checkbox.getAttribute('data-id'));
+        toggleQuestionById(questionId, checkbox.checked);
+    }
+    
+    function toggleQuestionById(questionId, isSelected) {
+        const item = document.querySelector(`.question-item[data-id="${questionId}"]`);
+        const content = item.querySelector('.question-content').textContent;
+        const scoreText = item.querySelector('.question-meta span').textContent;
+        const score = parseInt(scoreText.replace('分值: ', ''));
+        const type = parseInt(item.getAttribute('data-type'));
+        
+        const q = {
+            id: questionId,
+            content: content,
+            score: score,
+            type: type
+        };
+        
+        if (isSelected) {
+            if (!selectedQuestions.find(sq => sq.id === questionId)) {
+                selectedQuestions.push(q);
+            }
+        } else {
+            selectedQuestions = selectedQuestions.filter(sq => sq.id !== questionId);
+        }
+        
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+    
+    function updateSelectedList() {
+        const list = document.getElementById('selectedList');
+        const count = document.getElementById('selectedCount');
+        const totalScore = document.getElementById('totalScore');
+        
+        if (selectedQuestions.length === 0) {
+            list.innerHTML = '<div style="text-align: center; padding: 30px; color: #999;">暂无选题，请从左侧选择题目</div>';
+            count.textContent = '0';
+            totalScore.textContent = '0';
+            return;
+        }
+        
+        let html = '';
+        let score = 0;
+        
+        selectedQuestions.forEach((q, index) => {
+            score += q.score;
+            html += `
+                <div class="selected-item">
+                    <span class="selected-index">${index + 1}</span>
+                    <span class="selected-content" title="${q.content}">${q.content}</span>
+                    <span class="selected-score">${q.score}分</span>
+                    <button class="remove-btn" onclick="removeQuestion(${q.id})">移除</button>
+                </div>
+            `;
+        });
+        
+        list.innerHTML = html;
+        count.textContent = selectedQuestions.length;
+        totalScore.textContent = score;
+    }
+    
+    function removeQuestion(questionId) {
+        selectedQuestions = selectedQuestions.filter(sq => sq.id !== questionId);
+        const checkbox = document.querySelector(`.question-checkbox[data-id="${questionId}"]`);
+        if (checkbox) checkbox.checked = false;
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+    
+    function clearSelection() {
+        selectedQuestions = [];
+        document.querySelectorAll('.question-checkbox').forEach(cb => cb.checked = false);
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+    
+    function autoSelectQuestions() {
+        const randomCountInput = document.getElementById('randomCount');
+        let count = parseInt(randomCountInput.value) || 10;
+        if (count < 1) count = 1;
+        
+        const alreadySelectedIds = new Set(selectedQuestions.map(q => q.id));
+        
+        const availableQuestions = [];
+        document.querySelectorAll('.question-item').forEach(item => {
+            if (item.style.display === 'none') return;
+            const id = parseInt(item.getAttribute('data-id'));
+            if (alreadySelectedIds.has(id)) return;
+            const content = item.querySelector('.question-content').textContent;
+            const scoreText = item.querySelector('.question-meta span').textContent;
+            const score = parseInt(scoreText.replace('分值: ', ''));
+            const type = parseInt(item.getAttribute('data-type'));
+            availableQuestions.push({ id, content, score, type });
+        });
+        
+        if (availableQuestions.length === 0) {
+            alert('没有可选的题目（当前筛选结果中没有新题目可选题）');
+            return;
+        }
+        
+        const actualCount = Math.min(count, availableQuestions.length);
+        const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
+        const selected = shuffled.slice(0, actualCount);
+        
+        selected.forEach(q => {
+            if (!selectedQuestions.find(sq => sq.id === q.id)) {
+                selectedQuestions.push(q);
+            }
+        });
+        
+        document.querySelectorAll('.question-checkbox').forEach(cb => {
+            const id = parseInt(cb.getAttribute('data-id'));
+            cb.checked = selectedQuestions.some(sq => sq.id === id);
+        });
+        
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+    
+    function updateSubmitButton() {
+        const submitBtn = document.getElementById('submitBtn');
+        const title = document.getElementById('title').value.trim();
+        
+        if (selectedQuestions.length > 0 && title) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `✓ 创建试卷 (${selectedQuestions.length}题/${totalScore.textContent}分)`;
+        } else {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '创建试卷';
+        }
+    }
+    
+    function updateQuestionHighlight() {
+        document.querySelectorAll('.question-item').forEach(item => {
+            const id = parseInt(item.getAttribute('data-id'));
+            if (selectedQuestions.some(sq => sq.id === id)) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+        });
+    }
+    
+    function filterQuestions() {
+        const searchText = document.getElementById('searchBox').value.toLowerCase();
+        const typeFilter = document.getElementById('typeFilter').value;
+        const minScore = parseInt(document.getElementById('minScore').value) || 0;
+        const maxScore = parseInt(document.getElementById('maxScore').value) || Infinity;
+        
+        document.querySelectorAll('.question-item').forEach(item => {
+            const content = item.querySelector('.question-content').textContent.toLowerCase();
+            const type = item.getAttribute('data-type');
+            const score = parseInt(item.querySelector('.question-meta span').textContent.replace('分值: ', ''));
+            
+            const matchSearch = content.includes(searchText);
+            const matchType = typeFilter === 'all' || type === typeFilter;
+            const matchScore = score >= minScore && score <= maxScore;
+            
+            item.style.display = (matchSearch && matchType && matchScore) ? 'flex' : 'none';
+        });
+        
+        const visibleCount = document.querySelectorAll('.question-item[style="display: flex;"]').length;
+        document.getElementById('questionCount').textContent = visibleCount;
+    }
+    
+    let isBoxDragging = false;
+    let boxStartX = 0, boxStartY = 0;
+    let selectionBoxEl = null;
+    
+    function initBoxSelection() {
+        const list = document.getElementById('questionList');
+        if (!list) return;
+        
+        selectionBoxEl = document.createElement('div');
+        selectionBoxEl.className = 'selection-box';
+        list.appendChild(selectionBoxEl);
+        
+        list.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            if (e.target.type === 'checkbox' || e.target.closest('.remove-btn')) return;
+            
+            isBoxDragging = true;
+            boxStartX = e.clientX;
+            boxStartY = e.clientY;
+            
+            const cr = list.getBoundingClientRect();
+            selectionBoxEl.style.left = (e.clientX - cr.left) + 'px';
+            selectionBoxEl.style.top = (e.clientY - cr.top) + 'px';
+            selectionBoxEl.style.width = '0px';
+            selectionBoxEl.style.height = '0px';
+            selectionBoxEl.style.display = 'block';
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (!isBoxDragging) return;
+            
+            const cr = list.getBoundingClientRect();
+            const left = Math.min(boxStartX, e.clientX) - cr.left;
+            const top = Math.min(boxStartY, e.clientY) - cr.top;
+            const w = Math.abs(e.clientX - boxStartX);
+            const h = Math.abs(e.clientY - boxStartY);
+            
+            selectionBoxEl.style.left = left + 'px';
+            selectionBoxEl.style.top = top + 'px';
+            selectionBoxEl.style.width = w + 'px';
+            selectionBoxEl.style.height = h + 'px';
+            
+            const selRect = {
+                left: Math.min(boxStartX, e.clientX),
+                top: Math.min(boxStartY, e.clientY),
+                right: Math.max(boxStartX, e.clientX),
+                bottom: Math.max(boxStartY, e.clientY)
+            };
+            
+            list.querySelectorAll('.question-item').forEach(item => {
+                if (item.style.display === 'none') return;
+                const ir = item.getBoundingClientRect();
+                if (!(selRect.right < ir.left || selRect.left > ir.right ||
+                      selRect.bottom < ir.top || selRect.top > ir.bottom)) {
+                    item.classList.add('box-selecting');
+                } else {
+                    item.classList.remove('box-selecting');
+                }
+            });
+        });
+        
+        document.addEventListener('mouseup', function(e) {
+            if (!isBoxDragging) return;
+            isBoxDragging = false;
+            
+            const w = Math.abs(e.clientX - boxStartX);
+            const h = Math.abs(e.clientY - boxStartY);
+            
+            if (w > 5 || h > 5) {
+                const selRect = {
+                    left: Math.min(boxStartX, e.clientX),
+                    top: Math.min(boxStartY, e.clientY),
+                    right: Math.max(boxStartX, e.clientX),
+                    bottom: Math.max(boxStartY, e.clientY)
+                };
+                
+                list.querySelectorAll('.question-item').forEach(item => {
+                    if (item.style.display === 'none') return;
+                    const ir = item.getBoundingClientRect();
+                    if (!(selRect.right < ir.left || selRect.left > ir.right ||
+                          selRect.bottom < ir.top || selRect.top > ir.bottom)) {
+                        const checkbox = item.querySelector('.question-checkbox');
+                        checkbox.checked = !checkbox.checked;
+                        toggleQuestionById(parseInt(checkbox.getAttribute('data-id')), checkbox.checked);
+                    }
+                });
+            }
+            
+            selectionBoxEl.style.display = 'none';
+            list.querySelectorAll('.question-item.box-selecting').forEach(item => {
+                item.classList.remove('box-selecting');
+            });
+        });
+    }
+    
+    document.addEventListener('DOMContentLoaded', initBoxSelection);
+    
+    document.getElementById('searchBox').addEventListener('input', filterQuestions);
+    document.getElementById('typeFilter').addEventListener('change', filterQuestions);
+    document.getElementById('minScore').addEventListener('input', filterQuestions);
+    document.getElementById('maxScore').addEventListener('input', filterQuestions);
+    document.getElementById('title').addEventListener('input', updateSubmitButton);
+    
+    document.getElementById('createForm').addEventListener('submit', function(e) {
+        document.getElementById('selectedQuestions').value = JSON.stringify(selectedQuestions.map(q => q.id));
+    });
+</script>
+{% endblock %}

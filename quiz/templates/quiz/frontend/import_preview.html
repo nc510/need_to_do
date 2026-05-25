@@ -507,7 +507,7 @@
                                     placeholder="请输入题目内容" data-index="{{ forloop.counter0 }}"
                                     data-field="content">{{ q.content|default:'' }}</textarea>
                             </div>
-                            {% if q.type != 3 %}
+                            {% if q.type == 1 or q.type == 2 %}
                             <div class="options-row">
                                 <label class="field-label">选项</label>
                                 <div class="options-grid">
@@ -611,10 +611,53 @@
     // 初始化题目数据，防止未定义
     let questionsData = [];
     try {
-        questionsData = {{ questions_json | safe }
-    } || [];
+        questionsData = {{ questions_json | safe }};
     } catch (e) {
         questionsData = [];
+    }
+
+    // 从DOM读取单题数据
+    function getQuestionDataFromDOM(index) {
+        const q = {
+            content: '',
+            type: 1,
+            options: { A: '', B: '', C: '', D: '' },
+            correct_answer: '',
+            score: '',
+            explanation: ''
+        };
+
+        // 读取题目内容
+        const contentInput = document.querySelector('textarea[name="content_' + index + '"]');
+        if (contentInput) q.content = contentInput.value.trim();
+
+        // 读取选项
+        ['A', 'B', 'C', 'D'].forEach(function(letter) {
+            const input = document.querySelector('input[name="option_' + letter.toLowerCase() + '_' + index + '"]');
+            if (input) q.options[letter] = input.value.trim();
+        });
+
+        // 读取答案
+        const answerInput = document.querySelector('input[name="answer_' + index + '"]');
+        if (answerInput) q.correct_answer = answerInput.value.trim();
+
+        // 读取分值
+        const scoreInput = document.querySelector('input[name="score_' + index + '"]');
+        if (scoreInput) {
+            const score = parseInt(scoreInput.value);
+            q.score = isNaN(score) ? '' : score;
+        }
+
+        // 读取解析
+        const expInput = document.querySelector('textarea[name="explanation_' + index + '"]');
+        if (expInput) q.explanation = expInput.value.trim();
+
+        // 获取题目类型（从原始数据）
+        if (questionsData[index] && questionsData[index].type) {
+            q.type = parseInt(questionsData[index].type);
+        }
+
+        return q;
     }
 
     // 更新单题状态指示器
@@ -643,13 +686,34 @@
         });
     }
 
-    // 实时验证并更新提交按钮状态
+    // 更新顶部错误提示区域
+    function updateTopErrorArea(isValid) {
+        const errorList = document.querySelector('.error-list');
+        if (errorList) {
+            if (isValid) {
+                errorList.innerHTML = '<h4 style="color: #28a745;">✓ 数据验证通过</h4><ul><li>所有题目数据已完整，可以导入</li></ul>';
+                errorList.style.background = '#d4edda';
+                errorList.style.borderColor = '#c3e6cb';
+            } else {
+                // 保持原有样式
+                errorList.style.background = '';
+                errorList.style.borderColor = '';
+            }
+        }
+    }
+
+    // 实时验证并更新提交按钮状态（直接从DOM读取数据）
     function validateForm() {
         const submitBtn = document.getElementById('submitBtn');
         const validationWarning = document.querySelector('.validation-warning');
+        const questionsContainer = document.querySelector('.questions-table tbody');
+        
+        // 获取题目数量（从DOM）
+        const rows = questionsContainer ? questionsContainer.querySelectorAll('tr') : [];
+        const questionCount = rows.length;
 
         // 如果没有题目数据，显示警告
-        if (!questionsData || questionsData.length === 0) {
+        if (questionCount === 0) {
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '⚠ 没有可导入的题目';
@@ -658,17 +722,21 @@
                 validationWarning.querySelector('ul').innerHTML = '<li>没有找到题目数据，请先上传文件</li>';
                 validationWarning.style.display = 'block';
             }
+            updateTopErrorArea(false);
             return;
         }
 
         let incompleteCount = 0;
         const incompleteList = [];
 
-        questionsData.forEach(function (q, index) {
-            const content = q.content ? q.content.trim() : '';
-            const answer = q.correct_answer ? q.correct_answer.trim() : '';
-            const score = q.score ? parseInt(q.score) : 0;
-            const qType = q.type ? parseInt(q.type) : 1;
+        // 遍历所有题目，从DOM实时读取数据进行验证
+        for (let index = 0; index < questionCount; index++) {
+            const q = getQuestionDataFromDOM(index);
+            const content = q.content;
+            const answer = q.correct_answer;
+            const score = q.score;
+            const qType = q.type || 1;
+            const options = q.options;
 
             let hasError = false;
             let reasons = [];
@@ -681,19 +749,18 @@
                 hasError = true;
                 reasons.push('缺少答案');
             }
-            if (score <= 0) {
+            if (!score || score <= 0) {
                 hasError = true;
                 reasons.push('缺少分值');
             }
 
-            // 选择题需要验证选项（单选和多选）
-            if (qType !== 3) {
-                const options = q.options || {};
+            // 选择题（单选和多选）需要验证选项
+            if (qType == 1 || qType == 2) {
                 const missingOptions = [];
-                if (!options.A || !options.A.trim()) missingOptions.push('A');
-                if (!options.B || !options.B.trim()) missingOptions.push('B');
-                if (!options.C || !options.C.trim()) missingOptions.push('C');
-                if (!options.D || !options.D.trim()) missingOptions.push('D');
+                if (!options.A) missingOptions.push('A');
+                if (!options.B) missingOptions.push('B');
+                if (!options.C) missingOptions.push('C');
+                if (!options.D) missingOptions.push('D');
 
                 if (missingOptions.length > 0) {
                     hasError = true;
@@ -707,20 +774,19 @@
             // 更新高亮样式
             updateHighlight(index, 'content', !!content);
             updateHighlight(index, 'correct_answer', !!answer);
-            updateHighlight(index, 'score', score > 0);
-            if (qType !== 3) {
-                const options = q.options || {};
-                updateHighlight(index, 'option_A', !!(options.A && options.A.trim()));
-                updateHighlight(index, 'option_B', !!(options.B && options.B.trim()));
-                updateHighlight(index, 'option_C', !!(options.C && options.C.trim()));
-                updateHighlight(index, 'option_D', !!(options.D && options.D.trim()));
+            updateHighlight(index, 'score', !!(score && score > 0));
+            if (qType === 1 || qType === 2) {
+                updateHighlight(index, 'option_A', !!options.A);
+                updateHighlight(index, 'option_B', !!options.B);
+                updateHighlight(index, 'option_C', !!options.C);
+                updateHighlight(index, 'option_D', !!options.D);
             }
 
             if (hasError) {
                 incompleteCount++;
                 incompleteList.push({ index: index + 1, reasons: reasons.join('、') });
             }
-        });
+        }
 
         if (incompleteCount > 0) {
             submitBtn.disabled = true;
@@ -734,13 +800,15 @@
                 validationWarning.querySelector('ul').innerHTML = listHtml;
                 validationWarning.style.display = 'block';
             }
+            updateTopErrorArea(false);
         } else {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '✓ 确认导入 (' + questionsData.length + ' 题完整)';
+            submitBtn.innerHTML = '✓ 确认导入 (' + questionCount + ' 题完整)';
 
             if (validationWarning) {
                 validationWarning.style.display = 'none';
             }
+            updateTopErrorArea(true);
         }
     }
 

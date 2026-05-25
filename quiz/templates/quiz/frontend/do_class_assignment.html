@@ -262,18 +262,44 @@
                 <div class="question-item" data-question-id="{{ question.id }}">
                     <div class="question-header">
                         <span class="question-type">
-                            {% if question.type == 1 %}选择题{% else %}判断题{% endif %}
-                        </span>
+                                {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
+                            </span>
                         <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
                         {{ question.content }}
                     </div>
                     
                     <div class="options">
-                        {% if question.type == 1 %} <!-- 选择题 -->
+                        {% if question.type == 1 %} <!-- 单选题 -->
                             <input type="radio" name="question_{{ question.id }}" value="A" id="id_question_{{ question.id }}_A" style="display: none;">
                             <input type="radio" name="question_{{ question.id }}" value="B" id="id_question_{{ question.id }}_B" style="display: none;">
                             <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C" style="display: none;">
                             <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D" style="display: none;">
+                            
+                            {% if 'A' in question.options %}
+                                <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                            {% elif 'a' in question.options %}
+                                <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                            {% endif %}
+                            {% if 'B' in question.options %}
+                                <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                            {% elif 'b' in question.options %}
+                                <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                            {% endif %}
+                            {% if 'C' in question.options %}
+                                <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                            {% elif 'c' in question.options %}
+                                <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                            {% endif %}
+                            {% if 'D' in question.options %}
+                                <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                            {% elif 'd' in question.options %}
+                                <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                            {% endif %}
+                        {% elif question.type == 2 %} <!-- 多选题 -->
+                            <input type="checkbox" name="question_{{ question.id }}_A" value="A" id="id_question_{{ question.id }}_A" style="display: none;">
+                            <input type="checkbox" name="question_{{ question.id }}_B" value="B" id="id_question_{{ question.id }}_B" style="display: none;">
+                            <input type="checkbox" name="question_{{ question.id }}_C" value="C" id="id_question_{{ question.id }}_C" style="display: none;">
+                            <input type="checkbox" name="question_{{ question.id }}_D" value="D" id="id_question_{{ question.id }}_D" style="display: none;">
                             
                             {% if 'A' in question.options %}
                                 <div class="option" data-option="A">A. {{ question.options.A }}</div>

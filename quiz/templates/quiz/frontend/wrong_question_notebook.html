@@ -432,26 +432,42 @@
                             </div>
                             <span class="question-number">{{ forloop.counter }}</span>
                             <span class="question-content">{{ wrong_question.question.content }}</span>
-                            <span class="question-type">{% if wrong_question.question.type == 1 %}选择题{% else %}判断题{% endif %}</span>
+                            <span class="question-type">{% if wrong_question.question.type == 1 %}单选题{% elif wrong_question.question.type == 2 %}多选题{% else %}判断题{% endif %}</span>
                         </div>
                         
-                        {% if wrong_question.question.type == 1 and wrong_question.question.options %}
+                        {% if wrong_question.question.type == 1 %}
+                            {% if wrong_question.question.options %}
                             <div class="question-options">
                                 {% for key, value in wrong_question.question.options.items %}
-                                    <div class="option-item 
-                                        {% if key == wrong_question.question.correct_answer %}correct{% endif %}
-                                        {% if key == wrong_question.user_answer and key != wrong_question.question.correct_answer %}wrong{% endif %}">
-                                        <span class="option-key">{{ key }}.</span>
-                                        <span class="option-value">{{ value }}</span>
-                                        {% if key == wrong_question.question.correct_answer %}
-                                            <span class="option-tag correct-tag">正确答案</span>
-                                        {% elif key == wrong_question.user_answer %}
-                                            <span class="option-tag wrong-tag">您的答案</span>
-                                        {% endif %}
-                                    </div>
+                                <div class="option-item {% if key == wrong_question.question.correct_answer %}correct{% endif %} {% if key == wrong_question.user_answer and key != wrong_question.question.correct_answer %}wrong{% endif %}">
+                                    <span class="option-key">{{ key }}.</span>
+                                    <span class="option-value">{{ value }}</span>
+                                    {% if key == wrong_question.question.correct_answer %}
+                                        <span class="option-tag correct-tag">正确答案</span>
+                                    {% elif key == wrong_question.user_answer %}
+                                        <span class="option-tag wrong-tag">您的答案</span>
+                                    {% endif %}
+                                </div>
                                 {% endfor %}
                             </div>
+                            {% endif %}
                         {% elif wrong_question.question.type == 2 %}
+                            {% if wrong_question.question.options %}
+                            <div class="question-options">
+                                {% for key, value in wrong_question.question.options.items %}
+                                <div class="option-item {% if key in wrong_question.question.correct_answer %}correct{% endif %} {% if key in wrong_question.user_answer and key not in wrong_question.question.correct_answer %}wrong{% endif %}">
+                                    <span class="option-key">{{ key }}.</span>
+                                    <span class="option-value">{{ value }}</span>
+                                    {% if key in wrong_question.question.correct_answer %}
+                                        <span class="option-tag correct-tag">正确答案</span>
+                                    {% elif key in wrong_question.user_answer %}
+                                        <span class="option-tag wrong-tag">您的答案</span>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        {% elif wrong_question.question.type == 3 %}
                             <div class="question-options">
                                 <div class="option-item {% if '对' == wrong_question.question.correct_answer %}correct{% endif %} {% if '对' == wrong_question.user_answer and '对' != wrong_question.question.correct_answer %}wrong{% endif %}">
                                     <span class="option-key">对</span>

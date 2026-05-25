@@ -2,6 +2,13 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # 后台管理功能
+    path('admin/import_questions/', views.admin_import_questions, name='admin_import_questions'),  # 后台导入试题
+    path('admin/import_questions/template/', views.admin_export_template, name='admin_export_template'),  # 后台下载模板
+    path('admin/create_testpaper/', views.admin_create_testpaper, name='admin_create_testpaper'),  # 后台组卷
+    path('admin/import_testpaper/', views.admin_import_testpaper, name='admin_import_testpaper'),  # 后台导入试卷
+    path('admin/preview_testpaper/<int:paper_id>/', views.admin_preview_testpaper, name='admin_preview_testpaper'),  # 后台试卷预览
+    
     path('test_paper_list/', views.test_paper_list, name='test_paper_list'),  # 试卷列表
     
     path('question/<int:question_id>/', views.question_detail, name='question_detail'),

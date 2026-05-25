@@ -1,0 +1,15 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls static %}
+
+{% block object-tools-items %}
+    <li>
+        <a href="/quiz/admin/create_testpaper/" class="addlink" style="background: #2196f3; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+            📝 后台组卷
+        </a>
+    </li>
+    <li>
+        <a href="/quiz/admin/import_testpaper/" class="addlink" style="background: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+            📥 导入试卷
+        </a>
+    </li>
+{% endblock %}

@@ -6,8 +6,8 @@ from django.db.models.signals import m2m_changed
 from django.dispatch import receiver
 
 class Question(models.Model):
-    # 题目类型：1-选择题，2-判断题
-    TYPE_CHOICE = (1, '选择题'), (2, '判断题')
+    # 题目类型：1-单选题，2-多选题，3-判断题
+    TYPE_CHOICE = (1, '单选题'), (2, '多选题'), (3, '判断题')
     type = models.IntegerField(choices=TYPE_CHOICE, verbose_name='题目类型')
     content = models.TextField(verbose_name='题目内容')
     options = models.JSONField(verbose_name='选项', default=dict, blank=True, help_text='选择题选项，格式：{"A":"选项内容","B":"选项内容"}')
@@ -24,6 +24,17 @@ class Question(models.Model):
 
     def __str__(self):
         return self.content
+    
+    def as_json(self):
+        return {
+            'id': self.id,
+            'type': self.type,
+            'content': self.content,
+            'options': self.options,
+            'correct_answer': self.correct_answer,
+            'score': self.score,
+            'explanation': self.explanation
+        }
 
 class TestPaper(models.Model):
     title = models.CharField(max_length=100, verbose_name='试卷标题')

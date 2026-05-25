@@ -119,23 +119,53 @@ class ProfileAdmin(admin.ModelAdmin):
 
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ('id', 'type', 'content', 'score', 'created_at')
+    list_display_links = ('id', 'content')
     list_filter = ('type', 'created_at')
-    search_fields = ('content', 'explanation')
+    search_fields = ('id', 'content', 'explanation')
     ordering = ('-created_at',)
     fields = ('type', 'content', 'options', 'correct_answer', 'score', 'explanation')
+    change_list_template = 'admin/quiz/question/change_list.html'
 
 class TestPaperAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'created_by', 'created_at')
+    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'created_by', 'created_at', 'action_buttons')
+    list_display_links = ('id', 'title')
     list_filter = ('is_published', 'created_at')
     search_fields = ('title', 'description')
     ordering = ('-created_at',)
     filter_horizontal = ('questions',)
     fields = ('title', 'description', 'questions', 'is_published')
     readonly_fields = ('total_score', 'created_at', 'created_by')
+    change_list_template = 'admin/quiz/testpaper/change_list.html'
+    change_form_template = 'admin/quiz/testpaper/change_form.html'
+
+    def has_add_permission(self, request):
+        return False
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == 'questions':
+            field = super().formfield_for_manytomany(db_field, request, **kwargs)
+            field.label_from_instance = lambda obj: f'#{obj.id} {obj.content[:50]}'
+            return field
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def question_count(self, obj):
         return obj.questions.count()
     question_count.short_description = '题目数量'
+
+    def action_buttons(self, obj):
+        change_url = reverse('admin:quiz_testpaper_change', args=[obj.pk])
+        delete_url = reverse('admin:quiz_testpaper_delete', args=[obj.pk])
+        preview_url = reverse('admin_preview_testpaper', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" style="background: #2196f3; color: white; padding: 5px 12px; border-radius: 3px; text-decoration: none; font-size: 12px;">👁️ 预览</a>'
+            '&nbsp;'
+            '<a class="button" href="{}" style="background: #4caf50; color: white; padding: 5px 12px; border-radius: 3px; text-decoration: none; font-size: 12px;">✏️ 编辑</a>'
+            '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
+            '<a class="button" href="{}" style="background: #f44336; color: white; padding: 5px 12px; border-radius: 3px; text-decoration: none; font-size: 12px; margin-left: 30px;" onclick="return confirm(\'确定要删除此试卷吗？\')">🗑️ 删除</a>',
+            preview_url, change_url, delete_url
+        )
+    action_buttons.short_description = '操作'
+    action_buttons.allow_tags = True
 
     def save_model(self, request, obj, form, change):
         if not change:
