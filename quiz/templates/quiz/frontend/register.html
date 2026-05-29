@@ -1,36 +1,237 @@
 {% extends 'quiz/frontend/base.html' %}
-{% block title %}注册会员{% endblock %}
-{% block content %}
-    <h1>注册会员</h1>
-    <form method="post" action="{% url 'register' %}">
-        {% csrf_token %}
-        <div class="form-group">
-            <label for="username">用户名</label>
-            <input type="text" name="username" id="username" required>
-        </div>
-        <div class="form-group">
-            <label for="email">邮箱</label>
-            <input type="email" name="email" id="email" required>
-        </div>
-        <div class="form-group">
-            <label for="phone_number">手机号码</label>
-            <input type="text" name="phone_number" id="phone_number" maxlength="11">
-        </div>
-        <div class="form-group">
-            <label for="qq_number">QQ号码</label>
-            <input type="text" name="qq_number" id="qq_number" maxlength="20">
-        </div>
-        <div class="form-group">
-            <label for="password">密码</label>
-            <input type="password" name="password" id="password" required>
-        </div>
-        <div class="form-group">
-            <label for="password_confirm">确认密码</label>
-            <input type="password" name="password_confirm" id="password_confirm" required>
-        </div>
-        <div class="form-group">
-            <input type="submit" value="注册">
-        </div>
-    </form>
+{% block title %}注册会员 - 在线考试系统{% endblock %}
 
+{% block extra_styles %}
+<style>
+    .register-container {
+        max-width: 450px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .register-card {
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-header {
+        text-align: center;
+        margin-bottom: 35px;
+    }
+
+    .card-header .icon {
+        font-size: 50px;
+        margin-bottom: 15px;
+    }
+
+    .card-header h1 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+        color: #2c3e50;
+        font-weight: 700;
+    }
+
+    .card-header p {
+        margin: 0;
+        color: #888;
+        font-size: 14px;
+    }
+
+    .form-group {
+        margin-bottom: 22px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 14px 18px;
+        border: 2px solid #e8ecf1;
+        border-radius: 10px;
+        font-size: 15px;
+        transition: all 0.3s ease;
+        background: #fafbfc;
+        color: #333;
+    }
+
+    .form-group input:focus {
+        outline: none;
+        border-color: #667eea;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group input::placeholder {
+        color: #aaa;
+    }
+
+    .btn-register {
+        width: 100%;
+        padding: 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-top: 10px;
+    }
+
+    .btn-register:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-register:active {
+        transform: translateY(0);
+    }
+
+    .login-link {
+        text-align: center;
+        margin-top: 25px;
+        padding-top: 25px;
+        border-top: 1px solid #eee;
+    }
+
+    .login-link a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+
+    .login-link p {
+        margin: 0;
+        color: #888;
+        font-size: 14px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .password-hint {
+        font-size: 12px;
+        color: #999;
+        margin-top: 6px;
+    }
+
+    .terms-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 20px;
+        font-size: 13px;
+        color: #666;
+    }
+
+    .terms-checkbox input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .terms-checkbox a {
+        color: #667eea;
+        text-decoration: none;
+    }
+
+    .terms-checkbox a:hover {
+        text-decoration: underline;
+    }
+
+    @media (max-width: 500px) {
+        .register-container {
+            padding: 12px;
+        }
+
+        .register-card {
+            padding: 28px 20px;
+        }
+
+        .card-header h1 {
+            font-size: 24px;
+        }
+
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="register-container">
+    <div class="register-card">
+        <div class="card-header">
+            <div class="icon">🎓</div>
+            <h1>创建账号</h1>
+            <p>加入我们的在线考试系统</p>
+        </div>
+
+        <form method="post" action="{% url 'register' %}">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" name="username" id="username" required placeholder="请输入用户名">
+            </div>
+
+            <div class="form-group">
+                <label for="email">邮箱</label>
+                <input type="email" name="email" id="email" required placeholder="请输入邮箱地址">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="phone_number">手机号码</label>
+                    <input type="text" name="phone_number" id="phone_number" maxlength="11" placeholder="选填">
+                </div>
+                <div class="form-group">
+                    <label for="qq_number">QQ号码</label>
+                    <input type="text" name="qq_number" id="qq_number" maxlength="20" placeholder="选填">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" name="password" id="password" required placeholder="请输入密码">
+                <div class="password-hint">密码长度至少6位</div>
+            </div>
+
+            <div class="form-group">
+                <label for="password_confirm">确认密码</label>
+                <input type="password" name="password_confirm" id="password_confirm" required placeholder="请再次输入密码">
+            </div>
+
+            <div class="terms-checkbox">
+                <input type="checkbox" id="terms" required>
+                <label for="terms">我已阅读并同意<a href="#">《用户服务协议》</a>和<a href="#">《隐私政策》</a></label>
+            </div>
+
+            <button type="submit" class="btn-register">
+                🚀 立即注册
+            </button>
+        </form>
+
+        <div class="login-link">
+            <p>已有账号？<a href="{% url 'login' %}">立即登录</a></p>
+        </div>
+    </div>
+</div>
 {% endblock %}

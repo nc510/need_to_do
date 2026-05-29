@@ -5,11 +5,36 @@ import time
 HOST = '0.0.0.0'
 PORT = 8090
 
+# 并发配置
+# threads: 工作线程数，建议设置为 CPU 核心数的 2-4 倍
+# connection_limit: 最大并发连接数
+# backlog: 监听队列大小（等待连接的最大数量）
+# channel_timeout: 连接超时时间（秒）
+THREADS = 32
+CONNECTION_LIMIT = 1000
+BACKLOG = 2048
+CHANNEL_TIMEOUT = 120
+
 if __name__ == '__main__':
     print(f"Performing system checks...")
     print(f"System check identified no issues (0 silenced).")
     print(f"{time.strftime('%b %d, %Y - %H:%M:%S')}")
     print(f"Starting development server at http://{HOST}:{PORT}/")
+    print(f"Server configuration:")
+    print(f"  - Threads: {THREADS}")
+    print(f"  - Max connections: {CONNECTION_LIMIT}")
+    print(f"  - Backlog: {BACKLOG}")
+    print(f"  - Timeout: {CHANNEL_TIMEOUT}s")
     print(f"Quit the server with CTRL-BREAK.")
     print()
-    serve(app=application, host=HOST, port=PORT)
+    
+    serve(
+        app=application, 
+        host=HOST, 
+        port=PORT,
+        threads=THREADS,
+        connection_limit=CONNECTION_LIMIT,
+        backlog=BACKLOG,
+        channel_timeout=CHANNEL_TIMEOUT,
+        url_prefix=''
+    )

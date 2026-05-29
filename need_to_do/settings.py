@@ -11,6 +11,11 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +25,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-3zwd_-@qck6g1%na&4c$uewlgrne7px8%s7$*jv2u7#t#@!=rz'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-3zwd_-@qck6g1%na&4c$uewlgrne7px8%s7$*jv2u7#t#@!=rz')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
 
 # Application definition
@@ -49,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'quiz.middleware.AntiSpiderMiddleware',  # 反爬虫中间件
 ]
 
 LOGIN_URL = '/quiz/login/'
@@ -59,7 +65,6 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -79,12 +84,18 @@ WSGI_APPLICATION = 'need_to_do.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'need_to_do',
-        'USER': 'root',
-        'PASSWORD': 'Netsky121666880!',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
+        'NAME': os.getenv('DB_NAME', 'need_to_do'),
+        'USER': os.getenv('DB_USER', 'root'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'Netsky121666880!'),
+        'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+        'PORT': os.getenv('DB_PORT', '3306'),
+        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+            'use_unicode': True,
+        }
     }
 }
 
@@ -145,8 +156,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # SimpleUI 配置 - 现代化后台管理界面
 SIMPLEUI_HOME_TITLE = '📚 在线考试系统管理后台'
 SIMPLEUI_HOME_ICON = 'fa-solid fa-graduation-cap'
-SIMPLEUI_LOGIN_LOGO = '/static/admin/simpleui-x/logo.png'
-SIMPLEUI_LOGO = '/static/admin/simpleui-x/logo.png'
+# 移除不存在的logo配置，使用默认logo
+# SIMPLEUI_LOGIN_LOGO = '/static/admin/simpleui-x/logo.png'
+# SIMPLEUI_LOGO = '/static/admin/simpleui-x/logo.png'
 
 SIMPLEUI_DEFAULT_THEME = 'admin.lte.css'
 
@@ -236,3 +248,57 @@ SIMPLEUI_CONFIG = {
         }
     ]
 }
+
+# ==============================================================================
+# 性能优化配置
+# ==============================================================================
+
+# 缓存配置 - 使用本地内存缓存提高性能
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 300,  # 缓存超时时间（秒）
+        'OPTIONS': {
+            'MAX_ENTRIES': 10000,  # 最大缓存条目数
+            'CULL_FREQUENCY': 3,  # 缓存满时删除1/3的旧条目
+        }
+    }
+}
+
+# 会话配置优化
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'  # 使用缓存+数据库
+SESSION_COOKIE_AGE = 86400  # 会话超时时间（秒）= 24小时
+SESSION_SAVE_EVERY_REQUEST = False  # 不是每次请求都保存会话
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 浏览器关闭时不删除会话
+
+# 自动重新加载配置（开发环境）
+if DEBUG:
+    # 开发模式下使用更快的文件监视
+    WATCHFILES_CHANGED_DELAY = 1000  # 毫秒
+
+# 数据库连接池配置
+DATABASES['default'].update({
+    'CONN_MAX_AGE': 60,  # 数据库连接复用时间（秒）
+    'OPTIONS': {
+        'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        'charset': 'utf8mb4',
+        'use_unicode': True,
+    }
+})
+
+# 静态文件缓存
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+
+# 模板缓存
+TEMPLATES[0]['OPTIONS']['loaders'] = [
+    ('django.template.loaders.cached.Loader', [
+        'django.template.loaders.filesystem.Loader',
+        'django.template.loaders.app_directories.Loader',
+    ]),
+]
+
+# 中间件优化 - 启用条件GET中间件
+MIDDLEWARE += [
+    'django.middleware.http.ConditionalGetMiddleware',
+]

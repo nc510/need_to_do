@@ -34,9 +34,17 @@
     }
 
     @keyframes gradientFlow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
+        0% {
+            background-position: 0% 50%;
+        }
+
+        50% {
+            background-position: 100% 50%;
+        }
+
+        100% {
+            background-position: 0% 50%;
+        }
     }
 
     .login-header {
@@ -51,8 +59,15 @@
     }
 
     @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-10px);
+        }
     }
 
     .login-title {
@@ -185,26 +200,38 @@
     </div>
 
     {% if messages %}
-        {% for message in messages %}
-            <div class="{% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
-                {{ message }}
-            </div>
-        {% endfor %}
+    {% for message in messages %}
+    <div class="{% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
     {% endif %}
 
     <form method="post" action="{% url 'login' %}">
         {% csrf_token %}
-        
+
         <div class="form-group">
             <label for="username">用户名</label>
             <input type="text" name="username" id="username" placeholder="请输入用户名" required>
         </div>
-        
+
         <div class="form-group">
             <label for="password">密码</label>
             <input type="password" name="password" id="password" placeholder="请输入密码" required>
         </div>
-        
+
+        <div class="form-group">
+            <label for="captcha">验证码</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" name="captcha" id="captcha" placeholder="请输入验证码" required style="flex: 1;">
+                <img id="captcha-image" src="{% url 'captcha_image' %}" alt="验证码"
+                    style="width: 100px; height: 44px; border-radius: 8px; cursor: pointer;" onclick="refreshCaptcha()">
+            </div>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #95a5a6;">
+                点击验证码图片刷新
+            </p>
+        </div>
+
         <button type="submit" class="submit-btn">
             登录
         </button>
@@ -221,4 +248,13 @@
 {% endblock %}
 
 {% block footer %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function refreshCaptcha() {
+        var img = document.getElementById('captcha-image');
+        img.src = "{% url 'captcha_image' %}?t=" + Date.now();
+    }
+</script>
 {% endblock %}

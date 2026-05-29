@@ -1,13 +1,11 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.db.models.signals import m2m_changed
+from django.db.models.signals import post_save, m2m_changed
 from django.dispatch import receiver
 
 class Question(models.Model):
     # 题目类型：1-单选题，2-多选题，3-判断题
-    TYPE_CHOICE = (1, '单选题'), (2, '多选题'), (3, '判断题')
+    TYPE_CHOICE = [(1, '单选题'), (2, '多选题'), (3, '判断题')]
     type = models.IntegerField(choices=TYPE_CHOICE, verbose_name='题目类型')
     content = models.TextField(verbose_name='题目内容')
     options = models.JSONField(verbose_name='选项', default=dict, blank=True, help_text='选择题选项，格式：{"A":"选项内容","B":"选项内容"}')
@@ -37,6 +35,10 @@ class Question(models.Model):
         }
 
 class TestPaper(models.Model):
+    SOURCE_CHOICES = [
+        ('admin', '后台创建'),
+        ('frontend', '前台创建'),
+    ]
     title = models.CharField(max_length=100, verbose_name='试卷标题')
     description = models.TextField(verbose_name='试卷描述', null=True, blank=True)
     questions = models.ManyToManyField(Question, verbose_name='包含题目')
@@ -44,6 +46,7 @@ class TestPaper(models.Model):
     created_by = models.CharField(max_length=100, verbose_name='出题人', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     is_published = models.BooleanField(verbose_name='是否发布', default=False)
+    source = models.CharField(max_length=20, verbose_name='试卷来源', choices=SOURCE_CHOICES, default='frontend')
 
     class Meta:
         verbose_name = '试卷'

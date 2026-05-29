@@ -5,12 +5,20 @@
 {% block extra_styles %}
 <style>
     .form-container {
-        max-width: 800px;
+        max-width: 1400px;
         margin: 0 auto;
         background: white;
         border-radius: 12px;
         padding: 30px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0 0 25px 0;
+        text-align: center;
     }
 
     .form-group {
@@ -46,10 +54,262 @@
         min-height: 80px;
     }
 
-    .form-group .hint {
+    .two-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #667eea;
+        color: #2c3e50;
+    }
+
+    .filter-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+
+    .filter-row {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filter-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .filter-item label {
+        font-weight: 500;
+        margin: 0;
+        font-size: 13px;
+    }
+
+    .filter-item select,
+    .filter-item input {
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 13px;
+    }
+
+    .filter-item input[type="number"] {
+        width: 70px;
+        padding: 8px;
+    }
+
+    .search-box {
+        padding: 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 25px;
+        font-size: 14px;
+        width: 250px;
+        margin-bottom: 15px;
+    }
+
+    .search-box:focus {
+        border-color: #667eea;
+        outline: none;
+    }
+
+    .auto-select-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: background 0.3s;
+    }
+
+    .auto-select-btn:hover {
+        background: #5a6fd6;
+    }
+
+    .question-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        position: relative;
+    }
+
+    .question-counter {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 10px;
+    }
+
+    .question-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .question-item:last-child {
+        border-bottom: none;
+    }
+
+    .question-item:hover {
+        background: #f8f9fa;
+    }
+
+    .question-item.selected {
+        background: #f0f7ff;
+        border-left: 4px solid #667eea;
+    }
+
+    .question-checkbox {
+        margin-right: 12px;
+        width: 18px;
+        height: 18px;
+        accent-color: #667eea;
+        flex-shrink: 0;
+    }
+
+    .question-content {
+        flex: 1;
+        font-size: 14px;
+        color: #333;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 350px;
+    }
+
+    .question-meta {
+        display: flex;
+        gap: 12px;
         font-size: 12px;
-        color: #888;
-        margin-top: 5px;
+        color: #666;
+        margin-left: 15px;
+    }
+
+    .type-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .type-single {
+        background: #4caf50;
+    }
+
+    .type-multi {
+        background: #9c27b0;
+    }
+
+    .type-judge {
+        background: #ff9800;
+    }
+
+    .selected-section {
+        background: #fff8f0;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #ffe0b2;
+    }
+
+    .selected-summary {
+        display: flex;
+        gap: 25px;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+
+    .selected-summary span {
+        font-weight: 600;
+        color: #e65100;
+    }
+
+    .selected-list {
+        max-height: 250px;
+        overflow-y: auto;
+        border: 1px solid #ffe0b2;
+        border-radius: 8px;
+        background: white;
+    }
+
+    .selected-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #ffe0b2;
+    }
+
+    .selected-item:last-child {
+        border-bottom: none;
+    }
+
+    .selected-index {
+        width: 22px;
+        height: 22px;
+        background: #667eea;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 10px;
+        flex-shrink: 0;
+    }
+
+    .selected-content {
+        flex: 1;
+        font-size: 13px;
+        color: #333;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 280px;
+    }
+
+    .selected-score {
+        color: #e65100;
+        font-weight: 600;
+        margin-right: 12px;
+        font-size: 13px;
+    }
+
+    .remove-btn {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: background 0.3s;
+    }
+
+    .remove-btn:hover {
+        background: #c82333;
+    }
+
+    .empty-selection {
+        text-align: center;
+        padding: 30px;
+        color: #999;
+        font-size: 14px;
     }
 
     .form-actions {
@@ -84,6 +344,13 @@
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     }
 
+    .btn-primary:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
     .btn-secondary {
         background: #f5f7fa;
         color: #666;
@@ -93,147 +360,20 @@
         background: #eee;
     }
 
-    .page-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 0 0 25px 0;
-        text-align: center;
-    }
-
-    .questions-list {
-        max-height: 450px;
-        overflow-y: auto;
-        border: 1px solid #eee;
-        border-radius: 8px;
-        padding: 10px;
-        background: #fafafa;
-    }
-
-    .question-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 12px;
-        border-radius: 6px;
+    .btn-outline {
         background: white;
-        margin-bottom: 8px;
-        transition: all 0.2s ease;
-        cursor: pointer;
-        border: 1px solid #eee;
-    }
-
-    .question-item:hover {
-        background-color: #f8f9fa;
-        border-color: #667eea;
-    }
-
-    .question-item.selected {
-        background-color: #f0f7ff;
-        border: 2px solid #667eea;
-    }
-
-    .question-item input[type="checkbox"] {
-        margin-top: 2px;
-        transform: scale(1.3);
-        accent-color: #667eea;
-        flex-shrink: 0;
-    }
-
-    .question-content {
-        flex: 1;
-        min-width: 0;
-        word-break: break-word;
-    }
-
-    .question-content h4 {
-        margin: 0 0 8px 0;
-        font-size: 14px;
-        color: #2c3e50;
-        line-height: 1.4;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .question-options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 8px;
-    }
-
-    .option-tag {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 8px;
-        background: #f5f7fa;
-        border-radius: 4px;
-        font-size: 11px;
-        color: #555;
-        flex-shrink: 0;
-    }
-
-    .option-tag span:first-child {
-        font-weight: 600;
         color: #667eea;
-        margin-right: 4px;
+        border: 1px solid #667eea;
     }
 
-    .question-content p {
-        margin: 0;
-        font-size: 12px;
-        color: #666;
+    .btn-outline:hover {
+        background: #f8f9ff;
     }
 
-    .question-meta {
-        display: flex;
-        gap: 10px;
-        margin-top: 8px;
-        font-size: 11px;
-        color: #888;
-    }
-
-    .question-meta span {
-        padding: 2px 6px;
-        background: #f0f2f5;
-        border-radius: 3px;
-    }
-
-    .selected-count {
-        display: inline-block;
-        padding: 6px 12px;
-        background: #667eea;
-        color: white;
-        border-radius: 20px;
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 15px;
-    }
-
-    .type-badge {
-        display: inline-block;
-        font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 10px;
-        background: #e8ecf1;
-        color: #666;
-    }
-
-    .type-single {
-        background: #d4edda;
-        color: #155724;
-    }
-
-    .type-multi {
-        background: #cce5ff;
-        color: #004085;
-    }
-
-    .type-judge {
-        background: #fff3cd;
-        color: #856404;
+    @media (max-width: 900px) {
+        .two-columns {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
@@ -244,15 +384,16 @@
 
     {% if messages %}
     {% for message in messages %}
-    <div
-        style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
+    <div style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
         {{ message }}
     </div>
     {% endfor %}
     {% endif %}
 
-    <form method="post">
+    <form method="post" id="createForm">
         {% csrf_token %}
+
+        <div class="section-title">📋 试卷信息</div>
 
         <div class="form-group">
             <label for="title">试卷标题 <span style="color: #dc3545;">*</span></label>
@@ -264,92 +405,310 @@
             <textarea id="description" name="description" placeholder="请输入试卷描述（可选）"></textarea>
         </div>
 
-        <div class="form-group">
-            <label for="questions">选择题目 <span style="color: #dc3545;">*</span></label>
-            <div class="selected-count" id="selectedCount">已选择 0 道题目</div>
+        <div class="two-columns">
+            <div>
+                <div class="section-title">📚 题目库</div>
 
-            <div class="questions-list">
-                {% for question in questions %}
-                <div class="question-item" data-question-id="{{ question.id }}">
-                    <input type="checkbox" name="questions" value="{{ question.id }}" onchange="updateSelectedCount()">
-                    <div class="question-content">
-                        <h4>
-                            {{ question.content|truncatechars:80 }}
-                            <span
-                                class="type-badge {% if question.type == 1 %}type-single{% elif question.type == 2 %}type-multi{% else %}type-judge{% endif %}">
-                                {% if question.type == 1 %}单选{% elif question.type == 2 %}多选{% else %}判断{% endif %}
-                            </span>
-                        </h4>
-                        {% if question.options and question.options.items %}
-                        <div class="question-options">
-                            {% for key, value in question.options.items %}
-                            <div class="option-tag">
-                                <span>{{ key }}.</span>
-                                <span>{{ value|truncatechars:25 }}</span>
-                            </div>
-                            {% endfor %}
+                <div class="filter-section">
+                    <div class="filter-row">
+                        <div class="filter-item">
+                            <label>题型：</label>
+                            <select id="typeFilter">
+                                <option value="all">全部</option>
+                                <option value="1">单选题</option>
+                                <option value="2">多选题</option>
+                                <option value="3">判断题</option>
+                            </select>
                         </div>
-                        {% endif %}
-                        <div class="question-meta">
-                            <span>分值: {{ question.score }}分</span>
-                            {% if question.explanation %}
-                            <span>有解析</span>
-                            {% endif %}
+                        <div class="filter-item">
+                            <label>分值：</label>
+                            <input type="number" id="minScore" placeholder="最低" min="1" style="width: 60px;">
+                            <span> - </span>
+                            <input type="number" id="maxScore" placeholder="最高" min="1" style="width: 60px;">
                         </div>
                     </div>
                 </div>
-                {% empty %}
-                <p style="text-align: center; color: #888; padding: 30px;">暂无题目，请先在管理后台添加题目</p>
-                {% endfor %}
+
+                <input type="text" id="searchBox" class="search-box" placeholder="🔍 搜索题目内容...">
+
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <button type="button" class="auto-select-btn" onclick="autoSelectQuestions()">
+                        🎲 随机选题
+                    </button>
+                    <div class="filter-item">
+                        <label>数量：</label>
+                        <input type="number" id="randomCount" value="10" min="1" max="999" style="width: 60px; padding: 6px;">
+                    </div>
+                    <span style="font-size: 12px; color: #888;">（从当前筛选结果中随机选）</span>
+                </div>
+
+                <div class="question-counter">共 <span id="questionCount">{{ questions|length }}</span> 道题目</div>
+
+                <div class="question-list" id="questionList">
+                    {% for q in questions %}
+                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" data-score="{{ q.score }}">
+                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" name="questions" value="{{ q.id }}">
+                        <span class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
+                            {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
+                        </span>
+                        <span class="question-content" title="{{ q.content }}">{{ q.content }}</span>
+                        <div class="question-meta">
+                            <span>分值: {{ q.score }}</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div style="text-align: center; padding: 40px; color: #888;">
+                        暂无题目，请先在管理后台添加题目
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">✅ 已选题</div>
+
+                <div class="selected-section">
+                    <div class="selected-summary">
+                        <p>题目数量：<span id="selectedCount">0</span> 道</p>
+                        <p>总分：<span id="totalScore">0</span> 分</p>
+                    </div>
+
+                    <div class="selected-list" id="selectedList">
+                        <div class="empty-selection">
+                            暂无选题，请从左侧选择题目
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title">📌 操作</div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button type="button" class="btn btn-outline" onclick="selectAllVisible()" style="flex: 1; justify-content: center;">
+                        ✓ 全选可见
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearSelection()" style="flex: 1; justify-content: center;">
+                        🗑 清空选题
+                    </button>
+                </div>
             </div>
         </div>
 
         <div class="form-actions">
             <a href="{% url 'my_test_papers' %}" class="btn btn-secondary">← 返回</a>
             <a href="{% url 'import_test_paper' %}" class="btn btn-secondary">📥 导入试卷</a>
-            <button type="submit" class="btn btn-primary">✓ 创建试卷</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>✓ 创建试卷</button>
         </div>
     </form>
 </div>
 
 <script>
-    function updateSelectedCount() {
-        const checkboxes = document.querySelectorAll('input[name="questions"]:checked');
-        const count = checkboxes.length;
-        document.getElementById('selectedCount').textContent = `已选择 ${count} 道题目`;
+    let selectedQuestions = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.question-item').forEach(item => {
+            item.addEventListener('click', function(event) {
+                const checkbox = this.querySelector('.question-checkbox');
+                if (checkbox && event.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    onCheckboxChange(checkbox);
+                }
+            });
+        });
+
+        document.querySelectorAll('.question-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                onCheckboxChange(this);
+            });
+        });
+
+        document.getElementById('searchBox').addEventListener('input', filterQuestions);
+        document.getElementById('typeFilter').addEventListener('change', filterQuestions);
+        document.getElementById('minScore').addEventListener('input', filterQuestions);
+        document.getElementById('maxScore').addEventListener('input', filterQuestions);
+        document.getElementById('title').addEventListener('input', updateSubmitButton);
+
+        updateSubmitButton();
+    });
+
+    function onCheckboxChange(checkbox) {
+        const questionId = parseInt(checkbox.getAttribute('data-id'));
+        const item = document.querySelector(`.question-item[data-id="${questionId}"]`);
+        const content = item.querySelector('.question-content').textContent;
+        const score = parseInt(item.getAttribute('data-score'));
+        const type = parseInt(item.getAttribute('data-type'));
+
+        const q = {
+            id: questionId,
+            content: content,
+            score: score,
+            type: type
+        };
+
+        if (checkbox.checked) {
+            if (!selectedQuestions.find(sq => sq.id === questionId)) {
+                selectedQuestions.push(q);
+            }
+        } else {
+            selectedQuestions = selectedQuestions.filter(sq => sq.id !== questionId);
+        }
+
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        const selectedCount = document.getElementById('selectedCount');
-        if (!selectedCount) return;
+    function updateSelectedList() {
+        const list = document.getElementById('selectedList');
+        const count = document.getElementById('selectedCount');
+        const totalScore = document.getElementById('totalScore');
 
-        const selectAllBtn = document.createElement('button');
-        selectAllBtn.textContent = '全选';
-        selectAllBtn.className = 'btn btn-secondary';
-        selectAllBtn.style.marginRight = '10px';
-        selectAllBtn.onclick = function () {
-            const checkboxes = document.querySelectorAll('input[name="questions"]');
-            checkboxes.forEach(function (cb) { cb.checked = true; });
-            updateSelectedCount();
-        };
-
-        if (selectedCount.parentNode) {
-            selectedCount.parentNode.insertBefore(selectAllBtn, selectedCount);
+        if (selectedQuestions.length === 0) {
+            list.innerHTML = '<div class="empty-selection">暂无选题，请从左侧选择题目</div>';
+            count.textContent = '0';
+            totalScore.textContent = '0';
+            return;
         }
 
-        const deselectAllBtn = document.createElement('button');
-        deselectAllBtn.textContent = '取消全选';
-        deselectAllBtn.className = 'btn btn-secondary';
-        deselectAllBtn.style.marginRight = '10px';
-        deselectAllBtn.onclick = function () {
-            const checkboxes = document.querySelectorAll('input[name="questions"]');
-            checkboxes.forEach(function (cb) { cb.checked = false; });
-            updateSelectedCount();
-        };
+        let html = '';
+        let score = 0;
 
-        if (selectedCount.parentNode) {
-            selectedCount.parentNode.insertBefore(deselectAllBtn, selectedCount);
+        selectedQuestions.forEach((q, index) => {
+            score += q.score;
+            html += `
+                <div class="selected-item">
+                    <span class="selected-index">${index + 1}</span>
+                    <span class="selected-content" title="${q.content}">${q.content}</span>
+                    <span class="selected-score">${q.score}分</span>
+                    <button type="button" class="remove-btn" onclick="removeQuestion(${q.id})">移除</button>
+                </div>
+            `;
+        });
+
+        list.innerHTML = html;
+        count.textContent = selectedQuestions.length;
+        totalScore.textContent = score;
+    }
+
+    function removeQuestion(questionId) {
+        selectedQuestions = selectedQuestions.filter(sq => sq.id !== questionId);
+        const checkbox = document.querySelector(`.question-checkbox[data-id="${questionId}"]`);
+        if (checkbox) checkbox.checked = false;
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+
+    function clearSelection() {
+        selectedQuestions = [];
+        document.querySelectorAll('.question-checkbox').forEach(cb => cb.checked = false);
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+
+    function selectAllVisible() {
+        document.querySelectorAll('.question-item:not([style*="display: none"]) .question-checkbox').forEach(cb => {
+            if (!cb.checked) {
+                cb.checked = true;
+                onCheckboxChange(cb);
+            }
+        });
+    }
+
+    function autoSelectQuestions() {
+        const randomCountInput = document.getElementById('randomCount');
+        let count = parseInt(randomCountInput.value) || 10;
+        if (count < 1) count = 1;
+
+        const alreadySelectedIds = new Set(selectedQuestions.map(q => q.id));
+
+        const availableQuestions = [];
+        document.querySelectorAll('.question-item').forEach(item => {
+            if (item.style.display === 'none') return;
+            const id = parseInt(item.getAttribute('data-id'));
+            if (alreadySelectedIds.has(id)) return;
+            const content = item.querySelector('.question-content').textContent;
+            const score = parseInt(item.getAttribute('data-score'));
+            const type = parseInt(item.getAttribute('data-type'));
+            availableQuestions.push({ id, content, score, type });
+        });
+
+        if (availableQuestions.length === 0) {
+            alert('没有可选的题目');
+            return;
         }
-    });
+
+        const actualCount = Math.min(count, availableQuestions.length);
+        const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
+        const selected = shuffled.slice(0, actualCount);
+
+        selected.forEach(q => {
+            if (!selectedQuestions.find(sq => sq.id === q.id)) {
+                selectedQuestions.push(q);
+            }
+        });
+
+        document.querySelectorAll('.question-checkbox').forEach(cb => {
+            const id = parseInt(cb.getAttribute('data-id'));
+            cb.checked = selectedQuestions.some(sq => sq.id === id);
+        });
+
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+    }
+
+    function updateSubmitButton() {
+        const submitBtn = document.getElementById('submitBtn');
+        const title = document.getElementById('title').value.trim();
+        const checkedCount = document.querySelectorAll('.question-checkbox:checked').length;
+
+        if (checkedCount > 0 && title) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `✓ 创建试卷 (${checkedCount}题/${document.getElementById('totalScore').textContent}分)`;
+        } else {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '✓ 创建试卷';
+        }
+    }
+
+    function updateQuestionHighlight() {
+        document.querySelectorAll('.question-item').forEach(item => {
+            const id = parseInt(item.getAttribute('data-id'));
+            if (selectedQuestions.some(sq => sq.id === id)) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+        });
+    }
+
+    function filterQuestions() {
+        const searchText = document.getElementById('searchBox').value.toLowerCase();
+        const typeFilter = document.getElementById('typeFilter').value;
+        const minScore = parseInt(document.getElementById('minScore').value) || 0;
+        const maxScore = parseInt(document.getElementById('maxScore').value) || Infinity;
+
+        let visibleCount = 0;
+
+        document.querySelectorAll('.question-item').forEach(item => {
+            const content = item.querySelector('.question-content').textContent.toLowerCase();
+            const type = item.getAttribute('data-type');
+            const score = parseInt(item.getAttribute('data-score'));
+
+            const matchSearch = content.includes(searchText);
+            const matchType = typeFilter === 'all' || type === typeFilter;
+            const matchScore = score >= minScore && score <= maxScore;
+
+            if (matchSearch && matchType && matchScore) {
+                item.style.display = 'flex';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        document.getElementById('questionCount').textContent = visibleCount;
+    }
 </script>
 {% endblock %}

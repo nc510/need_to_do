@@ -17,6 +17,8 @@ urlpatterns = [
     
     path('register/', views.register, name='register'),  # 注册
     path('login/', views.login_view, name='login'),  # 登录
+    path('captcha/', views.captcha_image, name='captcha_image'),  # 验证码图片
+    path('captcha/refresh/', views.refresh_captcha, name='refresh_captcha'),  # 刷新验证码
     path('logout/', views.logout_view, name='logout'),  # 退出登录
     path('test_history/', views.test_history, name='test_history'),  # 答题历史
     path('test_history/<int:record_id>/', views.test_history_detail, name='test_history_detail'),  # 答题历史详情

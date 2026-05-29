@@ -1,0 +1,254 @@
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from django.http import HttpResponse
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils.exceptions import InvalidFileException
+
+def paginate_queryset(queryset, page_num, items_per_page=9):
+    paginator = Paginator(queryset, items_per_page)
+    try:
+        paginated_items = paginator.page(page_num)
+    except PageNotAnInteger:
+        paginated_items = paginator.page(1)
+    except EmptyPage:
+        paginated_items = paginator.page(paginator.num_pages)
+    return paginated_items
+
+def compare_answers(user_answer, correct_answer):
+    if user_answer is None:
+        return False
+    return user_answer.strip().lower() == correct_answer.strip().lower()
+
+def calculate_score(questions, user_answers):
+    score = 0
+    correct_count = 0
+    question_results = []
+
+    for question in questions:
+        user_answer = user_answers.get(str(question.id), user_answers.get(question.id))
+        is_correct = compare_answers(user_answer, question.correct_answer)
+
+        if is_correct:
+            score += question.score
+            correct_count += 1
+            result = '正确'
+        elif user_answer is None:
+            result = '未答'
+        else:
+            result = '错误'
+
+        question_results.append({
+            'question': question,
+            'user_answer': user_answer,
+            'correct_answer': question.correct_answer,
+            'result': result,
+            'score': question.score,
+            'is_correct': is_correct
+        })
+
+    total_count = len(question_results)
+    wrong_count = total_count - correct_count
+
+    return score, correct_count, wrong_count, total_count, question_results
+
+def parse_datetime_local(datetime_str):
+    import datetime
+    datetime_clean = datetime_str.replace('T', ' ')
+    return datetime.datetime.strptime(datetime_clean, '%Y-%m-%d %H:%M')
+
+class ExcelImporter:
+    HEADER_ALIASES = {
+        'content': ['content', '题目', '题目内容', 'question', '题干'],
+        'type': ['type', '题型', '题目类型', '类别'],
+        'option_a': ['option_a', '选项A', 'A', '选项a'],
+        'option_b': ['option_b', '选项B', 'B', '选项b'],
+        'option_c': ['option_c', '选项C', 'C', '选项c'],
+        'option_d': ['option_d', '选项D', 'D', '选项d'],
+        'options': ['options', '选项', '所有选项'],
+        'correct_answer': ['correct_answer', '答案', '正确答案', '参考答案', 'answer'],
+        'score': ['score', '分值', '分数', '得分'],
+        'explanation': ['explanation', '解析', '答案解析', '解析说明']
+    }
+
+    TYPE_MAPPING = {
+        '3': 3, '判断题': 3, '判断': 3, 'judge': 3,
+        '2': 2, '多选题': 2, '多选': 2, 'multiple': 2,
+        '1': 1, '单选题': 1, '单选': 1, 'single': 1, '选择题': 1, '选择': 1, 'choice': 1
+    }
+
+    def __init__(self, worksheet, required_keys=None):
+        self.ws = worksheet
+        self.errors = []
+        self.header_map = {}
+        if required_keys is None:
+            required_keys = ['content', 'correct_answer', 'score']
+        self.required_keys = required_keys
+
+    def parse_headers(self):
+        headers = [cell.value for cell in self.ws[1]]
+        for idx, header in enumerate(headers):
+            if header:
+                header_str = str(header).strip()
+                header_lower = header_str.lower()
+                for key, aliases in self.HEADER_ALIASES.items():
+                    if header_lower in aliases or header_str in aliases:
+                        self.header_map[key] = idx
+                        break
+        missing = [k for k in self.required_keys if k not in self.header_map]
+        return missing
+
+    def parse_row(self, row, row_idx):
+        try:
+            content = str(row[self.header_map['content']].value or '').strip()
+            if not content:
+                return None
+
+            q_type = 1
+            if 'type' in self.header_map:
+                type_val = row[self.header_map['type']].value
+                if type_val is not None:
+                    type_str = str(type_val).strip()
+                    q_type = self.TYPE_MAPPING.get(type_str, 1)
+
+            options = self._parse_options(row)
+            correct_answer = str(row[self.header_map['correct_answer']].value or '').strip()
+            score = self._parse_score(row)
+            explanation = ''
+            if 'explanation' in self.header_map:
+                explanation = str(row[self.header_map['explanation']].value or '').strip()
+
+            has_error = not correct_answer or (not score and score != 0)
+            if not correct_answer:
+                self.errors.append(f'第{row_idx}行：正确答案为空')
+            if not score and score != 0:
+                self.errors.append(f'第{row_idx}行：分值格式错误')
+
+            return {
+                'content': content,
+                'type': q_type,
+                'options': options,
+                'correct_answer': correct_answer,
+                'score': score,
+                'explanation': explanation,
+                'row': row_idx,
+                'has_error': has_error
+            }
+        except Exception as e:
+            self.errors.append(f'第{row_idx}行：{str(e)}')
+            return None
+
+    def _parse_options(self, row):
+        options = {}
+        option_cols = ['option_a', 'option_b', 'option_c', 'option_d']
+        option_letters = ['A', 'B', 'C', 'D']
+
+        for col_key, letter in zip(option_cols, option_letters):
+            if col_key in self.header_map:
+                val = row[self.header_map[col_key]].value
+                if val and str(val).strip():
+                    options[letter] = str(val).strip()
+
+        if not options and 'options' in self.header_map:
+            options_str = str(row[self.header_map['options']].value or '').strip()
+            if options_str:
+                for item in options_str.split(','):
+                    item = item.strip()
+                    if item and len(item) >= 2:
+                        letter = item[0].upper()
+                        if letter in ['A', 'B', 'C', 'D']:
+                            options[letter] = item[1:].strip()
+
+        return options
+
+    def _parse_score(self, row):
+        try:
+            score = int(row[self.header_map['score']].value or 0)
+            return score if score > 0 else ''
+        except:
+            return ''
+
+    def parse_all(self):
+        questions_data = []
+        for row_idx, row in enumerate(self.ws.iter_rows(min_row=2), start=2):
+            parsed = self.parse_row(row, row_idx)
+            if parsed:
+                questions_data.append(parsed)
+        return questions_data
+
+def create_import_template():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "题目导入模板"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="667EEA", end_color="764BA2", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    example_data = [
+        ['以下哪个是Python的关键字？', '单选题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字'],
+        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型'],
+        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', 3, 'Python确实是编程语言'],
+    ]
+
+    for row_idx, row_data in enumerate(example_data, start=2):
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+            cell.border = thin_border
+
+    ws.column_dimensions['A'].width = 35
+    ws.column_dimensions['B'].width = 8
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['G'].width = 10
+    ws.column_dimensions['H'].width = 8
+    ws.column_dimensions['I'].width = 25
+    ws.freeze_panes = 'A2'
+
+    return wb
+
+def download_template_response(filename='题目导入模板.xlsx'):
+    wb = create_import_template()
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    wb.save(response)
+    return response
+
+def import_questions_from_excel(file):
+    try:
+        wb = openpyxl.load_workbook(file)
+        ws = wb.active
+        importer = ExcelImporter(ws)
+        missing = importer.parse_headers()
+        if missing:
+            return None, None, [f'缺少必需列：{", ".join(missing)}']
+        questions_data = importer.parse_all()
+        if not questions_data:
+            return None, None, importer.errors[:5] if importer.errors else ['文件中没有有效的题目数据']
+        valid_count = sum(1 for q in questions_data if q.get('correct_answer') and q.get('score'))
+        missing_count = len(questions_data) - valid_count
+        total_score = sum(q['score'] if isinstance(q['score'], int) else 0 for q in questions_data)
+        return questions_data, {
+            'total_score': total_score,
+            'valid_count': valid_count,
+            'missing_count': missing_count,
+            'errors': importer.errors[:10]
+        }, None
+    except InvalidFileException:
+        return None, None, ['文件格式不正确，请上传 .xlsx 格式的 Excel 文件']
+    except Exception as e:
+        return None, None, [f'读取文件失败：{str(e)}']

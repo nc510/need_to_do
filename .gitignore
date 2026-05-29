@@ -1,14 +1,52 @@
 # Python
 *.pyc
 __pycache__/
+*.pyo
+*.pyd
 
 # Virtual Environment
 venv/
+.env/
+.venv/
+env/
 
 # Django
 staticfiles/
 *.log
 media/
+local_settings.py
+
+# Environment Variables
+.env
+.env.local
+.env.production
+.env.*.local
 
 # Excel files
 test_questions.xlsx
+*.xlsx
+*.xls
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log.*
+
+# Backup
+*.bak
+*.backup
+
+# Production
+uwsgi.ini
+gunicorn.conf.py
+nginx.conf

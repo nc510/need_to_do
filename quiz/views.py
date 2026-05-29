@@ -1,6 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -8,7 +7,8 @@ from django.db import IntegrityError
 from django.contrib.auth.models import User
 from django.utils import timezone
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord
-import pandas as pd
+from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel
+from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
 import json
 import re
@@ -32,18 +32,8 @@ def question_detail(request, question_id):
 
 # 试卷列表视图（仅显示已发布的试卷）
 def test_paper_list(request):
-    test_papers = TestPaper.objects.filter(is_published=True).order_by('-created_at')
-    # 实现分页，每页显示9套试卷
-    paginator = Paginator(test_papers, 9)
-    page_num = request.GET.get('page')
-    try:
-        paginated_test_papers = paginator.page(page_num)
-    except PageNotAnInteger:
-        # 如果页码不是整数，返回第一页
-        paginated_test_papers = paginator.page(1)
-    except EmptyPage:
-        # 如果页码超出范围，返回最后一页
-        paginated_test_papers = paginator.page(paginator.num_pages)
+    test_papers = TestPaper.objects.filter(is_published=True, source='admin').order_by('-created_at')
+    paginated_test_papers = paginate_queryset(test_papers, request.GET.get('page'), items_per_page=9)
     return render(request, 'quiz/frontend/test_paper_list.html', {'test_papers': paginated_test_papers})
 
 # 试卷详情视图
@@ -191,7 +181,17 @@ def register(request):
             messages.error(request, '两次输入的密码不一致')
             return render(request, 'quiz/frontend/register.html')
         
-        # 验证手机号码格式
+        # 检查用户名唯一性
+        if User.objects.filter(username=username).exists():
+            messages.error(request, '用户名已存在')
+            return render(request, 'quiz/frontend/register.html')
+        
+        # 检查邮箱唯一性
+        if User.objects.filter(email=email).exists():
+            messages.error(request, '邮箱已存在')
+            return render(request, 'quiz/frontend/register.html')
+        
+        # 验证手机号码格式和唯一性
         if phone_number:
             phone_regex = re.compile(r'^1[3-9]\d{9}$')
             if not phone_regex.match(phone_number):
@@ -200,13 +200,8 @@ def register(request):
             
             # 检查手机号码唯一性
             if Profile.objects.filter(phone_number=phone_number).exists():
-                messages.error(request, '用户名或者手机号码已存在')
+                messages.error(request, '手机号码已存在')
                 return render(request, 'quiz/frontend/register.html')
-        
-        # 检查邮箱唯一性
-        if User.objects.filter(email=email).exists():
-            messages.error(request, '邮箱已存在')
-            return render(request, 'quiz/frontend/register.html')
         
         try:
             # 创建用户
@@ -231,11 +226,36 @@ def register(request):
     
     return render(request, 'quiz/frontend/register.html')
 
+# 验证码视图
+def captcha_image(request):
+    """生成验证码图片"""
+    captcha_text = generate_captcha_text()
+    request.session['captcha'] = captcha_text.lower()  # 保存到session，不区分大小写
+    image_buffer = generate_captcha_image(captcha_text)
+    return HttpResponse(image_buffer, content_type='image/png')
+
+
+# 刷新验证码
+def refresh_captcha(request):
+    """刷新验证码"""
+    captcha_text = generate_captcha_text()
+    request.session['captcha'] = captcha_text.lower()
+    image_buffer = generate_captcha_image(captcha_text)
+    return HttpResponse(image_buffer, content_type='image/png')
+
+
 # 登录视图
 def login_view(request):
     if request.method == 'POST':
         username_or_phone = request.POST.get('username')
         password = request.POST.get('password')
+        captcha = request.POST.get('captcha', '').lower()
+        
+        # 验证验证码
+        session_captcha = request.session.get('captcha', '')
+        if captcha != session_captcha:
+            messages.error(request, '验证码错误')
+            return render(request, 'quiz/frontend/login.html')
         
         # 首先尝试通过用户名登录
         user = authenticate(request, username=username_or_phone, password=password)
@@ -259,7 +279,7 @@ def login_view(request):
             except:
                 # 其他错误
                 pass
-            
+        
         # 如果两种方式都登录失败
         if user is None:
             messages.error(request, '用户名/手机号码或密码错误')
@@ -307,20 +327,8 @@ def user_center(request):
 # 答题历史记录视图
 @login_required
 def test_history(request):
-    # 获取当前用户的所有答题记录
     test_records = TestRecord.objects.filter(user=request.user).order_by('-completed_at')
-    
-    # 实现分页
-    paginator = Paginator(test_records, 9)  # 每页显示9条记录
-    page_num = request.GET.get('page')
-    
-    try:
-        paginated_records = paginator.page(page_num)
-    except PageNotAnInteger:
-        paginated_records = paginator.page(1)
-    except EmptyPage:
-        paginated_records = paginator.page(paginator.num_pages)
-    
+    paginated_records = paginate_queryset(test_records, request.GET.get('page'), items_per_page=9)
     return render(request, 'quiz/frontend/test_history.html', {
         'test_records': paginated_records
     })
@@ -336,7 +344,7 @@ def test_history_detail(request, record_id):
         return redirect('test_history')
     
     # 获取该答题记录的所有每题答题记录
-    answer_records = AnswerRecord.objects.filter(test_record=test_record)
+    answer_records = AnswerRecord.objects.filter(test_record=test_record).select_related('question')
     
     return render(request, 'quiz/frontend/test_history_detail.html', {
         'test_record': test_record,
@@ -346,20 +354,8 @@ def test_history_detail(request, record_id):
 # 错题本视图
 @login_required
 def wrong_question_notebook(request):
-    # 获取当前用户的所有错题
     wrong_questions = WrongQuestion.objects.filter(user=request.user).order_by('-added_at')
-    
-    # 实现分页，每页显示50条错题
-    paginator = Paginator(wrong_questions, 50)
-    page_num = request.GET.get('page')
-    
-    try:
-        paginated_wrong_questions = paginator.page(page_num)
-    except PageNotAnInteger:
-        paginated_wrong_questions = paginator.page(1)
-    except EmptyPage:
-        paginated_wrong_questions = paginator.page(paginator.num_pages)
-    
+    paginated_wrong_questions = paginate_queryset(wrong_questions, request.GET.get('page'), items_per_page=50)
     return render(request, 'quiz/frontend/wrong_question_notebook.html', {
         'wrong_questions': paginated_wrong_questions
     })
@@ -524,7 +520,7 @@ def class_detail(request, class_id):
     """班级详情视图"""
     class_obj = get_object_or_404(Class, pk=class_id)
     students = User.objects.filter(profile__class_obj=class_obj).order_by('username')
-    admins = ClassAdmin.objects.filter(class_obj=class_obj)
+    admins = ClassAdmin.objects.filter(class_obj=class_obj).select_related('user')
     is_admin = is_class_admin(request.user, class_obj)
     pending_count = ClassApplication.objects.filter(class_obj=class_obj, status=0).count()
     
@@ -768,7 +764,7 @@ def apply_to_class(request):
 @login_required
 def my_applications(request):
     """我的申请记录视图"""
-    applications = ClassApplication.objects.filter(user=request.user).order_by('-created_at')
+    applications = ClassApplication.objects.filter(user=request.user).select_related('class_obj').order_by('-created_at')
     return render(request, 'quiz/frontend/my_applications.html', {'applications': applications})
 
 
@@ -782,8 +778,8 @@ def class_applications(request, class_id):
         messages.error(request, '您没有权限查看申请列表')
         return redirect('class_detail', class_id=class_id)
     
-    pending_applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).order_by('-created_at')
-    processed_applications = ClassApplication.objects.filter(class_obj=class_obj, status__in=[1, 2]).order_by('-created_at')[:20]
+    pending_applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).select_related('user').order_by('-created_at')
+    processed_applications = ClassApplication.objects.filter(class_obj=class_obj, status__in=[1, 2]).select_related('user', 'reviewed_by').order_by('-created_at')[:20]
     
     return render(request, 'quiz/frontend/class_applications.html', {
         'class_obj': class_obj,
@@ -1098,7 +1094,7 @@ def submit_class_assignment(request, assignment_id):
         score = 0
         for question in assignment.test_paper.questions.all():
             user_answer = request.POST.get(f'question_{question.id}')
-            is_correct = user_answer == question.correct_answer
+            is_correct = compare_answers(user_answer, question.correct_answer)
             
             if is_correct:
                 score += question.score
@@ -1153,19 +1149,8 @@ def submit_class_assignment(request, assignment_id):
 @login_required
 def my_test_papers(request):
     """我的试卷视图 - 显示用户创建的所有试卷"""
-    # 获取用户创建的所有试卷，按创建时间倒序排列
     test_papers = TestPaper.objects.filter(created_by=request.user.username).order_by('-created_at')
-    
-    # 分页，每页显示9份试卷
-    paginator = Paginator(test_papers, 9)
-    page_num = request.GET.get('page')
-    try:
-        paginated_test_papers = paginator.page(page_num)
-    except PageNotAnInteger:
-        paginated_test_papers = paginator.page(1)
-    except EmptyPage:
-        paginated_test_papers = paginator.page(paginator.num_pages)
-    
+    paginated_test_papers = paginate_queryset(test_papers, request.GET.get('page'), items_per_page=9)
     return render(request, 'quiz/frontend/my_test_papers.html', {
         'test_papers': paginated_test_papers
     })
@@ -1177,18 +1162,17 @@ def create_test_paper(request):
     if request.method == 'POST':
         title = request.POST.get('title')
         description = request.POST.get('description')
-        question_ids = request.POST.getlist('questions')
-        
+        question_ids = request.POST.getlist('questions')  # 直接获取复选框值列表
+
         if title and question_ids:
             # 创建试卷
             test_paper = TestPaper.objects.create(
                 title=title,
                 description=description,
                 created_by=request.user.username,
-                is_published=False  # 默认不发布
+                is_published=False
             )
-            
-            # 添加题目
+
             total_score = 0
             for q_id in question_ids:
                 try:
@@ -1197,17 +1181,19 @@ def create_test_paper(request):
                     total_score += question.score
                 except Question.DoesNotExist:
                     pass
-            
+
+            # 保存总分（信号会自动计算，但这里直接设置更明确）
             test_paper.total_score = total_score
             test_paper.save()
+
             messages.success(request, f'试卷 "{title}" 创建成功！共 {len(question_ids)} 道题目，总分 {total_score} 分。')
             return redirect('my_test_papers')
         else:
             messages.error(request, '请填写试卷标题并至少选择一道题目')
-    
+
     # 获取所有题目供选择
     questions = Question.objects.all().order_by('id')
-    
+
     # 处理options字段，确保是字典格式
     questions_list = []
     for q in questions:
@@ -1561,70 +1547,8 @@ def publish_test_paper(request, paper_id):
 
 @login_required
 def download_import_template(request):
-    """下载导入模板 - 与后台管理格式一致"""
-    import openpyxl
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from django.http import HttpResponse
-    
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "题目导入模板"
-    
-    # 设置样式
-    header_font = Font(bold=True, color="FFFFFF", size=11)
-    header_fill = PatternFill(start_color="667EEA", end_color="764BA2", fill_type="solid")
-    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-    
-    # 写入表头（与后台 Question 模型字段一致）
-    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
-    for col_idx, header in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_alignment
-        cell.border = thin_border
-    
-    # 写入示例数据（与后台 Question 模型一致）
-    # 题型：单选题、多选题、判断题
-    example_data = [
-        ['以下哪个是Python的关键字？', '单选题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字'],
-        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型'],
-        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', 3, 'Python确实是编程语言'],
-    ]
-    
-    for row_idx, row_data in enumerate(example_data, start=2):
-        for col_idx, value in enumerate(row_data, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            cell.alignment = Alignment(vertical="center", wrap_text=True)
-            cell.border = thin_border
-    
-    # 设置列宽
-    ws.column_dimensions['A'].width = 35  # 题目内容
-    ws.column_dimensions['B'].width = 8    # 题型
-    ws.column_dimensions['C'].width = 15  # 选项A
-    ws.column_dimensions['D'].width = 15  # 选项B
-    ws.column_dimensions['E'].width = 15  # 选项C
-    ws.column_dimensions['F'].width = 15  # 选项D
-    ws.column_dimensions['G'].width = 10  # 正确答案
-    ws.column_dimensions['H'].width = 8   # 分值
-    ws.column_dimensions['I'].width = 25  # 解析
-    
-    # 冻结首行
-    ws.freeze_panes = 'A2'
-    
-    # 创建响应
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename=题目导入模板.xlsx'
-    wb.save(response)
-    
-    return response
+    """下载导入模板"""
+    return download_template_response()
 
 
 @login_required
@@ -1646,138 +1570,30 @@ import openpyxl
 
 @staff_member_required
 def admin_import_questions(request):
-    """后台导入试题"""
+    """后台导入试题 - 使用统一的导入函数"""
     if request.method == 'POST':
         if 'file' in request.FILES:
             file = request.FILES['file']
-            try:
-                wb = openpyxl.load_workbook(file)
-                ws = wb.active
-                
-                # 解析表头
-                header_row = [cell.value for cell in ws[1]]
-                header_map = {}
-                header_aliases = {
-                    'content': ['content', '题目', '题目内容', 'question', '题干'],
-                    'type': ['type', '题型', '题目类型', '类别'],
-                    'option_a': ['option_a', '选项A', 'A', '选项a'],
-                    'option_b': ['option_b', '选项B', 'B', '选项b'],
-                    'option_c': ['option_c', '选项C', 'C', '选项c'],
-                    'option_d': ['option_d', '选项D', 'D', '选项d'],
-                    'options': ['options', '选项', '所有选项'],
-                    'correct_answer': ['correct_answer', '答案', '正确答案', '参考答案'],
-                    'score': ['score', '分值', '分数', '得分'],
-                    'explanation': ['explanation', '解析', '答案解析', '解析说明']
-                }
-                
-                for idx, header in enumerate(header_row):
-                    if header:
-                        header_str = str(header).strip()
-                        for key, aliases in header_aliases.items():
-                            if header_str in aliases:
-                                header_map[key] = idx
-                                break
-                
-                required_keys = ['content', 'correct_answer', 'score']
-                missing_cols = [k for k in required_keys if k not in header_map]
-                if missing_cols:
-                    messages.error(request, f'缺少必需列：{", ".join(missing_cols)}。请下载正确格式的模板')
-                    return render(request, 'quiz/admin/import_questions.html', {'step': 1})
-                
-                questions_data = []
-                errors = []
-                
-                for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
-                    try:
-                        content = str(row[header_map['content']].value or '').strip()
-                        if not content:
-                            continue
-                        
-                        q_type = 1
-                        if 'type' in header_map:
-                            type_val = row[header_map['type']].value
-                            if type_val is not None:
-                                type_str = str(type_val).strip()
-                                if type_str in ['3', '判断题', '判断', 'judge']:
-                                    q_type = 3
-                                elif type_str in ['2', '多选题', '多选', 'multiple']:
-                                    q_type = 2
-                                elif type_str in ['1', '单选题', '单选', 'single', '选择题']:
-                                    q_type = 1
-                        
-                        options = {}
-                        option_cols = ['option_a', 'option_b', 'option_c', 'option_d']
-                        option_letters = ['A', 'B', 'C', 'D']
-                        
-                        for col_key, letter in zip(option_cols, option_letters):
-                            if col_key in header_map:
-                                val = row[header_map[col_key]].value
-                                if val and str(val).strip():
-                                    options[letter] = str(val).strip()
-                        
-                        if not options and 'options' in header_map:
-                            options_str = str(row[header_map['options']].value or '').strip()
-                            if options_str:
-                                for item in options_str.split(','):
-                                    item = item.strip()
-                                    if item and len(item) >= 2:
-                                        letter = item[0].upper()
-                                        if letter in ['A', 'B', 'C', 'D']:
-                                            options[letter] = item[1:].strip()
-                        
-                        options_json = options if options else {}
-                        
-                        correct_answer = str(row[header_map['correct_answer']].value or '').strip()
-                        if not correct_answer:
-                            errors.append(f'第{row_idx}行：正确答案为空，请补全')
-                        
-                        try:
-                            score = int(row[header_map['score']].value or '')
-                            if score <= 0:
-                                score = ''
-                        except:
-                            score = ''
-                            errors.append(f'第{row_idx}行：分值格式错误，请补全')
-                        
-                        explanation = ''
-                        if 'explanation' in header_map:
-                            explanation = str(row[header_map['explanation']].value or '').strip()
-                        
-                        questions_data.append({
-                            'content': content,
-                            'type': q_type,
-                            'options': options_json,
-                            'correct_answer': correct_answer,
-                            'score': score,
-                            'explanation': explanation,
-                            'row': row_idx,
-                            'has_error': not correct_answer or not score
-                        })
-                        
-                    except Exception as e:
-                        errors.append(f'第{row_idx}行：{str(e)}')
-                
-                if not questions_data:
-                    messages.error(request, '文件中没有有效的题目数据')
-                    return render(request, 'quiz/admin/import_questions.html', {'step': 1})
-                
-                valid_count = sum(1 for q in questions_data if q.get('correct_answer') and q.get('score'))
-                missing_count = len(questions_data) - valid_count
-                total_score = sum(q['score'] if isinstance(q['score'], int) else 0 for q in questions_data)
-                
-                return render(request, 'quiz/admin/import_questions.html', {
-                    'step': 2,
-                    'questions_data': questions_data,
-                    'questions_json': json.dumps(questions_data, ensure_ascii=False),
-                    'total_score': total_score,
-                    'valid_count': valid_count,
-                    'missing_count': missing_count,
-                    'errors': errors[:10] if errors else []
-                })
+            questions_data, stats, errors = import_questions_from_excel(file)
             
-            except Exception as e:
-                messages.error(request, f'读取文件失败：{str(e)}')
+            if errors:
+                messages.error(request, errors[0])
                 return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+            
+            # 为每个题目添加 has_error 和 row 字段（保持与原有模板兼容）
+            for idx, q in enumerate(questions_data):
+                q['row'] = idx + 2
+                q['has_error'] = not (q.get('correct_answer') and q.get('score'))
+            
+            return render(request, 'quiz/admin/import_questions.html', {
+                'step': 2,
+                'questions_data': questions_data,
+                'questions_json': json.dumps(questions_data, ensure_ascii=False),
+                'total_score': stats['total_score'],
+                'valid_count': stats['valid_count'],
+                'missing_count': stats['missing_count'],
+                'errors': stats['errors']
+            })
         
         elif 'questions_json' in request.POST:
             try:
@@ -1811,58 +1627,7 @@ def admin_import_questions(request):
 @staff_member_required
 def admin_export_template(request):
     """下载后台导入模板"""
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "题目导入模板"
-    
-    header_font = openpyxl.styles.Font(bold=True, color="FFFFFF", size=11)
-    header_fill = openpyxl.styles.PatternFill(start_color="667EEA", end_color="764BA2", fill_type="solid")
-    header_alignment = openpyxl.styles.Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin_border = openpyxl.styles.Border(
-        left=openpyxl.styles.Side(style='thin'),
-        right=openpyxl.styles.Side(style='thin'),
-        top=openpyxl.styles.Side(style='thin'),
-        bottom=openpyxl.styles.Side(style='thin')
-    )
-    
-    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
-    
-    for col_idx, header in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_alignment
-        cell.border = thin_border
-    
-    example_data = [
-        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', '10', 'Python支持多种数据类型'],
-        ['Python中，以下哪个是正确的变量名？', '单选题', '1name', '_name', 'name-1', 'name.1', 'B', '5', '变量名只能以字母或下划线开头'],
-        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', '5', 'Python确实是编程语言']
-    ]
-    
-    for row_idx, row_data in enumerate(example_data, start=2):
-        for col_idx, value in enumerate(row_data, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            cell.alignment = openpyxl.styles.Alignment(vertical="center", wrap_text=True)
-            cell.border = thin_border
-    
-    ws.column_dimensions['A'].width = 35
-    ws.column_dimensions['B'].width = 8
-    ws.column_dimensions['C'].width = 15
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 15
-    ws.column_dimensions['G'].width = 10
-    ws.column_dimensions['H'].width = 8
-    ws.column_dimensions['I'].width = 25
-    
-    ws.freeze_panes = 'A2'
-    
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename=题目导入模板.xlsx'
-    wb.save(response)
-    
-    return response
+    return download_template_response()
 
 
 @staff_member_required
@@ -1891,7 +1656,8 @@ def admin_create_testpaper(request):
                 title=title,
                 description=description,
                 is_published=is_published,
-                created_by=request.user.username
+                created_by=request.user.username,
+                source='admin'
             )
             
             for q_id in question_ids:
@@ -1937,7 +1703,8 @@ def admin_import_testpaper(request):
                         title=title,
                         description=description,
                         created_by=request.user.username,
-                        is_published=False
+                        is_published=False,
+                        source='admin'
                     )
                     
                     total_score = 0

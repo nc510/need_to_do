@@ -18,11 +18,17 @@ from django.urls import path, include
 from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
+
+def favicon_view(request):
+    """返回空的favicon响应，避免404错误"""
+    return HttpResponse(status=204)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('quiz/', include('quiz.urls')),
     path('', RedirectView.as_view(url='/quiz/test_paper_list/')),
+    path('favicon.ico', favicon_view),
 ]
 
 if settings.DEBUG:
