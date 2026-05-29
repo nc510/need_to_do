@@ -172,8 +172,11 @@ def register(request):
         qq_number = request.POST.get('qq_number')
         
         # 检查必填字段
-        if not username or not password or not password_confirm or not email:
-            messages.error(request, '请填写完整的注册信息')
+        # 获取姓名字段
+        first_name = request.POST.get('first_name', '').strip()
+        
+        if not username or not password or not password_confirm or not email or not first_name or not phone_number:
+            messages.error(request, '请填写完整的注册信息（姓名和手机号码为必填项）')
             return render(request, 'quiz/frontend/register.html')
         
         # 验证密码一致性
@@ -191,29 +194,27 @@ def register(request):
             messages.error(request, '邮箱已存在')
             return render(request, 'quiz/frontend/register.html')
         
-        # 验证手机号码格式和唯一性
-        if phone_number:
-            phone_regex = re.compile(r'^1[3-9]\d{9}$')
-            if not phone_regex.match(phone_number):
-                messages.error(request, '手机号码格式不正确')
-                return render(request, 'quiz/frontend/register.html')
-            
-            # 检查手机号码唯一性
-            if Profile.objects.filter(phone_number=phone_number).exists():
-                messages.error(request, '手机号码已存在')
-                return render(request, 'quiz/frontend/register.html')
+        # 验证手机号码格式和唯一性（必填）
+        phone_regex = re.compile(r'^1[3-9]\d{9}$')
+        if not phone_regex.match(phone_number):
+            messages.error(request, '手机号码格式不正确，请输入11位有效手机号')
+            return render(request, 'quiz/frontend/register.html')
+        
+        if Profile.objects.filter(phone_number=phone_number).exists():
+            messages.error(request, '手机号码已被注册')
+            return render(request, 'quiz/frontend/register.html')
         
         try:
-            # 创建用户
+            # 创建用户，包含姓名
             user = User.objects.create_user(
                 username=username,
                 password=password,
-                email=email
+                email=email,
+                first_name=first_name
             )
             
             # 保存手机号码和QQ号码到Profile
-            if phone_number:
-                user.profile.phone_number = phone_number
+            user.profile.phone_number = phone_number
             if qq_number:
                 user.profile.qq_number = qq_number
             user.profile.save()
@@ -225,6 +226,72 @@ def register(request):
             return render(request, 'quiz/frontend/register.html')
     
     return render(request, 'quiz/frontend/register.html')
+
+
+def register8(request):
+    """新版注册视图 - 包含姓名和必填手机号"""
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        password_confirm = request.POST.get('password_confirm')
+        email = request.POST.get('email')
+        phone_number = request.POST.get('phone_number')
+        qq_number = request.POST.get('qq_number')
+        first_name = request.POST.get('first_name', '').strip()
+        
+        # 检查必填字段
+        if not username or not password or not password_confirm or not email or not first_name or not phone_number:
+            messages.error(request, '请填写完整的注册信息（姓名和手机号码为必填项）')
+            return render(request, 'quiz/frontend/register8.html')
+        
+        # 验证密码一致性
+        if password != password_confirm:
+            messages.error(request, '两次输入的密码不一致')
+            return render(request, 'quiz/frontend/register8.html')
+        
+        # 检查用户名唯一性
+        if User.objects.filter(username=username).exists():
+            messages.error(request, '用户名已存在')
+            return render(request, 'quiz/frontend/register8.html')
+        
+        # 检查邮箱唯一性
+        if User.objects.filter(email=email).exists():
+            messages.error(request, '邮箱已存在')
+            return render(request, 'quiz/frontend/register8.html')
+        
+        # 验证手机号码格式和唯一性（必填）
+        phone_regex = re.compile(r'^1[3-9]\d{9}$')
+        if not phone_regex.match(phone_number):
+            messages.error(request, '手机号码格式不正确，请输入11位有效手机号')
+            return render(request, 'quiz/frontend/register8.html')
+        
+        if Profile.objects.filter(phone_number=phone_number).exists():
+            messages.error(request, '手机号码已被注册')
+            return render(request, 'quiz/frontend/register8.html')
+        
+        try:
+            # 创建用户，包含姓名
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=email,
+                first_name=first_name
+            )
+            
+            # 保存手机号码和QQ号码到Profile
+            user.profile.phone_number = phone_number
+            if qq_number:
+                user.profile.qq_number = qq_number
+            user.profile.save()
+            
+            messages.success(request, '注册成功，请等待管理员审核')
+            return redirect('login')
+        except IntegrityError:
+            messages.error(request, '用户名或者手机号码已存在')
+            return render(request, 'quiz/frontend/register8.html')
+    
+    return render(request, 'quiz/frontend/register8.html')
+
 
 # 验证码视图
 def captcha_image(request):
@@ -257,37 +324,35 @@ def login_view(request):
             messages.error(request, '验证码错误')
             return render(request, 'quiz/frontend/login.html')
         
-        # 首先尝试通过用户名登录
-        user = authenticate(request, username=username_or_phone, password=password)
+        user = None
         
-        # 如果用户名登录失败，尝试通过手机号码登录
-        if user is None:
+        # 首先尝试通过用户名查找用户（不使用authenticate，避免is_active检查）
+        try:
+            user = User.objects.get(username=username_or_phone)
+        except User.DoesNotExist:
+            # 用户名不存在，尝试通过手机号码查找
             try:
-                # 通过手机号码查找对应的Profile
                 profile = Profile.objects.get(phone_number=username_or_phone)
-                # 获取对应的用户对象
                 user = profile.user
-                # 验证密码
-                if user.check_password(password):
-                    # 密码正确，登录用户
-                    login(request, user)
-                    messages.success(request, '登录成功')
-                    return redirect('test_paper_list')
             except Profile.DoesNotExist:
-                # 手机号码不存在
-                pass
-            except:
-                # 其他错误
-                pass
+                # 用户名和手机号都不存在
+                messages.error(request, '用户名/手机号码或密码错误')
+                return render(request, 'quiz/frontend/login.html')
         
-        # 如果两种方式都登录失败
-        if user is None:
+        # 验证密码
+        if not user.check_password(password):
             messages.error(request, '用户名/手机号码或密码错误')
             return render(request, 'quiz/frontend/login.html')
-        else:
-            login(request, user)
-            messages.success(request, '登录成功')
-            return redirect('test_paper_list')
+        
+        # 检查用户是否被禁用
+        if not user.is_active:
+            messages.error(request, '用户被停用，请联系管理员激活')
+            return render(request, 'quiz/frontend/login.html')
+        
+        # 用户正常，登录用户
+        login(request, user)
+        messages.success(request, '登录成功')
+        return redirect('test_paper_list')
     
     return render(request, 'quiz/frontend/login.html')
 
@@ -1567,13 +1632,63 @@ def delete_test_paper(request, paper_id):
 # ========== 后台管理功能 ==========
 from django.contrib.admin.views.decorators import staff_member_required
 import openpyxl
+import hashlib
+from datetime import datetime, timedelta
+
+# 存储最近导入的文件哈希（内存缓存，重启后清空）
+# 格式: {file_hash: (import_time, imported_count)}
+_imported_files_cache = {}
+
+def generate_file_hash(file_content):
+    """生成文件内容的MD5哈希值"""
+    return hashlib.md5(file_content).hexdigest()
+
+def is_duplicate_import(file_content, time_window_hours=24):
+    """检查是否在指定时间窗口内重复导入同一文件"""
+    file_hash = generate_file_hash(file_content)
+    now = datetime.now()
+    
+    # 清理过期记录
+    to_remove = []
+    for h, (import_time, _) in _imported_files_cache.items():
+        if now - import_time > timedelta(hours=time_window_hours):
+            to_remove.append(h)
+    for h in to_remove:
+        del _imported_files_cache[h]
+    
+    # 检查是否重复
+    if file_hash in _imported_files_cache:
+        import_time, count = _imported_files_cache[file_hash]
+        if now - import_time < timedelta(hours=time_window_hours):
+            return True, count, import_time
+    return False, 0, None
+
+def record_import(file_content, imported_count):
+    """记录导入记录"""
+    file_hash = generate_file_hash(file_content)
+    _imported_files_cache[file_hash] = (datetime.now(), imported_count)
+
 
 @staff_member_required
 def admin_import_questions(request):
-    """后台导入试题 - 使用统一的导入函数"""
+    """后台导入试题 - 使用统一的导入函数，支持防重复导入"""
     if request.method == 'POST':
         if 'file' in request.FILES:
             file = request.FILES['file']
+            
+            # 读取文件内容用于哈希计算
+            file_content = file.read()
+            file.seek(0)  # 重置文件指针
+            
+            # 检查是否重复导入
+            is_dup, prev_count, import_time = is_duplicate_import(file_content)
+            if is_dup:
+                time_diff = datetime.now() - import_time
+                messages.error(request, 
+                    f'检测到重复导入！该文件已于 {import_time.strftime("%Y-%m-%d %H:%M")} 导入，'
+                    f'共导入 {prev_count} 道题目。如需重新导入，请等待24小时或修改文件内容后重试。')
+                return render(request, 'quiz/admin/import_questions.html', {'step': 1})
+            
             questions_data, stats, errors = import_questions_from_excel(file)
             
             if errors:
@@ -1584,6 +1699,10 @@ def admin_import_questions(request):
             for idx, q in enumerate(questions_data):
                 q['row'] = idx + 2
                 q['has_error'] = not (q.get('correct_answer') and q.get('score'))
+            
+            # 将文件哈希和数据保存到 session，用于确认导入时验证
+            request.session['import_file_hash'] = generate_file_hash(file_content)
+            request.session['import_questions_data'] = questions_data
             
             return render(request, 'quiz/admin/import_questions.html', {
                 'step': 2,
@@ -1611,6 +1730,13 @@ def admin_import_questions(request):
                             explanation=q_data.get('explanation', '')
                         )
                         imported_count += 1
+                
+                # 记录导入
+                if 'import_file_hash' in request.session:
+                    file_hash = request.session['import_file_hash']
+                    _imported_files_cache[file_hash] = (datetime.now(), imported_count)
+                    del request.session['import_file_hash']
+                    del request.session['import_questions_data']
                 
                 return render(request, 'quiz/admin/import_questions.html', {
                     'step': 3,

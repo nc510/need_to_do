@@ -11,11 +11,11 @@ from django.core.cache import cache
 # 配置常量
 RATE_LIMITS = {
     # (路径模式, 时间窗口(秒), 最大请求数)
-    ('/quiz/login/', 60, 5),           # 登录页面：1分钟最多5次
-    ('/quiz/register/', 60, 3),        # 注册页面：1分钟最多3次
-    ('/quiz/create_test_paper/', 300, 5),  # 创建试卷：5分钟最多5次
-    ('/quiz/submit/', 60, 10),         # 提交答题：1分钟最多10次
-    ('/quiz/', 60, 30),                # 其他quiz路径：1分钟最多30次
+    ('/quiz/login/', 60, 20),           # 登录页面：1分钟最多20次
+    ('/quiz/register/', 60, 10),        # 注册页面：1分钟最多10次
+    ('/quiz/create_test_paper/', 300, 10),  # 创建试卷：5分钟最多10次
+    ('/quiz/submit/', 60, 30),         # 提交答题：1分钟最多30次
+    ('/quiz/', 60, 100),                # 其他quiz路径：1分钟最多100次
 }
 
 # 可疑的User-Agent列表
@@ -26,7 +26,7 @@ SUSPICIOUS_USER_AGENTS = [
 ]
 
 # IP白名单（测试环境或信任的IP）
-IP_WHITELIST = ['127.0.0.1', '::1']
+IP_WHITELIST = ['127.0.0.1', '::1', '192.168.0.109']
 
 
 def get_client_ip(request):
@@ -60,7 +60,7 @@ def check_rate_limit(ip, path):
             requests = cache.get(key, 0)
             
             if requests >= max_requests:
-                return False, f"请求过于频繁，请{window}秒后重试"
+                return False, "请求过于频繁，请30秒后重试"
             
             cache.set(key, requests + 1, window)
             break

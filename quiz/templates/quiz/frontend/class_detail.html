@@ -234,7 +234,8 @@
             {% for admin in admins %}
             <li class="member-item">
                 <div>
-                    <div class="name">{{ admin.user.username }}</div>
+                    <div class="name">{% if admin.user.first_name %}{{ admin.user.first_name }}{% else %}{{
+                        admin.user.username }}{% endif %}</div>
                     <div class="email">{{ admin.user.email }}</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -265,7 +266,8 @@
             {% for student in students %}
             <li class="member-item">
                 <div>
-                    <div class="name">{{ student.username }}</div>
+                    <div class="name">{% if student.first_name %}{{ student.first_name }}{% else %}{{ student.username
+                        }}{% endif %}</div>
                     <div class="email">{{ student.email }}</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">

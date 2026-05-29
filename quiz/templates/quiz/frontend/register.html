@@ -199,8 +199,8 @@
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="phone_number">手机号码</label>
-                    <input type="text" name="phone_number" id="phone_number" maxlength="11" placeholder="选填">
+                    <label for="phone_number">手机号码 <span style="color: #e74c3c;">*</span></label>
+                    <input type="tel" name="phone_number" id="phone_number" maxlength="11" required placeholder="请输入手机号码">
                 </div>
                 <div class="form-group">
                     <label for="qq_number">QQ号码</label>
@@ -217,6 +217,11 @@
             <div class="form-group">
                 <label for="password_confirm">确认密码</label>
                 <input type="password" name="password_confirm" id="password_confirm" required placeholder="请再次输入密码">
+            </div>
+
+            <div class="form-group">
+                <label for="first_name">姓名 <span style="color: #e74c3c;">*</span></label>
+                <input type="text" name="first_name" id="first_name" required placeholder="用于班级名单显示">
             </div>
 
             <div class="terms-checkbox">
