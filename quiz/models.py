@@ -3,6 +3,79 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save, m2m_changed
 from django.dispatch import receiver
 
+# 学科模型
+class Subject(models.Model):
+    name = models.CharField(max_length=50, verbose_name='学科名称', unique=True)
+    code = models.CharField(max_length=10, verbose_name='学科代码', unique=True, help_text='如 MATH, CHINESE')
+    description = models.TextField(verbose_name='学科描述', blank=True, null=True)
+    color = models.CharField(max_length=7, verbose_name='学科颜色', default='#667eea', help_text='十六进制颜色值')
+    icon = models.CharField(max_length=50, verbose_name='学科图标', default='📚', help_text='Emoji图标')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    
+    class Meta:
+        verbose_name = '学科'
+        verbose_name_plural = '学科'
+        ordering = ['name']
+    
+    def __str__(self):
+        return f'{self.icon} {self.name}'
+
+# 章节模型
+class Chapter(models.Model):
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, verbose_name='所属学科', related_name='chapters')
+    number = models.IntegerField(verbose_name='章节编号')
+    title = models.CharField(max_length=100, verbose_name='章节标题')
+    description = models.TextField(verbose_name='章节描述', blank=True, null=True)
+    
+    class Meta:
+        verbose_name = '章节'
+        verbose_name_plural = '章节'
+        unique_together = ('subject', 'number')
+        ordering = ['subject', 'number']
+    
+    def __str__(self):
+        return f'{self.subject.name} - 第{self.number}章 {self.title}'
+    
+    @property
+    def full_number(self):
+        return str(self.number)
+
+# 小节模型
+class Section(models.Model):
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, verbose_name='所属章节', related_name='sections')
+    number = models.IntegerField(verbose_name='小节编号')
+    title = models.CharField(max_length=100, verbose_name='小节标题')
+    
+    class Meta:
+        verbose_name = '小节'
+        verbose_name_plural = '小节'
+        unique_together = ('chapter', 'number')
+        ordering = ['chapter', 'number']
+    
+    def __str__(self):
+        return f'{self.chapter.title} - {self.chapter.number}.{self.number} {self.title}'
+    
+    @property
+    def full_number(self):
+        return f'{self.chapter.number}.{self.number}'
+
+# 知识点模型
+class KnowledgePoint(models.Model):
+    section = models.ForeignKey(Section, on_delete=models.SET_NULL, verbose_name='所属小节', related_name='knowledge_points', blank=True, null=True)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, verbose_name='所属学科', related_name='knowledge_points_all')
+    name = models.CharField(max_length=100, verbose_name='知识点名称')
+    description = models.TextField(verbose_name='知识点描述', blank=True, null=True)
+    difficulty = models.IntegerField(verbose_name='难度等级', default=2, choices=[(1, '简单'), (2, '中等'), (3, '困难')])
+    
+    class Meta:
+        verbose_name = '知识点'
+        verbose_name_plural = '知识点'
+        unique_together = ('subject', 'name')
+        ordering = ['subject', 'name']
+    
+    def __str__(self):
+        return f'{self.subject.name} - {self.name}'
+
 class Question(models.Model):
     # 题目类型：1-单选题，2-多选题，3-判断题
     TYPE_CHOICE = [(1, '单选题'), (2, '多选题'), (3, '判断题')]
@@ -14,6 +87,16 @@ class Question(models.Model):
     explanation = models.TextField(verbose_name='解析', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    # 公开/私有标记
+    is_public = models.BooleanField(verbose_name='是否公开', default=True, help_text='否表示私有题目，只有创建者和后台能看到')
+    created_by = models.CharField(max_length=100, verbose_name='创建者', null=True, blank=True)
+
+    # 新增学科分类字段
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, verbose_name='所属学科', null=True, blank=True, related_name='questions')
+    chapter = models.ForeignKey(Chapter, on_delete=models.SET_NULL, verbose_name='所属章节', null=True, blank=True, related_name='questions')
+    section = models.ForeignKey(Section, on_delete=models.SET_NULL, verbose_name='所属小节', null=True, blank=True, related_name='questions')
+    knowledge_points = models.ManyToManyField(KnowledgePoint, verbose_name='关联知识点', blank=True, related_name='questions')
 
     class Meta:
         verbose_name = '题目'
@@ -80,6 +163,8 @@ class Profile(models.Model):
     qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)
     # 关联班级（允许为空，表示未分配班级）
     class_obj = models.ForeignKey('Class', on_delete=models.SET_NULL, verbose_name='所属班级', null=True, blank=True, related_name='profiles')
+    # 单点登录：存储当前活跃的session_key
+    session_key = models.CharField(max_length=40, verbose_name='当前会话ID', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 

@@ -42,8 +42,8 @@ urlpatterns = [
     path('class/<int:class_id>/delete/', views.delete_class, name='delete_class'),  # 删除班级
     path('class/<int:class_id>/add_admin/', views.add_class_admin, name='add_class_admin'),  # 添加班级管理员
     path('class/<int:class_id>/remove_admin/<int:admin_id>/', views.remove_class_admin, name='remove_class_admin'),  # 移除班级管理员
-    path('class/<int:class_id>/assign_student/', views.assign_student_to_class, name='assign_student'),  # 分配学生
-    path('class/<int:class_id>/remove_student/<int:user_id>/', views.remove_student_from_class, name='remove_student'),  # 移除学生
+    path('class/<int:class_id>/assign_student/', views.assign_student, name='assign_student'),  # 分配学生
+    path('class/<int:class_id>/remove_student/<int:user_id>/', views.remove_student, name='remove_student'),  # 移除学生
     
     # 班级申请
     path('apply_to_class/', views.apply_to_class, name='apply_to_class'),  # 申请加入班级

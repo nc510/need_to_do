@@ -81,6 +81,11 @@
         gap: 15px;
         flex-wrap: wrap;
         align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .filter-row:last-child {
+        margin-bottom: 0;
     }
 
     .filter-item {
@@ -93,6 +98,7 @@
         font-weight: 500;
         margin: 0;
         font-size: 13px;
+        color: #555;
     }
 
     .filter-item select,
@@ -101,11 +107,23 @@
         border: 1px solid #ddd;
         border-radius: 6px;
         font-size: 13px;
+        min-width: 120px;
     }
 
     .filter-item input[type="number"] {
         width: 70px;
         padding: 8px;
+        min-width: 70px;
+    }
+
+    .filter-item select {
+        background: white;
+        cursor: pointer;
+    }
+
+    .filter-item select:focus {
+        border-color: #667eea;
+        outline: none;
     }
 
     .search-box {
@@ -384,7 +402,8 @@
 
     {% if messages %}
     {% for message in messages %}
-    <div style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
+    <div
+        style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
         {{ message }}
     </div>
     {% endfor %}
@@ -412,6 +431,29 @@
                 <div class="filter-section">
                     <div class="filter-row">
                         <div class="filter-item">
+                            <label>学科：</label>
+                            <select id="subjectFilter">
+                                <option value="all">全部学科</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.icon }} {{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label>章节：</label>
+                            <select id="chapterFilter">
+                                <option value="all">全部章节</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label>知识点：</label>
+                            <select id="knowledgeFilter">
+                                <option value="all">全部知识点</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-item">
                             <label>题型：</label>
                             <select id="typeFilter">
                                 <option value="all">全部</option>
@@ -437,7 +479,8 @@
                     </button>
                     <div class="filter-item">
                         <label>数量：</label>
-                        <input type="number" id="randomCount" value="10" min="1" max="999" style="width: 60px; padding: 6px;">
+                        <input type="number" id="randomCount" value="10" min="1" max="999"
+                            style="width: 60px; padding: 6px;">
                     </div>
                     <span style="font-size: 12px; color: #888;">（从当前筛选结果中随机选）</span>
                 </div>
@@ -446,14 +489,21 @@
 
                 <div class="question-list" id="questionList">
                     {% for q in questions %}
-                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" data-score="{{ q.score }}">
-                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" name="questions" value="{{ q.id }}">
-                        <span class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
+                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" data-score="{{ q.score }}"
+                        data-subject="{{ q.subject_id }}" data-chapter="{{ q.chapter_id }}"
+                        data-knowledge-points="{% for kp_id in q.knowledge_point_ids %}{{ kp_id }},{% endfor %}">
+                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" name="questions"
+                            value="{{ q.id }}">
+                        <span
+                            class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
                             {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
                         </span>
                         <span class="question-content" title="{{ q.content }}">{{ q.content }}</span>
                         <div class="question-meta">
                             <span>分值: {{ q.score }}</span>
+                            {% if q.subject_id %}
+                            <span style="color: #667eea; font-weight: 500;">学科标记</span>
+                            {% endif %}
                         </div>
                     </div>
                     {% empty %}
@@ -483,10 +533,12 @@
                 <div class="section-title">📌 操作</div>
 
                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                    <button type="button" class="btn btn-outline" onclick="selectAllVisible()" style="flex: 1; justify-content: center;">
+                    <button type="button" class="btn btn-outline" onclick="selectAllVisible()"
+                        style="flex: 1; justify-content: center;">
                         ✓ 全选可见
                     </button>
-                    <button type="button" class="btn btn-secondary" onclick="clearSelection()" style="flex: 1; justify-content: center;">
+                    <button type="button" class="btn btn-secondary" onclick="clearSelection()"
+                        style="flex: 1; justify-content: center;">
                         🗑 清空选题
                     </button>
                 </div>
@@ -503,10 +555,12 @@
 
 <script>
     let selectedQuestions = [];
+    let chaptersData = {};
+    let knowledgePointsData = {};
 
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.question-item').forEach(item => {
-            item.addEventListener('click', function(event) {
+            item.addEventListener('click', function (event) {
                 const checkbox = this.querySelector('.question-checkbox');
                 if (checkbox && event.target !== checkbox) {
                     checkbox.checked = !checkbox.checked;
@@ -516,19 +570,81 @@
         });
 
         document.querySelectorAll('.question-checkbox').forEach(cb => {
-            cb.addEventListener('change', function() {
+            cb.addEventListener('change', function () {
                 onCheckboxChange(this);
             });
         });
 
         document.getElementById('searchBox').addEventListener('input', filterQuestions);
         document.getElementById('typeFilter').addEventListener('change', filterQuestions);
+        document.getElementById('subjectFilter').addEventListener('change', onSubjectChange);
+        document.getElementById('chapterFilter').addEventListener('change', filterQuestions);
+        document.getElementById('knowledgeFilter').addEventListener('change', filterQuestions);
         document.getElementById('minScore').addEventListener('input', filterQuestions);
         document.getElementById('maxScore').addEventListener('input', filterQuestions);
         document.getElementById('title').addEventListener('input', updateSubmitButton);
 
+        loadChapterData();
         updateSubmitButton();
     });
+
+    function loadChapterData() {
+        {% for chapter in chapters %}
+        if (!chaptersData[{{ chapter.subject.id }
+    }]) {
+        chaptersData[{{ chapter.subject.id }
+    }] =[];
+            }
+    chaptersData[{{ chapter.subject.id }}].push({
+        id: {{ chapter.id }},
+        number: {{ chapter.number }},
+        title: '{{ chapter.title }}'
+            });
+    {% endfor %}
+
+    {% for kp in knowledge_points %}
+    if (!knowledgePointsData[{{ kp.section.chapter.id }}]) {
+        knowledgePointsData[{{ kp.section.chapter.id }
+    }] =[];
+            }
+    knowledgePointsData[{{ kp.section.chapter.id }}].push({
+        id: {{ kp.id }},
+        name: '{{ kp.name }}'
+            });
+    {% endfor %}
+    }
+
+    function onSubjectChange() {
+        const subjectId = document.getElementById('subjectFilter').value;
+        const chapterSelect = document.getElementById('chapterFilter');
+        const knowledgeSelect = document.getElementById('knowledgeFilter');
+
+        chapterSelect.innerHTML = '<option value="all">全部章节</option>';
+        knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
+
+        if (subjectId !== 'all' && chaptersData[subjectId]) {
+            chaptersData[subjectId].forEach(chapter => {
+                chapterSelect.innerHTML += `<option value="${chapter.id}">第${chapter.number}章 ${chapter.title}</option>`;
+            });
+        }
+
+        filterQuestions();
+    }
+
+    function onChapterChange() {
+        const chapterId = document.getElementById('chapterFilter').value;
+        const knowledgeSelect = document.getElementById('knowledgeFilter');
+
+        knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
+
+        if (chapterId !== 'all' && knowledgePointsData[chapterId]) {
+            knowledgePointsData[chapterId].forEach(kp => {
+                knowledgeSelect.innerHTML += `<option value="${kp.id}">${kp.name}</option>`;
+            });
+        }
+
+        filterQuestions();
+    }
 
     function onCheckboxChange(checkbox) {
         const questionId = parseInt(checkbox.getAttribute('data-id'));
@@ -686,6 +802,9 @@
     function filterQuestions() {
         const searchText = document.getElementById('searchBox').value.toLowerCase();
         const typeFilter = document.getElementById('typeFilter').value;
+        const subjectFilter = document.getElementById('subjectFilter').value;
+        const chapterFilter = document.getElementById('chapterFilter').value;
+        const knowledgeFilter = document.getElementById('knowledgeFilter').value;
         const minScore = parseInt(document.getElementById('minScore').value) || 0;
         const maxScore = parseInt(document.getElementById('maxScore').value) || Infinity;
 
@@ -694,13 +813,24 @@
         document.querySelectorAll('.question-item').forEach(item => {
             const content = item.querySelector('.question-content').textContent.toLowerCase();
             const type = item.getAttribute('data-type');
+            const subjectId = item.getAttribute('data-subject');
+            const chapterId = item.getAttribute('data-chapter');
+            const knowledgeIds = item.getAttribute('data-knowledge-points') || '';
             const score = parseInt(item.getAttribute('data-score'));
 
             const matchSearch = content.includes(searchText);
             const matchType = typeFilter === 'all' || type === typeFilter;
+            const matchSubject = subjectFilter === 'all' || subjectId === subjectFilter;
+            const matchChapter = chapterFilter === 'all' || chapterId === chapterFilter;
+
+            let matchKnowledge = true;
+            if (knowledgeFilter !== 'all') {
+                matchKnowledge = knowledgeIds.includes(knowledgeFilter);
+            }
+
             const matchScore = score >= minScore && score <= maxScore;
 
-            if (matchSearch && matchType && matchScore) {
+            if (matchSearch && matchType && matchSubject && matchChapter && matchKnowledge && matchScore) {
                 item.style.display = 'flex';
                 visibleCount++;
             } else {

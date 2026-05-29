@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.http import HttpResponseRedirect
 from django import forms
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint
 
 admin.site.site_header = '📚 在线考试系统管理后台'
 admin.site.site_title = '考试系统管理'
@@ -118,19 +118,40 @@ class ProfileAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
 
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'type', 'content', 'score', 'created_at')
+    list_display = ('id', 'type', 'content', 'score', 'is_public', 'created_by', 'subject', 'chapter', 'knowledge_points_display', 'created_at')
     list_display_links = ('id', 'content')
-    list_filter = ('type', 'created_at')
-    search_fields = ('id', 'content', 'explanation')
+    list_filter = ('type', 'is_public', 'subject', 'created_at')
+    search_fields = ('id', 'content', 'explanation', 'created_by')
     ordering = ('-created_at',)
-    fields = ('type', 'content', 'options', 'correct_answer', 'score', 'explanation')
+    fields = ('type', 'content', 'options', 'correct_answer', 'score', 'explanation', 'is_public', 'created_by', 'subject', 'chapter', 'section', 'knowledge_points')
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('knowledge_points',)
     change_list_template = 'admin/quiz/question/change_list.html'
+    list_select_related = ('subject', 'chapter', 'section')
+    actions = ['make_public', 'make_private', 'delete_selected']
+    
+    def knowledge_points_display(self, obj):
+        kps = list(obj.knowledge_points.all()[:3])
+        if obj.knowledge_points.count() > 3:
+            return ', '.join([kp.name for kp in kps]) + '...'
+        return ', '.join([kp.name for kp in kps])
+    knowledge_points_display.short_description = '知识点'
+    
+    def make_public(self, request, queryset):
+        count = queryset.update(is_public=True)
+        self.message_user(request, f'已成功将 {count} 道题目设为公开')
+    make_public.short_description = '设为公开'
+    
+    def make_private(self, request, queryset):
+        count = queryset.update(is_public=False)
+        self.message_user(request, f'已成功将 {count} 道题目设为私有')
+    make_private.short_description = '设为私有'
 
 class TestPaperAdmin(admin.ModelAdmin):
     list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'created_by', 'created_at', 'action_buttons')
     list_display_links = ('id', 'title')
-    list_filter = ('is_published', 'created_at')
-    search_fields = ('title', 'description')
+    list_filter = ('is_published', 'created_by', 'created_at')
+    search_fields = ('title', 'description', 'created_by')
     ordering = ('-created_at',)
     filter_horizontal = ('questions',)
     fields = ('title', 'description', 'questions', 'is_published')
@@ -307,3 +328,61 @@ class ClassAssignmentRecordAdmin(admin.ModelAdmin):
 
 admin.site.register(ClassAssignment, ClassAssignmentAdmin)
 admin.site.register(ClassAssignmentRecord, ClassAssignmentRecordAdmin)
+
+# 学科分类管理
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'icon', 'color', 'description', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('name', 'code', 'description')
+    ordering = ('name',)
+    fieldsets = (
+        ('基本信息', {'fields': ('name', 'code', 'icon', 'color')}),
+        ('描述', {'fields': ('description',)}),
+    )
+    prepopulated_fields = {'code': ('name',)}
+    
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        field = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == 'color':
+            field.widget.attrs['type'] = 'color'
+        return field
+
+class ChapterAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'number', 'title', 'description', 'section_count')
+    list_filter = ('subject',)
+    search_fields = ('title', 'description')
+    ordering = ('subject', 'number')
+    list_select_related = ('subject',)
+    
+    def section_count(self, obj):
+        return obj.sections.count()
+    section_count.short_description = '小节数量'
+
+class SectionAdmin(admin.ModelAdmin):
+    list_display = ('chapter', 'full_number', 'title', 'knowledge_point_count')
+    list_filter = ('chapter__subject', 'chapter')
+    search_fields = ('title',)
+    ordering = ('chapter', 'number')
+    list_select_related = ('chapter', 'chapter__subject')
+    
+    def knowledge_point_count(self, obj):
+        return obj.knowledge_points.count()
+    knowledge_point_count.short_description = '知识点数量'
+
+class KnowledgePointAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'name', 'section', 'difficulty', 'description')
+    list_filter = ('subject', 'difficulty', 'section__chapter__subject')
+    search_fields = ('name', 'description')
+    ordering = ('subject', 'name')
+    list_select_related = ('subject', 'section', 'section__chapter')
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'section':
+            if request.GET.get('subject'):
+                kwargs['queryset'] = Section.objects.filter(chapter__subject_id=request.GET['subject'])
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+admin.site.register(Subject, SubjectAdmin)
+admin.site.register(Chapter, ChapterAdmin)
+admin.site.register(Section, SectionAdmin)
+admin.site.register(KnowledgePoint, KnowledgePointAdmin)

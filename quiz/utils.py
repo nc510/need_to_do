@@ -67,7 +67,11 @@ class ExcelImporter:
         'options': ['options', '选项', '所有选项'],
         'correct_answer': ['correct_answer', '答案', '正确答案', '参考答案', 'answer'],
         'score': ['score', '分值', '分数', '得分'],
-        'explanation': ['explanation', '解析', '答案解析', '解析说明']
+        'explanation': ['explanation', '解析', '答案解析', '解析说明'],
+        'subject': ['subject', '学科', '科目', '所属学科', '学科名称'],
+        'chapter': ['chapter', '章节', '所属章节', '章', '章节名称'],
+        'section': ['section', '小节', '所属小节', '节', '小节名称'],
+        'knowledge_points': ['knowledge_points', '知识点', '知识要点', '关联知识点', 'kp'],
     }
 
     TYPE_MAPPING = {
@@ -79,6 +83,7 @@ class ExcelImporter:
     def __init__(self, worksheet, required_keys=None):
         self.ws = worksheet
         self.errors = []
+        self.warnings = []
         self.header_map = {}
         if required_keys is None:
             required_keys = ['content', 'correct_answer', 'score']
@@ -117,6 +122,30 @@ class ExcelImporter:
             if 'explanation' in self.header_map:
                 explanation = str(row[self.header_map['explanation']].value or '').strip()
 
+            subject_name = ''
+            if 'subject' in self.header_map:
+                subject_val = row[self.header_map['subject']].value
+                if subject_val:
+                    subject_name = str(subject_val).strip()
+
+            chapter_title = ''
+            if 'chapter' in self.header_map:
+                chapter_val = row[self.header_map['chapter']].value
+                if chapter_val:
+                    chapter_title = str(chapter_val).strip()
+
+            section_title = ''
+            if 'section' in self.header_map:
+                section_val = row[self.header_map['section']].value
+                if section_val:
+                    section_title = str(section_val).strip()
+
+            knowledge_points_str = ''
+            if 'knowledge_points' in self.header_map:
+                kp_val = row[self.header_map['knowledge_points']].value
+                if kp_val:
+                    knowledge_points_str = str(kp_val).strip()
+
             has_error = not correct_answer or (not score and score != 0)
             if not correct_answer:
                 self.errors.append(f'第{row_idx}行：正确答案为空')
@@ -130,6 +159,10 @@ class ExcelImporter:
                 'correct_answer': correct_answer,
                 'score': score,
                 'explanation': explanation,
+                'subject_name': subject_name,
+                'chapter_title': chapter_title,
+                'section_title': section_title,
+                'knowledge_points_str': knowledge_points_str,
                 'row': row_idx,
                 'has_error': has_error
             }
@@ -188,7 +221,7 @@ def create_import_template():
         top=Side(style='thin'), bottom=Side(style='thin')
     )
 
-    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析']
+    headers = ['题目内容', '题型', '选项A', '选项B', '选项C', '选项D', '正确答案', '分值', '解析', '学科', '章节', '小节', '知识点']
     for col_idx, header in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col_idx, value=header)
         cell.font = header_font
@@ -197,9 +230,9 @@ def create_import_template():
         cell.border = thin_border
 
     example_data = [
-        ['以下哪个是Python的关键字？', '单选题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字'],
-        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型'],
-        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', 3, 'Python确实是编程语言'],
+        ['以下哪个是Python的关键字？', '单选题', 'and', 'or', 'true', 'false', 'A', 5, 'and是Python的关键字', '计算机', '第一章 基础语法', '1.1 关键字', '关键字,标识符'],
+        ['下列哪些是Python的数据类型？', '多选题', 'int', 'str', 'list', 'dict', 'ABCD', 10, 'Python支持多种数据类型', '计算机', '第一章 基础语法', '1.2 数据类型', '数据类型,int,str'],
+        ['Python是一种编程语言', '判断题', '', '', '', '', '正确', 3, 'Python确实是编程语言', '计算机', '第一章 基础语法', '1.1 关键字', '编程语言'],
     ]
 
     for row_idx, row_data in enumerate(example_data, start=2):
@@ -208,15 +241,19 @@ def create_import_template():
             cell.alignment = Alignment(vertical="center", wrap_text=True)
             cell.border = thin_border
 
-    ws.column_dimensions['A'].width = 35
+    ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 8
-    ws.column_dimensions['C'].width = 15
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 12
     ws.column_dimensions['G'].width = 10
     ws.column_dimensions['H'].width = 8
-    ws.column_dimensions['I'].width = 25
+    ws.column_dimensions['I'].width = 20
+    ws.column_dimensions['J'].width = 12
+    ws.column_dimensions['K'].width = 18
+    ws.column_dimensions['L'].width = 15
+    ws.column_dimensions['M'].width = 25
     ws.freeze_panes = 'A2'
 
     return wb
@@ -228,7 +265,7 @@ def download_template_response(filename='题目导入模板.xlsx'):
     wb.save(response)
     return response
 
-def import_questions_from_excel(file):
+def import_questions_from_excel(file, subject_map=None, chapter_map=None, section_map=None, knowledge_point_map=None):
     try:
         wb = openpyxl.load_workbook(file)
         ws = wb.active
