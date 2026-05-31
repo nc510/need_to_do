@@ -273,7 +273,8 @@ def login_view(request):
         else:
             messages.error(request, '用户名/手机号码或密码错误')
     
-    captcha_text, captcha_image = generate_captcha_text()
+    captcha_text = generate_captcha_text()
+    captcha_image = generate_captcha_image(captcha_text)
     cache.set(f'captcha:{request.session.session_key}', captcha_text, 300)
     
     return render(request, 'quiz/frontend/login.html', {
@@ -290,7 +291,7 @@ def register(request):
         
         if not captcha or captcha.lower() != expected_captcha.lower():
             messages.error(request, '验证码错误，请重试')
-            return render(request, 'quiz/frontend/register.html')
+            return redirect('register')
         
         username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
@@ -349,18 +350,14 @@ def register(request):
         except Exception as e:
             messages.error(request, f'注册失败：{str(e)}')
     
-    captcha_text, captcha_image = generate_captcha_text()
-    cache.set(f'captcha:{request.session.session_key}', captcha_text, 300)
-    
-    return render(request, 'quiz/frontend/register.html', {
-        'captcha_image': captcha_image
-    })
+    return render(request, 'quiz/frontend/register.html')
 
 def approval_pending(request):
     return render(request, 'quiz/frontend/approval_pending.html')
 
 def captcha_image(request):
-    captcha_text, captcha_image = generate_captcha_text()
+    captcha_text = generate_captcha_text()
+    captcha_image = generate_captcha_image(captcha_text)
     cache.set(f'captcha:{request.session.session_key}', captcha_text, 300)
     return HttpResponse(captcha_image, content_type='image/png')
 

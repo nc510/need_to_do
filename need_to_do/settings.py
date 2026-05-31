@@ -52,14 +52,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'quiz.middleware.AntiSpiderMiddleware',  # 反爬虫中间件
+    'quiz.middleware.AntiSpiderMiddleware',
 ]
 
 LOGIN_URL = '/quiz/login/'
@@ -88,36 +87,22 @@ WSGI_APPLICATION = 'need_to_do.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-RAILWAY_DB_URL = os.getenv('DATABASE_URL')
-
-if RAILWAY_DB_URL:
-    # Railway 数据库配置 (PostgreSQL)
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=RAILWAY_DB_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
-    }
-else:
-    # 本地开发配置
-    DATABASES = {
-        'default': {
-            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
-            'NAME': os.getenv('DB_NAME', 'need_to_do'),
-            'USER': os.getenv('DB_USER', 'root'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'Netsky121666880!'),
-            'HOST': os.getenv('DB_HOST', '127.0.0.1'),
-            'PORT': os.getenv('DB_PORT', '3306'),
-            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
-            'OPTIONS': {
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-                'charset': 'utf8mb4',
-                'use_unicode': True,
-            }
+DATABASES = {
+    'default': {
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
+        'NAME': os.getenv('DB_NAME', 'need_to_do'),
+        'USER': os.getenv('DB_USER', 'root'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'Netsky121666880!'),
+        'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+        'PORT': os.getenv('DB_PORT', '3306'),
+        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+            'use_unicode': True,
         }
     }
+}
 
 
 # Password validation
