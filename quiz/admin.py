@@ -111,9 +111,9 @@ class CustomUserAdmin(UserAdmin):
         super().save_model(request, obj, form, change)
 
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'approval_status', 'created_at', 'updated_at')
-    list_filter = ('approval_status', 'created_at')
-    search_fields = ('user__username', 'user__email')
+    list_display = ('user', 'name', 'approval_status', 'phone_number', 'class_obj', 'created_at', 'updated_at')
+    list_filter = ('approval_status', 'class_obj', 'created_at')
+    search_fields = ('user__username', 'user__email', 'name', 'phone_number')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at')
 
