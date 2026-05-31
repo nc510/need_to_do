@@ -248,10 +248,10 @@ def login_view(request):
 
             try:
                 profile = Profile.objects.get(user=user)
-                if profile.approval_status == 'pending':
+                if profile.approval_status == 0:
                     logout(request)
                     return redirect('approval_pending')
-                elif profile.approval_status == 'rejected':
+                elif profile.approval_status == 2:
                     logout(request)
                     messages.error(request, '您的账号已被拒绝，请联系管理员')
                     return render(request, 'quiz/frontend/login.html')
@@ -342,7 +342,7 @@ def register(request):
                 user=user,
                 phone_number=phone_number,
                 qq_number=qq_number,
-                approval_status='pending'
+                approval_status=0
             )
             
             messages.success(request, '注册成功！您的账号正在等待管理员审核通过。')
