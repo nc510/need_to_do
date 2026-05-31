@@ -29,7 +29,7 @@ def is_duplicate_import(file_content, window_hours=24):
     file_hash = generate_file_hash(file_content)
     if file_hash in _imported_files_cache:
         import_time, imported_count = _imported_files_cache[file_hash]
-        time_diff = datetime.now() - import_time
+        time_diff = timezone.now() - import_time
         if time_diff.total_seconds() < window_hours * 3600:
             return True, imported_count, import_time
     return False, 0, None
@@ -60,7 +60,15 @@ def question_detail(request, question_id):
     return render(request, 'quiz/frontend/question_detail.html', {'question': question})
 
 def test_paper_list(request):
-    test_papers = TestPaper.objects.filter(is_published=True).order_by('-created_at')
+    user = request.user
+    if user.is_staff:
+        test_papers = TestPaper.objects.filter(is_published=True).order_by('-created_at')
+    else:
+        test_papers = TestPaper.objects.filter(
+            is_published=True
+        ).filter(
+            models.Q(is_public=True) | models.Q(created_by=user.username)
+        ).order_by('-created_at')
     paginated_test_papers = paginate_queryset(test_papers, request.GET.get('page', 1))
     return render(request, 'quiz/frontend/test_paper_list.html', {
         'test_papers': paginated_test_papers
@@ -68,6 +76,9 @@ def test_paper_list(request):
 
 def test_paper_detail(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
+    user = request.user
+    if not test_paper.is_public and (not user.is_authenticated or (test_paper.created_by != user.username and not user.is_staff)):
+        raise Http404('试卷不存在或无权访问')
     questions = list(test_paper.questions.all())
     for q in questions:
         if isinstance(q.options, str):
@@ -1240,40 +1251,47 @@ def create_class_assignment(request, class_id):
         messages.error(request, '只有班级管理员才能创建作业')
         return redirect('class_detail', class_id=class_id)
     
-    test_papers = TestPaper.objects.filter(created_by=request.user.username, is_published=False)
+    # 获取已发布的试卷
+    available_papers = TestPaper.objects.filter(is_published=True)
     
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
         description = request.POST.get('description', '').strip()
-        assignment_type = request.POST.get('type', 'test')
-        paper_id = request.POST.get('test_paper')
+        assignment_type = request.POST.get('type', '1')
+        paper_id = request.POST.get('paper_id')
         deadline = request.POST.get('deadline')
+        time_limit = request.POST.get('time_limit')
         
         if not title:
             messages.error(request, '请填写作业标题')
             return render(request, 'quiz/frontend/create_class_assignment.html', {
                 'class_obj': class_obj,
-                'test_papers': test_papers
+                'available_papers': available_papers
+            })
+        
+        if not paper_id:
+            messages.error(request, '请选择试卷')
+            return render(request, 'quiz/frontend/create_class_assignment.html', {
+                'class_obj': class_obj,
+                'available_papers': available_papers
             })
         
         assignment = ClassAssignment.objects.create(
             class_obj=class_obj,
             title=title,
             description=description,
-            type=assignment_type,
-            deadline=parse_datetime_local(deadline) if deadline else None
+            type=int(assignment_type),
+            deadline=parse_datetime_local(deadline) if deadline else None,
+            time_limit=int(time_limit) if (time_limit and assignment_type == '2') else None,
+            test_paper=TestPaper.objects.get(id=paper_id)
         )
         
-        if paper_id and assignment_type == 'test':
-            assignment.test_paper = TestPaper.objects.get(id=paper_id)
-            assignment.save()
-        
-        messages.success(request, f'作业 "{title}" 创建成功！')
+        messages.success(request, f'{"考试" if assignment_type == "2" else "作业"} "{title}" 创建成功！')
         return redirect('class_assignments', class_id=class_id)
     
     return render(request, 'quiz/frontend/create_class_assignment.html', {
         'class_obj': class_obj,
-        'test_papers': test_papers
+        'available_papers': available_papers
     })
 
 @login_required
@@ -1332,44 +1350,88 @@ def student_class_assignments(request):
         messages.error(request, '请先完善您的个人信息')
         return redirect('user_center')
     
+    # 获取类型参数
+    current_type = request.GET.get('type', '1')
+    try:
+        current_type = int(current_type)
+    except:
+        current_type = 1
+    
     assignments = ClassAssignment.objects.filter(
         class_obj=profile.class_obj,
-        status='published'
+        status='published',
+        type=current_type
     ).order_by('-published_at')
     
     records = ClassAssignmentRecord.objects.filter(user=request.user)
     record_dict = {r.assignment_id: r for r in records}
     
+    assignment_list = []
+    now = timezone.now()
     for assignment in assignments:
-        if assignment.id in record_dict:
-            assignment.record = record_dict[assignment.id]
-        else:
-            assignment.record = None
+        record = record_dict.get(assignment.id)
+        is_submitted = record and record.is_submitted
+        is_overdue = assignment.deadline < now
+        assignment_list.append({
+            'assignment': assignment,
+            'record': record,
+            'is_submitted': is_submitted,
+            'is_overdue': is_overdue
+        })
     
     return render(request, 'quiz/frontend/student_class_assignments.html', {
         'class_obj': profile.class_obj,
-        'assignments': assignments
+        'assignment_list': assignment_list,
+        'current_type': current_type,
+        'now': now
     })
 
 @login_required
-def do_class_assignment(request, class_id, assignment_id):
-    assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj_id=class_id)
+def do_class_assignment(request, assignment_id):
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
     
     if assignment.status != 'published':
         messages.error(request, '该作业尚未发布')
         return redirect('student_class_assignments')
     
-    record, created = ClassAssignmentRecord.objects.get_or_create(
+    # 获取用户最新的答题记录
+    latest_record = ClassAssignmentRecord.objects.filter(
         assignment=assignment,
         user=request.user
-    )
+    ).order_by('-attempt').first()
     
-    if record.is_submitted:
-        messages.error(request, '您已经提交过该作业')
+    # 考试模式：只能有一次提交
+    if assignment.type == 2 and latest_record and latest_record.is_submitted:
+        messages.error(request, '您已经提交过该考试')
         return redirect('student_class_assignments')
     
+    # 检查考试时间限制
+    if assignment.type == 2 and assignment.time_limit:
+        if latest_record and latest_record.start_time:
+            # 检查是否超时
+            time_elapsed = (timezone.now() - latest_record.start_time).total_seconds() / 60
+            if time_elapsed > assignment.time_limit:
+                messages.error(request, '考试已超时，自动提交')
+                # 自动提交当前答案（如果有）
+                return redirect('student_class_assignments')
+    
+    # 创建新的答题记录（作业模式允许多次）
+    if not latest_record or latest_record.is_submitted:
+        attempt = latest_record.attempt + 1 if latest_record else 1
+        record = ClassAssignmentRecord.objects.create(
+            assignment=assignment,
+            user=request.user,
+            start_time=timezone.now(),
+            attempt=attempt
+        )
+    else:
+        record = latest_record
+        if not record.start_time:
+            record.start_time = timezone.now()
+            record.save()
+    
     if request.method == 'POST':
-        if assignment.type == 'test' and assignment.test_paper:
+        if assignment.test_paper:
             test_paper = assignment.test_paper
             questions = list(test_paper.questions.all())
             
@@ -1404,17 +1466,17 @@ def do_class_assignment(request, class_id, assignment_id):
                     score=result['score']
                 )
             
-            messages.success(request, f'作业提交成功！得分：{score}分')
+            messages.success(request, f'{"考试" if assignment.type == 2 else "作业"}提交成功！得分：{score}分')
         else:
             record.is_submitted = True
             record.submitted_at = timezone.now()
             record.save()
-            messages.success(request, '作业提交成功！')
+            messages.success(request, f'{"考试" if assignment.type == 2 else "作业"}提交成功！')
         
         return redirect('student_class_assignments')
     
     questions = []
-    if assignment.type == 'test' and assignment.test_paper:
+    if assignment.test_paper:
         test_paper = assignment.test_paper
         questions = list(test_paper.questions.all())
         for q in questions:
@@ -1425,14 +1487,28 @@ def do_class_assignment(request, class_id, assignment_id):
                 except:
                     q.options = {}
     
+    # 计算剩余时间
+    remaining_seconds = None
+    if assignment.type == 2 and assignment.time_limit:
+        if record.start_time:
+            elapsed_seconds = (timezone.now() - record.start_time).total_seconds()
+            remaining_seconds = max(0, assignment.time_limit * 60 - elapsed_seconds)
+    
+    # 作业模式：始终可以查看答案
+    show_answer = assignment.type == 1
+    
     return render(request, 'quiz/frontend/do_class_assignment.html', {
         'assignment': assignment,
-        'questions': questions
+        'questions': questions,
+        'test_paper': test_paper,
+        'remaining_seconds': remaining_seconds,
+        'show_answer': show_answer,
+        'record': record
     })
 
 @login_required
-def submit_class_assignment(request, class_id, assignment_id):
-    assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj_id=class_id)
+def submit_class_assignment(request, assignment_id):
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
     
     if request.method == 'POST':
         record, created = ClassAssignmentRecord.objects.get_or_create(
@@ -1601,7 +1677,7 @@ def admin_import_questions(request):
                 
                 if 'import_file_hash' in request.session:
                     file_hash = request.session['import_file_hash']
-                    _imported_files_cache[file_hash] = (datetime.now(), imported_count)
+                    _imported_files_cache[file_hash] = (timezone.now(), imported_count)
                     del request.session['import_file_hash']
                     del request.session['import_questions_data']
                 
@@ -1679,7 +1755,7 @@ def admin_create_testpaper(request):
         questions_list.append(q)
     
     return render(request, 'quiz/admin/create_testpaper.html', {
-        'questions': questions_list
+        'all_questions': questions_list
     })
 
 @staff_member_required

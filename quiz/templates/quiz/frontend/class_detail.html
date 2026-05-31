@@ -212,8 +212,7 @@
             {% for admin in admins %}
             <li class="member-item">
                 <div>
-                    <div class="name">{{
-                        admin.user.profile.name|default:admin.user.first_name|default:admin.user.username }}</div>
+                    <div class="name">{{ admin.user.username }} ({{ admin.user.first_name|default:'' }})</div>
                     <div class="email">{{ admin.user.email }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px">

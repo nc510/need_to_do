@@ -297,7 +297,7 @@ CACHES = {
 }
 
 # 会话配置优化
-SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'  # 使用缓存+数据库
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 使用数据库存储会话
 SESSION_COOKIE_AGE = 86400  # 会话超时时间（秒）= 24小时
 SESSION_SAVE_EVERY_REQUEST = False  # 不是每次请求都保存会话
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 浏览器关闭时不删除会话

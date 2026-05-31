@@ -119,37 +119,6 @@
         width: auto;
     }
 
-    .filter-tabs {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 15px;
-        flex-wrap: wrap;
-    }
-
-    .filter-tab {
-        padding: 8px 16px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        background: white;
-        cursor: pointer;
-        text-decoration: none;
-        color: #666;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-
-    .filter-tab:hover {
-        border-color: #667eea;
-        color: #667eea;
-    }
-
-    .filter-tab.active {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-color: transparent;
-    }
-
     .paper-option {
         padding: 8px 0;
     }
@@ -173,6 +142,20 @@
         background: #d4edda;
         color: #155724;
     }
+
+    .time-limit-group {
+        display: none;
+    }
+
+    .type-desc {
+        background: #f0f7ff;
+        border-left: 4px solid #667eea;
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-top: 10px;
+        font-size: 13px;
+        color: #555;
+    }
 </style>
 {% endblock %}
 
@@ -186,38 +169,35 @@
         {% csrf_token %}
 
         <div class="form-group">
-            <label for="title">作业标题 <span style="color: #dc3545;">*</span></label>
-            <input type="text" id="title" name="title" placeholder="请输入作业标题" required>
+            <label for="title">标题 <span style="color: #dc3545;">*</span></label>
+            <input type="text" id="title" name="title" placeholder="请输入标题" required>
         </div>
 
         <div class="form-group">
-            <label for="type">作业类型</label>
+            <label for="type">类型</label>
             <div class="radio-group">
                 <label>
-                    <input type="radio" name="type" value="1" checked>
+                    <input type="radio" name="type" value="1" checked onchange="toggleTimeLimit()">
                     <span>📋 作业</span>
                 </label>
                 <label>
-                    <input type="radio" name="type" value="2">
+                    <input type="radio" name="type" value="2" onchange="toggleTimeLimit()">
                     <span>📝 考试</span>
                 </label>
             </div>
+            <div class="type-desc" id="type-desc">
+                <strong>作业模式：</strong>可以随时查看答案和解析，允许多次提交
+            </div>
+        </div>
+
+        <div class="form-group" id="time-limit-group">
+            <label for="time_limit">考试时长（分钟）<span style="color: #dc3545;">*</span></label>
+            <input type="number" id="time_limit" name="time_limit" placeholder="例如：60" min="1">
+            <div class="hint">💡 仅考试模式需要设置</div>
         </div>
 
         <div class="form-group">
             <label for="paper_id">选择试卷 <span style="color: #dc3545;">*</span></label>
-
-            <div class="filter-tabs">
-                <a href="?filter=all" class="filter-tab {% if filter_type == 'all' %}active{% endif %}">
-                    📚 全部试卷
-                </a>
-                <a href="?filter=my" class="filter-tab {% if filter_type == 'my' %}active{% endif %}">
-                    👤 我的试卷
-                </a>
-                <a href="?filter=published" class="filter-tab {% if filter_type == 'published' %}active{% endif %}">
-                    🌐 全站试卷
-                </a>
-            </div>
 
             <select id="paper_id" name="paper_id" required>
                 <option value="">请选择试卷</option>
@@ -242,14 +222,36 @@
         </div>
 
         <div class="form-group">
-            <label for="description">作业描述</label>
-            <textarea id="description" name="description" placeholder="请输入作业描述（可选）"></textarea>
+            <label for="description">描述</label>
+            <textarea id="description" name="description" placeholder="请输入描述（可选）"></textarea>
         </div>
 
         <div class="form-actions">
             <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回</a>
-            <button type="submit" class="btn btn-primary">✓ 创建作业</button>
+            <button type="submit" class="btn btn-primary" id="submit-btn">✓ 创建</button>
         </div>
     </form>
 </div>
+
+<script>
+function toggleTimeLimit() {
+    const type = document.querySelector('input[name="type"]:checked').value;
+    const timeLimitGroup = document.getElementById('time-limit-group');
+    const typeDesc = document.getElementById('type-desc');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    if (type === '2') {
+        timeLimitGroup.style.display = 'block';
+        typeDesc.innerHTML = '<strong>考试模式：</strong>有时间限制，提交后才能查看答案和解析，更严格的防作弊';
+        submitBtn.textContent = '✓ 创建考试';
+    } else {
+        timeLimitGroup.style.display = 'none';
+        typeDesc.innerHTML = '<strong>作业模式：</strong>可以随时查看答案和解析，允许多次提交';
+        submitBtn.textContent = '✓ 创建作业';
+    }
+}
+
+// 初始化
+toggleTimeLimit();
+</script>
 {% endblock %}

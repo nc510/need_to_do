@@ -148,16 +148,17 @@ class QuestionAdmin(admin.ModelAdmin):
     make_private.short_description = '设为私有'
 
 class TestPaperAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'created_by', 'created_at', 'action_buttons')
+    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'is_public', 'created_by', 'created_at', 'action_buttons')
     list_display_links = ('id', 'title')
-    list_filter = ('is_published', 'created_by', 'created_at')
+    list_filter = ('is_published', 'is_public', 'created_by', 'created_at')
     search_fields = ('title', 'description', 'created_by')
     ordering = ('-created_at',)
     filter_horizontal = ('questions',)
-    fields = ('title', 'description', 'questions', 'is_published')
+    fields = ('title', 'description', 'questions', 'is_published', 'is_public')
     readonly_fields = ('total_score', 'created_at', 'created_by')
     change_list_template = 'admin/quiz/testpaper/change_list.html'
     change_form_template = 'admin/quiz/testpaper/change_form.html'
+    actions = ['make_public', 'make_private', 'delete_selected']
 
     def has_add_permission(self, request):
         return False
@@ -187,6 +188,16 @@ class TestPaperAdmin(admin.ModelAdmin):
         )
     action_buttons.short_description = '操作'
     action_buttons.allow_tags = True
+
+    def make_public(self, request, queryset):
+        count = queryset.update(is_public=True)
+        self.message_user(request, f'已成功将 {count} 份试卷设为公开')
+    make_public.short_description = '设为公开'
+
+    def make_private(self, request, queryset):
+        count = queryset.update(is_public=False)
+        self.message_user(request, f'已成功将 {count} 份试卷设为私有')
+    make_private.short_description = '设为私有'
 
     def save_model(self, request, obj, form, change):
         if not change:

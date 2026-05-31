@@ -278,7 +278,7 @@
             <p style="font-size: 18px; margin-bottom: 10px;">点击或拖拽文件到此处上传</p>
             <p style="color: #666; margin-bottom: 20px;">支持 .xlsx 格式的 Excel 文件</p>
             <input type="file" name="file" id="fileInput" accept=".xlsx" style="display: none;">
-            <button type="button" class="upload-btn" onclick="document.getElementById('fileInput').click()">选择文件</button>
+            <button type="button" class="upload-btn" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">选择文件</button>
             <p><a href="{% url 'admin_export_template' %}" class="template-link">📥 下载导入模板</a></p>
         </div>
         <div class="action-buttons" style="justify-content: flex-end;">

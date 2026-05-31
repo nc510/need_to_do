@@ -1,9 +1,42 @@
 {% extends 'quiz/frontend/base.html' %}
 
-{% block title %}我的班级作业 - 在线考试系统{% endblock %}
+{% block title %}我的班级{% if request.GET.type == '2' %}考试{% else %}作业{% endif %} - 在线考试系统{% endblock %}
 
 {% block extra_styles %}
 <style>
+    .tabs-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 25px;
+        justify-content: center;
+    }
+
+    .tab-btn {
+        padding: 12px 30px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 15px;
+        background: #f5f7fa;
+        color: #666;
+    }
+
+    .tab-btn:hover {
+        background: #e8f4fd;
+    }
+
+    .tab-btn.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .tab-btn.exam.active {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    }
+
     .assignment-list {
         margin-top: 20px;
     }
@@ -23,6 +56,10 @@
 
     .assignment-card.overdue {
         border-left-color: #dc3545;
+    }
+
+    .assignment-card.exam {
+        border-left-color: #e74c3c;
     }
 
     .assignment-header {
@@ -53,8 +90,8 @@
     }
 
     .assignment-type.exam {
-        background: #fff3cd;
-        color: #856404;
+        background: #ffebee;
+        color: #c62828;
     }
 
     .assignment-meta {
@@ -188,21 +225,39 @@
     .countdown.safe {
         color: #28a745;
     }
+
+    .section-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #eee;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<h1 class="page-title">📋 我的班级作业</h1>
+<h1 class="page-title">{% if current_type == 2 %}📝 我的班级考试{% else %}📋 我的班级作业{% endif %}</h1>
 
 {% if request.user.profile.class_obj %}
-    <p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ request.user.profile.class_obj.name }}【{{ request.user.profile.class_obj.code }}】</p>
+<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ request.user.profile.class_obj.name }}【{{ request.user.profile.class_obj.code }}】</p>
 {% endif %}
+
+<div class="tabs-container">
+    <a href="?type=1" class="tab-btn {% if current_type == 1 %}active{% endif %}">
+        📋 作业
+    </a>
+    <a href="?type=2" class="tab-btn {% if current_type == 2 %}active exam{% endif %}">
+        📝 考试
+    </a>
+</div>
 
 {% if assignment_list %}
 <div class="assignment-list">
     {% for item in assignment_list %}
     {% with assignment=item.assignment record=item.record %}
-    <div class="assignment-card {% if item.is_overdue %}overdue{% elif item.is_submitted %}submitted{% endif %}">
+    <div class="assignment-card {% if item.is_overdue %}overdue{% elif item.is_submitted %}submitted{% endif %} {% if assignment.type == 2 %}exam{% endif %}">
         <div class="assignment-header">
             <h3>
                 {{ assignment.title }}
@@ -226,6 +281,9 @@
         <div class="assignment-meta">
             <span>📝 {{ assignment.test_paper.title }} ({{ assignment.test_paper.total_score }}分)</span>
             <span>⏰ 截止：{{ assignment.deadline|date:"Y-m-d H:i" }}</span>
+            {% if assignment.type == 2 and assignment.time_limit %}
+            <span>⏱️ 考试时长：{{ assignment.time_limit }}分钟</span>
+            {% endif %}
             {% if not item.is_submitted %}
             {% if assignment.deadline > now %}
             <span class="countdown {% if assignment.deadline|timeuntil < '1 day' %}warning{% else %}safe{% endif %}">
@@ -258,9 +316,9 @@
 {% else %}
 <div class="empty-state">
     <span style="font-size: 60px;">📭</span>
-    <h3>暂无班级作业</h3>
+    <h3>暂无班级{% if current_type == 2 %}考试{% else %}作业{% endif %}</h3>
     {% if request.user.profile.class_obj %}
-    <p>等待班主任发布新作业</p>
+    <p>等待班主任发布新{% if current_type == 2 %}考试{% else %}作业{% endif %}</p>
     {% else %}
     <p>您还没有加入任何班级</p>
     {% endif %}

@@ -2,19 +2,22 @@
 {% load i18n admin_urls static %}
 
 {% block object-tools-items %}
-    <li>
-        <a href="/quiz/admin/create_testpaper/" class="addlink" style="background: #2196f3; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
-            📝 后台组卷
-        </a>
-    </li>
-    <li>
-        <a href="/quiz/admin/import_testpaper/" class="addlink" style="background: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
-            📥 导入试卷
-        </a>
-    </li>
-    <li>
-        <a href="/quiz/admin/import_questions/template/" class="addlink" style="background: #4caf50; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
-            📄 下载导入模板
-        </a>
-    </li>
+<li>
+    <a href="/quiz/admin/create_testpaper/" class="addlink"
+        style="background: #007bff !important; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block; border: 1px solid #007bff;">
+        📝 手工组卷
+    </a>
+</li>
+<li>
+    <a href="/quiz/admin/import_testpaper/" class="addlink"
+        style="background: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+        📥 导入试卷
+    </a>
+</li>
+<li>
+    <a href="/quiz/admin/import_questions/template/" class="addlink"
+        style="background: #4caf50; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+        📄 下载导入模板
+    </a>
+</li>
 {% endblock %}

@@ -129,6 +129,7 @@ class TestPaper(models.Model):
     created_by = models.CharField(max_length=100, verbose_name='出题人', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     is_published = models.BooleanField(verbose_name='是否发布', default=False)
+    is_public = models.BooleanField(verbose_name='是否公开', default=True, help_text='否表示私有试卷，只有创建者和后台能看到')
     source = models.CharField(max_length=20, verbose_name='试卷来源', choices=SOURCE_CHOICES, default='frontend')
 
     class Meta:
@@ -305,6 +306,7 @@ class ClassAssignment(models.Model):
     description = models.TextField(verbose_name='作业描述', null=True, blank=True)
     type = models.IntegerField(choices=TYPE_CHOICE, default=1, verbose_name='作业类型')
     deadline = models.DateTimeField(verbose_name='截止时间')
+    time_limit = models.IntegerField(verbose_name='考试时长(分钟)', null=True, blank=True, help_text='仅考试模式有效，单位分钟')
     STATUS_CHOICE = ((0, '未发布'), (1, '已发布'))
     status = models.IntegerField(choices=STATUS_CHOICE, default=0, verbose_name='状态')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, verbose_name='创建人', null=True, blank=True, related_name='created_assignments')
@@ -346,12 +348,14 @@ class ClassAssignmentRecord(models.Model):
     test_record = models.ForeignKey(TestRecord, on_delete=models.SET_NULL, verbose_name='答题记录', null=True, blank=True, related_name='assignment_record')
     is_submitted = models.BooleanField(default=False, verbose_name='是否提交')
     score = models.IntegerField(verbose_name='得分', null=True, blank=True)
+    start_time = models.DateTimeField(verbose_name='开始答题时间', null=True, blank=True)
     submitted_at = models.DateTimeField(verbose_name='提交时间', null=True, blank=True)
+    attempt = models.IntegerField(verbose_name='第几次提交', default=1)
 
     class Meta:
         verbose_name = '班级作业记录'
         verbose_name_plural = '班级作业记录'
-        unique_together = ('assignment', 'user')
+        ordering = ['-submitted_at', '-start_time']
 
     def __str__(self):
         return f'{self.user.username} - {self.assignment.title}'

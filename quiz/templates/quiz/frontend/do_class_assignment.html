@@ -1,6 +1,6 @@
 {% extends 'quiz/frontend/base.html' %}
 
-{% block title %}{{ assignment.title }} - 班级作业{% endblock %}
+{% block title %}{{ assignment.title }} - 班级{% if assignment.type == 1 %}作业{% else %}考试{% endif %}{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -15,7 +15,19 @@
     }
 
     .paper-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: {
+            % if assignment.type==2 %
+        }
+
+        linear-gradient(135deg, #e74c3c 0%, #c0392b 100%) {
+            % else %
+        }
+
+        linear-gradient(135deg, #667eea 0%, #764ba2 100%) {
+            % endif %
+        }
+
+        ;
         color: white;
         padding: 20px;
         border-radius: 8px;
@@ -34,6 +46,40 @@
         margin: 5px 0;
         opacity: 0.9;
         font-size: 14px;
+    }
+
+    .timer-box {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px 20px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .timer-text {
+        font-size: 18px;
+        font-weight: bold;
+        color: #856404;
+    }
+
+    .timer-warning {
+        color: #dc3545;
+        animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
     }
 
     .paper-info {
@@ -152,6 +198,29 @@
         font-size: 14px;
     }
 
+    .answer-box {
+        background: #e8f5e9;
+        border-left: 4px solid #4caf50;
+        padding: 10px 15px;
+        margin-top: 10px;
+        border-radius: 4px;
+        display: none;
+    }
+
+    .answer-box.show {
+        display: block;
+    }
+
+    .answer-title {
+        font-weight: bold;
+        color: #2e7d32;
+        margin-bottom: 5px;
+    }
+
+    .answer-content {
+        color: #388e3c;
+    }
+
     .btn {
         padding: 12px 24px;
         border: none;
@@ -186,7 +255,19 @@
     }
 
     .btn-submit {
-        background: #2ecc71;
+        background: {
+            % if assignment.type==2 %
+        }
+
+        #dc3545 {
+            % else %
+        }
+
+        #2ecc71 {
+            % endif %
+        }
+
+        ;
         color: white;
         width: 100%;
         justify-content: center;
@@ -196,7 +277,19 @@
     }
 
     .btn-submit:hover {
-        background: #27ae60;
+        background: {
+            % if assignment.type==2 %
+        }
+
+        #c0392b {
+            % else %
+        }
+
+        #27ae60 {
+            % endif %
+        }
+
+        ;
     }
 
     .back-btn {
@@ -206,7 +299,7 @@
     .deadline-warning {
         background: #fff3cd;
         border-left: 4px solid #ffc107;
-        padding: 12px 15px;
+        padding: 12px 16px;
         border-radius: 4px;
         margin-bottom: 20px;
         color: #856404;
@@ -222,6 +315,24 @@
         font-size: 14px;
         color: #888;
     }
+
+    .mode-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .mode-homework {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .mode-exam {
+        background: #ffebee;
+        color: #c62828;
+    }
 </style>
 {% endblock %}
 
@@ -231,170 +342,234 @@
         <h1>
             {% if assignment.type == 1 %}📋{% else %}📝{% endif %} {{ assignment.title }}
         </h1>
+        <p>
+            <span class="mode-badge {% if assignment.type == 1 %}mode-homework{% else %}mode-exam{% endif %}">
+                {% if assignment.type == 1 %}作业模式{% else %}考试模式{% endif %}
+            </span>
+        </p>
         <p>班级：{{ assignment.class_obj.name }} ({{ assignment.class_obj.code }})</p>
         <p>截止时间：{{ assignment.deadline|date:"Y-m-d H:i" }}</p>
+        {% if assignment.type == 2 and assignment.time_limit %}
+        <p>考试时长：{{ assignment.time_limit }} 分钟</p>
+        {% endif %}
     </div>
+
+    {% if assignment.type == 2 and remaining_seconds is not None %}
+    <div class="timer-box" id="timer-box">
+        <span>⏱️ 剩余时间：</span>
+        <span class="timer-text" id="timer">--:--</span>
+    </div>
+    {% endif %}
 
     {% now "Y-m-d H:i" as current_time %}
     {% if assignment.deadline|date:"Y-m-d H:i" > current_time %}
-        {% if assignment.deadline|timeuntil < '1 day' %}
-            <div class="deadline-warning">
-                ⚠️ 注意：作业将在 {{ assignment.deadline|timeuntil }} 后截止，请尽快完成！
-            </div>
-        {% endif %}
+    {% if assignment.deadline|timeuntil < "1 day" %} <div class="deadline-warning">
+        ⚠️ 注意：将在 {{ assignment.deadline|timeuntil }} 后截止，请尽快完成！
+</div>
+{% endif %}
+{% endif %}
+
+<a href="{% url 'student_class_assignments' %}" class="btn btn-secondary back-btn">← 返回列表</a>
+
+<div class="paper-info">
+    {% if test_paper.description %}
+    <div class="paper-description">{{ test_paper.description }}</div>
     {% endif %}
+    <div class="paper-meta">
+        总分：{{ test_paper.total_score }}分 | 出题人：{{ test_paper.created_by }} | 题目数：{{ test_paper.questions.count }}题
+    </div>
+</div>
 
-    <a href="{% url 'student_class_assignments' %}" class="btn btn-secondary back-btn">← 返回作业列表</a>
+<form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}">
+    {% csrf_token %}
+    <div class="question-list">
+        {% for question in test_paper.questions.all %}
+        <div class="question-item" data-question-id="{{ question.id }}">
+            <div class="question-header">
+                <span class="question-type">
+                    {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
+                </span>
+                <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
+                {{ question.content }}
+            </div>
 
-    <div class="paper-info">
-        {% if test_paper.description %}
-            <div class="paper-description">{{ test_paper.description }}</div>
-        {% endif %}
-        <div class="paper-meta">
-            总分: {{ test_paper.total_score }}分 | 出题人: {{ test_paper.created_by }} | 题目数: {{ test_paper.questions.count }}题
+            <div class="options">
+                {% if question.type == 1 %}
+                <input type="radio" name="question_{{ question.id }}" value="A" id="id_question_{{ question.id }}_A"
+                    style="display: none;">
+                <input type="radio" name="question_{{ question.id }}" value="B" id="id_question_{{ question.id }}_B"
+                    style="display: none;">
+                <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C"
+                    style="display: none;">
+                <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D"
+                    style="display: none;">
+
+                {% if 'A' in question.options %}
+                <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                {% elif 'a' in question.options %}
+                <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                {% endif %}
+                {% if 'B' in question.options %}
+                <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                {% elif 'b' in question.options %}
+                <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                {% endif %}
+                {% if 'C' in question.options %}
+                <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                {% elif 'c' in question.options %}
+                <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                {% endif %}
+                {% if 'D' in question.options %}
+                <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                {% elif 'd' in question.options %}
+                <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                {% endif %}
+                {% elif question.type == 2 %}
+                <input type="checkbox" name="question_{{ question.id }}_A" value="A"
+                    id="id_question_{{ question.id }}_A" style="display: none;">
+                <input type="checkbox" name="question_{{ question.id }}_B" value="B"
+                    id="id_question_{{ question.id }}_B" style="display: none;">
+                <input type="checkbox" name="question_{{ question.id }}_C" value="C"
+                    id="id_question_{{ question.id }}_C" style="display: none;">
+                <input type="checkbox" name="question_{{ question.id }}_D" value="D"
+                    id="id_question_{{ question.id }}_D" style="display: none;">
+
+                {% if 'A' in question.options %}
+                <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                {% elif 'a' in question.options %}
+                <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                {% endif %}
+                {% if 'B' in question.options %}
+                <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                {% elif 'b' in question.options %}
+                <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                {% endif %}
+                {% if 'C' in question.options %}
+                <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                {% elif 'c' in question.options %}
+                <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                {% endif %}
+                {% if 'D' in question.options %}
+                <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                {% elif 'd' in question.options %}
+                <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                {% endif %}
+                {% else %}
+                <input type="radio" name="question_{{ question.id }}" value="对" id="id_question_{{ question.id }}_对"
+                    style="display: none;">
+                <input type="radio" name="question_{{ question.id }}" value="错" id="id_question_{{ question.id }}_错"
+                    style="display: none;">
+
+                <div class="option" data-option="对">✅ 对</div>
+                <div class="option" data-option="错">❌ 错</div>
+                {% endif %}
+            </div>
+
+            {% if show_answer %}
+            <div class="answer-box show">
+                <div class="answer-title">📝 正确答案：{{ question.correct_answer }}</div>
+                {% if question.explanation %}
+                <div class="answer-content">💡 解析：{{ question.explanation }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="question-score">分值：{{ question.score }}分</div>
         </div>
+        {% endfor %}
     </div>
 
-    <form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}">
-        {% csrf_token %}
-        <div class="question-list">
-            {% for question in test_paper.questions.all %}
-                <div class="question-item" data-question-id="{{ question.id }}">
-                    <div class="question-header">
-                        <span class="question-type">
-                                {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
-                            </span>
-                        <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
-                        {{ question.content }}
-                    </div>
-                    
-                    <div class="options">
-                        {% if question.type == 1 %} <!-- 单选题 -->
-                            <input type="radio" name="question_{{ question.id }}" value="A" id="id_question_{{ question.id }}_A" style="display: none;">
-                            <input type="radio" name="question_{{ question.id }}" value="B" id="id_question_{{ question.id }}_B" style="display: none;">
-                            <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C" style="display: none;">
-                            <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D" style="display: none;">
-                            
-                            {% if 'A' in question.options %}
-                                <div class="option" data-option="A">A. {{ question.options.A }}</div>
-                            {% elif 'a' in question.options %}
-                                <div class="option" data-option="A">A. {{ question.options.a }}</div>
-                            {% endif %}
-                            {% if 'B' in question.options %}
-                                <div class="option" data-option="B">B. {{ question.options.B }}</div>
-                            {% elif 'b' in question.options %}
-                                <div class="option" data-option="B">B. {{ question.options.b }}</div>
-                            {% endif %}
-                            {% if 'C' in question.options %}
-                                <div class="option" data-option="C">C. {{ question.options.C }}</div>
-                            {% elif 'c' in question.options %}
-                                <div class="option" data-option="C">C. {{ question.options.c }}</div>
-                            {% endif %}
-                            {% if 'D' in question.options %}
-                                <div class="option" data-option="D">D. {{ question.options.D }}</div>
-                            {% elif 'd' in question.options %}
-                                <div class="option" data-option="D">D. {{ question.options.d }}</div>
-                            {% endif %}
-                        {% elif question.type == 2 %} <!-- 多选题 -->
-                            <input type="checkbox" name="question_{{ question.id }}_A" value="A" id="id_question_{{ question.id }}_A" style="display: none;">
-                            <input type="checkbox" name="question_{{ question.id }}_B" value="B" id="id_question_{{ question.id }}_B" style="display: none;">
-                            <input type="checkbox" name="question_{{ question.id }}_C" value="C" id="id_question_{{ question.id }}_C" style="display: none;">
-                            <input type="checkbox" name="question_{{ question.id }}_D" value="D" id="id_question_{{ question.id }}_D" style="display: none;">
-                            
-                            {% if 'A' in question.options %}
-                                <div class="option" data-option="A">A. {{ question.options.A }}</div>
-                            {% elif 'a' in question.options %}
-                                <div class="option" data-option="A">A. {{ question.options.a }}</div>
-                            {% endif %}
-                            {% if 'B' in question.options %}
-                                <div class="option" data-option="B">B. {{ question.options.B }}</div>
-                            {% elif 'b' in question.options %}
-                                <div class="option" data-option="B">B. {{ question.options.b }}</div>
-                            {% endif %}
-                            {% if 'C' in question.options %}
-                                <div class="option" data-option="C">C. {{ question.options.C }}</div>
-                            {% elif 'c' in question.options %}
-                                <div class="option" data-option="C">C. {{ question.options.c }}</div>
-                            {% endif %}
-                            {% if 'D' in question.options %}
-                                <div class="option" data-option="D">D. {{ question.options.D }}</div>
-                            {% elif 'd' in question.options %}
-                                <div class="option" data-option="D">D. {{ question.options.d }}</div>
-                            {% endif %}
-                        {% else %} <!-- 判断题 -->
-                            <input type="radio" name="question_{{ question.id }}" value="对" id="id_question_{{ question.id }}_对" style="display: none;">
-                            <input type="radio" name="question_{{ question.id }}" value="错" id="id_question_{{ question.id }}_错" style="display: none;">
-                            
-                            <div class="option" data-option="对">✅ 对</div>
-                            <div class="option" data-option="错">❌ 错</div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="question-score">分值: {{ question.score }}分</div>
-                </div>
-            {% endfor %}
-        </div>
+    <div class="question-navigation">
+        <span class="question-counter">共 {{ test_paper.questions.count }} 题</span>
+    </div>
 
-        <div class="question-navigation">
-            <span class="question-counter">共 {{ test_paper.questions.count }} 题</span>
-        </div>
-
-        <button type="submit" class="btn btn-submit">📤 提交作业</button>
-    </form>
+    <button type="submit" class="btn btn-submit">📤 提交{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</button>
+</form>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.options').forEach(optionsDiv => {
-            const questionId = optionsDiv.closest('.question-item').dataset.questionId;
-            
-            optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
-                const optionText = optionDiv.dataset.option;
-                const optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
-                
-                if (optionElement && optionElement.checked) {
-                    optionDiv.classList.add('selected');
-                }
-                
-                optionDiv.addEventListener('click', () => {
-                    optionsDiv.querySelectorAll('.option').forEach(opt => {
-                        opt.classList.remove('selected');
-                    });
-                    
-                    optionDiv.classList.add('selected');
-                    
-                    if (optionElement) {
-                        optionElement.checked = true;
-                    }
-                });
-            });
-        });
+    document.addEventListener('DOMContentLoaded', function () {
+        {% if assignment.type == 2 and remaining_seconds is not None %}
+        let remainingSeconds = {{ remaining_seconds }
+    };
+    const timerEl = document.getElementById('timer');
+    const timerBoxEl = document.getElementById('timer-box');
+    const form = document.getElementById('test_paper_form');
 
-        const form = document.getElementById('test_paper_form');
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const unansweredQuestions = [];
-            document.querySelectorAll('.question-item').forEach((item, index) => {
-                const questionId = item.dataset.questionId;
-                const selectedOption = document.querySelector(`input[name="question_${questionId}"]:checked`);
-                if (!selectedOption) {
-                    unansweredQuestions.push(index + 1);
+    function updateTimer() {
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        if (remainingSeconds <= 300) {
+            timerBoxEl.style.background = '#ffebee';
+            timerBoxEl.style.borderLeftColor = '#dc3545';
+            timerEl.classList.add('timer-warning');
+        }
+
+        if (remainingSeconds <= 0) {
+            alert('考试时间到！');
+            form.submit();
+            return;
+        }
+
+        remainingSeconds--;
+        setTimeout(updateTimer, 1000);
+    }
+
+    updateTimer();
+    {% endif %}
+
+    document.querySelectorAll('.options').forEach(optionsDiv => {
+        const questionId = optionsDiv.closest('.question-item').dataset.questionId;
+
+        optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
+            const optionText = optionDiv.dataset.option;
+            const optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
+
+            if (optionElement && optionElement.checked) {
+                optionDiv.classList.add('selected');
+            }
+
+            optionDiv.addEventListener('click', () => {
+                optionsDiv.querySelectorAll('.option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+
+                optionDiv.classList.add('selected');
+
+                if (optionElement) {
+                    optionElement.checked = true;
                 }
             });
-            
-            if (unansweredQuestions.length > 0) {
-                if (confirm(`您还有 ${unansweredQuestions.length} 题未作答：第 ${unansweredQuestions.join('、')} 题。确定要提交吗？`)) {
-                    form.submit();
-                }
-            } else {
-                if (confirm('确定要提交作业吗？')) {
-                    form.submit();
-                }
-            }
         });
     });
+
+    const form = document.getElementById('test_paper_form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const unansweredQuestions = [];
+        document.querySelectorAll('.question-item').forEach((item, index) => {
+            const questionId = item.dataset.questionId;
+            const selectedOption = document.querySelector(`input[name="question_${questionId}"]:checked`);
+            if (!selectedOption) {
+                unansweredQuestions.push(index + 1);
+            }
+        });
+
+        if (unansweredQuestions.length > 0) {
+            if (confirm(`您还有 ${unansweredQuestions.length} 题未作答：第 ${unansweredQuestions.join('、')} 题。确定要提交吗？`)) {
+                form.submit();
+            }
+        } else {
+            if (confirm('确定要提交吗？')) {
+                form.submit();
+            }
+        }
+    });
+});
 </script>
 {% endblock %}
