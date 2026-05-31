@@ -200,6 +200,16 @@ SIMPLEUI_CONFIG = {
                     'name': '📄 题目管理',
                     'icon': 'fa-solid fa-file-lines',
                     'url': 'quiz/question/'
+                },
+                {
+                    'name': '📥 导入试题',
+                    'icon': 'fa-solid fa-file-import',
+                    'url': '/quiz/admin/import_questions/'
+                },
+                {
+                    'name': '📋 下载导入模板',
+                    'icon': 'fa-solid fa-file-arrow-down',
+                    'url': '/quiz/admin/import_questions/template/'
                 }
             ]
         },
@@ -211,6 +221,21 @@ SIMPLEUI_CONFIG = {
                     'name': '📜 试卷列表',
                     'icon': 'fa-solid fa-scroll',
                     'url': 'quiz/testpaper/'
+                },
+                {
+                    'name': '📝 后台组卷',
+                    'icon': 'fa-solid fa-pen-to-square',
+                    'url': '/quiz/admin/create_testpaper/'
+                },
+                {
+                    'name': '📥 导入试卷',
+                    'icon': 'fa-solid fa-file-import',
+                    'url': '/quiz/admin/import_testpaper/'
+                },
+                {
+                    'name': '📄 下载导入模板',
+                    'icon': 'fa-solid fa-file-arrow-down',
+                    'url': '/quiz/admin/import_questions/template/'
                 }
             ]
         },
