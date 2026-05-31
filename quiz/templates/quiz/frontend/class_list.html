@@ -190,9 +190,12 @@
                     <span>👤 {{ class_obj.class_admins.count }} 管理员</span>
                     <span>📅 {{ class_obj.created_at|date:"m-d" }}</span>
                 </div>
-                <div class="actions">
+                <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
                     <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-primary">
                         查看详情
+                    </a>
+                    <a href="{% url 'student_class_assignments' %}" class="btn btn-secondary" style="background:#fff; border:1px solid #667eea; color:#667eea;">
+                        📝 我的作业
                     </a>
                 </div>
             </div>

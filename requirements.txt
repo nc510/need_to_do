@@ -14,6 +14,9 @@ Pillow==10.2.0
 # Production Server
 waitress==2.1.2
 
+# Static File Serving in Production
+whitenoise==6.12.0
+
 # Admin Interface
 django-simpleui==2026.1.13
 

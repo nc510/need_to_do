@@ -899,8 +899,7 @@ def class_list(request):
     ).distinct().order_by('-created_at')
     
     student_classes = Class.objects.filter(
-        profiles__user=request.user,
-        class_admins__user=request.user
+        profiles__user=request.user
     ).exclude(
         id__in=user_classes.values_list('id', flat=True)
     ).distinct()
@@ -938,6 +937,7 @@ def class_detail(request, class_id):
         'admins': admins,
         'students': students,
         'pending_applications': pending_applications,
+        'pending_count': pending_applications.count(),
         'is_admin': is_admin
     })
 
@@ -947,6 +947,7 @@ def create_class(request):
         name = request.POST.get('name', '').strip()
         description = request.POST.get('description', '').strip()
         code = request.POST.get('code', '').strip()
+        join_rule = request.POST.get('join_rule', 'approval').strip()
         
         if not name or not code:
             messages.error(request, '请填写班级名称和班级代码')
@@ -959,7 +960,8 @@ def create_class(request):
         class_obj = Class.objects.create(
             name=name,
             description=description,
-            code=code
+            code=code,
+            join_rule=join_rule
         )
         
         ClassAdmin.objects.create(
@@ -991,6 +993,8 @@ def edit_class(request, class_id):
     if request.method == 'POST':
         class_obj.name = request.POST.get('name', '').strip()
         class_obj.description = request.POST.get('description', '').strip()
+        join_rule = request.POST.get('join_rule', 'approval').strip()
+        class_obj.join_rule = join_rule
         class_obj.save()
         messages.success(request, '班级信息已更新')
         return redirect('class_detail', class_id=class_id)
@@ -1139,14 +1143,45 @@ def apply_to_class(request):
             messages.error(request, '您已经申请过该班级，请等待审核')
             return render(request, 'quiz/frontend/apply_to_class.html')
         
-        ClassApplication.objects.create(
-            class_obj=class_obj,
-            user=request.user,
-            message=request.POST.get('message', '')
-        )
+        # 检查是否已经在班级中
+        try:
+            profile = Profile.objects.get(user=request.user)
+            if profile.class_obj == class_obj:
+                messages.error(request, '您已经在该班级中')
+                return render(request, 'quiz/frontend/apply_to_class.html')
+        except Profile.DoesNotExist:
+            pass
         
-        messages.success(request, f'已成功申请加入班级 "{class_obj.name}"，请等待管理员审核')
-        return redirect('user_center')
+        # 根据进班规则处理申请
+        if class_obj.join_rule == 'auto':
+            # 自动进班
+            application = ClassApplication.objects.create(
+                class_obj=class_obj,
+                user=request.user,
+                message=request.POST.get('message', ''),
+                status=1
+            )
+            
+            try:
+                profile = Profile.objects.get(user=request.user)
+                profile.class_obj = class_obj
+                profile.approval_status = 1
+                profile.save()
+            except Profile.DoesNotExist:
+                Profile.objects.create(user=request.user, class_obj=class_obj, approval_status=1)
+            
+            messages.success(request, f'已成功加入班级 "{class_obj.name}"！')
+            return redirect('user_center')
+        else:
+            # 需要审核
+            ClassApplication.objects.create(
+                class_obj=class_obj,
+                user=request.user,
+                message=request.POST.get('message', '')
+            )
+            
+            messages.success(request, f'已成功申请加入班级 "{class_obj.name}"，请等待管理员审核')
+            return redirect('user_center')
     
     return render(request, 'quiz/frontend/apply_to_class.html')
 
@@ -1170,11 +1205,16 @@ def class_applications(request, class_id):
         messages.error(request, '只有班级管理员才能查看申请列表')
         return redirect('class_detail', class_id=class_id)
     
-    applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).select_related('user')
+    pending_applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).select_related('user')
+    processed_applications = ClassApplication.objects.filter(
+        class_obj=class_obj,
+        status__in=[1, 2]
+    ).select_related('user', 'reviewed_by').order_by('-reviewed_at')[:20]
     
     return render(request, 'quiz/frontend/class_applications.html', {
         'class_obj': class_obj,
-        'applications': applications
+        'pending_applications': pending_applications,
+        'processed_applications': processed_applications
     })
 
 @login_required
@@ -1189,7 +1229,7 @@ def approve_application(request, class_id, application_id):
     application = get_object_or_404(ClassApplication, pk=application_id, class_obj=class_obj)
     
     application.status = 1
-    application.reviewed_by = request.user.username
+    application.reviewed_by = request.user
     application.save()
     
     try:
@@ -1216,7 +1256,7 @@ def reject_application(request, class_id, application_id):
     
     if request.method == 'POST':
         application.status = 2
-        application.reviewed_by = request.user.username
+        application.reviewed_by = request.user
         application.save()
         messages.success(request, f'已拒绝 {application.user.username} 的加入申请')
         return redirect('class_applications', class_id=class_id)
@@ -1320,7 +1360,7 @@ def publish_class_assignment(request, class_id, assignment_id):
     assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj=class_obj)
     
     if request.method == 'POST':
-        assignment.status = 'published'
+        assignment.status = 1
         assignment.published_at = timezone.now()
         assignment.save()
         
@@ -1359,7 +1399,7 @@ def student_class_assignments(request):
     
     assignments = ClassAssignment.objects.filter(
         class_obj=profile.class_obj,
-        status='published',
+        status=1,
         type=current_type
     ).order_by('-published_at')
     
@@ -1390,7 +1430,7 @@ def student_class_assignments(request):
 def do_class_assignment(request, assignment_id):
     assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
     
-    if assignment.status != 'published':
+    if assignment.status != 1:
         messages.error(request, '该作业尚未发布')
         return redirect('student_class_assignments')
     
@@ -1520,7 +1560,7 @@ def submit_class_assignment(request, assignment_id):
         if record.is_submitted:
             return JsonResponse({'success': False, 'message': '已经提交过'})
         
-        if assignment.type == 'test' and assignment.test_paper:
+        if assignment.type == 2 and assignment.test_paper:
             test_paper = assignment.test_paper
             questions = list(test_paper.questions.all())
             

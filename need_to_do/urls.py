@@ -14,10 +14,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.views.generic import RedirectView
 from django.conf import settings
-from django.conf.urls.static import static
+from django.views.static import serve as static_serve
 from django.http import HttpResponse
 
 def favicon_view(request):
@@ -31,5 +31,7 @@ urlpatterns = [
     path('favicon.ico', favicon_view),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# 提供静态文件服务（Whitenoise/runserver/waitress 均适用）
+urlpatterns += [
+    re_path(r'^static/(?P<path>.*)$', static_serve, {'document_root': settings.STATIC_ROOT}),
+]

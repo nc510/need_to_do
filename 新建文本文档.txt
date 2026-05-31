@@ -3,13 +3,13 @@ from need_to_do.wsgi import application
 import time
 
 HOST = '0.0.0.0'
-PORT = 8000
+PORT = 8090
 
-# å¹¶å‘é…ç½®
-# threads: å·¥ä½œçº¿ç¨‹æ•°ï¼Œå»ºè®®è®¾ç½®ä¸º CPU æ ¸å¿ƒæ•°çš„ 2-4 å€
-# connection_limit: æœ€å¤§å¹¶å‘è¿žæŽ¥æ•°
-# backlog: ç›‘å¬é˜Ÿåˆ—å¤§å°ï¼ˆç­‰å¾…è¿žæŽ¥çš„æœ€å¤§æ•°é‡ï¼‰
-# channel_timeout: è¿žæŽ¥è¶…æ—¶æ—¶é—´ï¼ˆç§’ï¼‰
+# ²¢·¢ÅäÖÃ
+# threads: ¹¤×÷Ïß³ÌÊý£¬½¨ÒéÉèÖÃÎª CPU ºËÐÄÊýµÄ 2-4 ±¶
+# connection_limit: ×î´ó²¢·¢Á¬½ÓÊý
+# backlog: ¼àÌý¶ÓÁÐ´óÐ¡£¨µÈ´ýÁ¬½ÓµÄ×î´óÊýÁ¿£©
+# channel_timeout: Á¬½Ó³¬Ê±Ê±¼ä£¨Ãë£©
 THREADS = 32
 CONNECTION_LIMIT = 1000
 BACKLOG = 2048

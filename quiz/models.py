@@ -240,6 +240,11 @@ class Class(models.Model):
     code = models.CharField(max_length=20, verbose_name='班级编号', unique=True, help_text='用于学生申请加入班级的编号')
     name = models.CharField(max_length=100, verbose_name='班级名称')
     description = models.TextField(verbose_name='班级描述', null=True, blank=True)
+    JOIN_RULE_CHOICES = (
+        ('auto', '自动进班'),
+        ('approval', '授权进班'),
+    )
+    join_rule = models.CharField(max_length=20, verbose_name='进班规则', choices=JOIN_RULE_CHOICES, default='approval')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
