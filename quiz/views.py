@@ -919,7 +919,7 @@ def class_detail(request, class_id):
             return redirect('class_list')
     
     admins = ClassAdmin.objects.filter(class_obj=class_obj).select_related('user')
-    students = Profile.objects.filter(class_obj=class_obj, approval_status='approved').select_related('user')
+    students = Profile.objects.filter(class_obj=class_obj, approval_status=1).select_related('user')
     pending_applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).select_related('user')
     
     return render(request, 'quiz/frontend/class_detail.html', {
@@ -1070,10 +1070,10 @@ def assign_student(request, class_id):
                 try:
                     profile = Profile.objects.get(user=user)
                     profile.class_obj = class_obj
-                    profile.approval_status = 'approved'
+                    profile.approval_status = 1
                     profile.save()
                 except Profile.DoesNotExist:
-                    Profile.objects.create(user=user, class_obj=class_obj, approval_status='approved')
+                    Profile.objects.create(user=user, class_obj=class_obj, approval_status=1)
                 
                 ClassApplication.objects.filter(user=user, class_obj=class_obj).update(status=1)
                 
@@ -1184,10 +1184,10 @@ def approve_application(request, class_id, application_id):
     try:
         profile = Profile.objects.get(user=application.user)
         profile.class_obj = class_obj
-        profile.approval_status = 'approved'
+        profile.approval_status = 1
         profile.save()
     except Profile.DoesNotExist:
-        Profile.objects.create(user=application.user, class_obj=class_obj, approval_status='approved')
+        Profile.objects.create(user=application.user, class_obj=class_obj, approval_status=1)
     
     messages.success(request, f'已批准 {application.user.username} 的加入申请')
     return redirect('class_applications', class_id=class_id)
@@ -1306,7 +1306,7 @@ def publish_class_assignment(request, class_id, assignment_id):
         assignment.published_at = timezone.now()
         assignment.save()
         
-        students = Profile.objects.filter(class_obj=class_obj, approval_status='approved')
+        students = Profile.objects.filter(class_obj=class_obj, approval_status=1)
         for student in students:
             ClassAssignmentRecord.objects.get_or_create(
                 assignment=assignment,
