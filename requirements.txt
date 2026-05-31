@@ -2,7 +2,8 @@
 django==3.2.23
 
 # Database
-pymysql==1.1.1
+pymysql==1.1.1  # MySQL (本地开发)
+psycopg2-binary==2.9.9  # PostgreSQL (Railway 生产环境)
 
 # Excel Processing
 openpyxl==3.1.2
