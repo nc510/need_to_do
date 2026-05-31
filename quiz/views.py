@@ -918,8 +918,8 @@ def class_detail(request, class_id):
             messages.error(request, '您不是该班级的管理员或学生')
             return redirect('class_list')
     
-    admins = ClassAdmin.objects.filter(class_obj=class_obj).select_related('user')
-    students = Profile.objects.filter(class_obj=class_obj, approval_status=1).select_related('user')
+    admins = ClassAdmin.objects.filter(class_obj=class_obj).select_related('user', 'user__profile')
+    students = Profile.objects.filter(class_obj=class_obj, approval_status=1).select_related('user', 'user__profile')
     pending_applications = ClassApplication.objects.filter(class_obj=class_obj, status=0).select_related('user')
     
     return render(request, 'quiz/frontend/class_detail.html', {

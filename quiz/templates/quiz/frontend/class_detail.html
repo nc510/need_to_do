@@ -234,8 +234,9 @@
             {% for admin in admins %}
             <li class="member-item">
                 <div>
-                    <div class="name">{% if admin.user.first_name %}{{ admin.user.first_name }}{% else %}{{
-                        admin.user.username }}{% endif %}</div>
+                    <div class="name">{% if admin.user.profile.name %}{{ admin.user.profile.name }}{% elif
+                        admin.user.first_name %}{{ admin.user.first_name }}{% else %}{{ admin.user.username }}{% endif
+                        %}</div>
                     <div class="email">{{ admin.user.email }}</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -266,15 +267,16 @@
             {% for student in students %}
             <li class="member-item">
                 <div>
-                    <div class="name">{% if student.first_name %}{{ student.first_name }}{% else %}{{ student.username
-                        }}{% endif %}</div>
-                    <div class="email">{{ student.email }}</div>
+                    <div class="name">{% if student.user.profile.name %}{{ student.user.profile.name }}{% elif
+                        student.user.first_name %}{{ student.user.first_name }}{% else %}{{ student.user.username }}{%
+                        endif %}</div>
+                    <div class="email">{{ student.user.email }}</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span class="role">学生</span>
                     {% if user.is_superuser or is_admin %}
-                    <a href="{% url 'remove_student' class_id=class_obj.id user_id=student.id %}" class="btn btn-danger"
-                        style="padding: 6px 12px; font-size: 12px;">移除</a>
+                    <a href="{% url 'remove_student' class_id=class_obj.id user_id=student.user.id %}"
+                        class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;">移除</a>
                     {% endif %}
                 </div>
             </li>
