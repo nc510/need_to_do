@@ -487,14 +487,15 @@ def submit_wrong_question_paper(request, paper_id):
         )
         
         wrong_question_ids = set()
-        AnswerRecord.objects.create(
-            test_record=test_record,
-            question=questions[0],
-            user_answer=user_answers.get(questions[0].id, ''),
-            correct_answer=questions[0].correct_answer,
-            is_correct=(score == test_paper.total_score),
-            score=score
-        )
+        for result in question_results:
+            AnswerRecord.objects.create(
+                test_record=test_record,
+                question=result['question'],
+                user_answer=result.get('user_answer', ''),
+                correct_answer=result['correct_answer'],
+                is_correct=result['is_correct'],
+                score=result['score']
+            )
         
         for wq in WrongQuestion.objects.filter(user=request.user, question__in=questions):
             wrong_question_ids.add(wq.question.id)
@@ -1323,7 +1324,8 @@ def create_class_assignment(request, class_id):
             type=int(assignment_type),
             deadline=parse_datetime_local(deadline) if deadline else None,
             time_limit=int(time_limit) if (time_limit and assignment_type == '2') else None,
-            test_paper=TestPaper.objects.get(id=paper_id)
+            test_paper=TestPaper.objects.get(id=paper_id),
+            is_allow_exam=True
         )
         
         messages.success(request, f'{"考试" if assignment_type == "2" else "作业"} "{title}" 创建成功！')
@@ -1342,10 +1344,18 @@ def class_assignment_detail(request, class_id, assignment_id):
     
     records = ClassAssignmentRecord.objects.filter(assignment=assignment).select_related('user')
     
+    total_students = assignment.get_total_students()
+    completed_count = assignment.get_completed_count()
+    not_submitted_count = total_students - completed_count
+    
     return render(request, 'quiz/frontend/class_assignment_detail.html', {
         'assignment': assignment,
+        'class_obj': assignment.class_obj,
         'records': records,
-        'is_admin': is_admin
+        'is_admin': is_admin,
+        'total_students': total_students,
+        'completed_count': completed_count,
+        'not_submitted_count': not_submitted_count
     })
 
 @login_required
@@ -1378,6 +1388,70 @@ def publish_class_assignment(request, class_id, assignment_id):
         'class_obj': class_obj,
         'assignment': assignment
     })
+
+
+@login_required
+def allow_exam(request, class_id, assignment_id):
+    """允许考试"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj=class_obj)
+    
+    is_admin = ClassAdmin.objects.filter(class_obj=class_obj, user=request.user).exists()
+    if not is_admin:
+        messages.error(request, '只有班级管理员才能操作')
+        return redirect('class_assignment_detail', class_id=class_id, assignment_id=assignment_id)
+    
+    assignment.is_allow_exam = True
+    assignment.save()
+    
+    messages.success(request, f'已允许考试：{assignment.title}')
+    return redirect('class_assignment_detail', class_id=class_id, assignment_id=assignment_id)
+
+
+@login_required
+def close_exam(request, class_id, assignment_id):
+    """关闭考试"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj=class_obj)
+    
+    is_admin = ClassAdmin.objects.filter(class_obj=class_obj, user=request.user).exists()
+    if not is_admin:
+        messages.error(request, '只有班级管理员才能操作')
+        return redirect('class_assignment_detail', class_id=class_id, assignment_id=assignment_id)
+    
+    assignment.is_allow_exam = False
+    assignment.save()
+    
+    messages.success(request, f'已关闭考试：{assignment.title}')
+    return redirect('class_assignment_detail', class_id=class_id, assignment_id=assignment_id)
+
+
+@login_required
+def reset_exam_status(request, class_id, assignment_id):
+    """重置考试状态（清空所有答题记录）"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj=class_obj)
+    
+    is_admin = ClassAdmin.objects.filter(class_obj=class_obj, user=request.user).exists()
+    if not is_admin:
+        messages.error(request, '只有班级管理员才能操作')
+        return redirect('class_assignment_detail', class_id=class_id, assignment_id=assignment_id)
+    
+    if request.method == 'POST':
+        ClassAssignmentRecord.objects.filter(assignment=assignment).delete()
+        
+        students = Profile.objects.filter(class_obj=class_obj, approval_status=1)
+        for student in students:
+            ClassAssignmentRecord.objects.create(assignment=assignment, user=student.user)
+        
+        messages.success(request, f'已重置考试状态：{assignment.title}')
+        return redirect('class_assignment_detail', class_id=class_id, assignment_id=assignment_id)
+    
+    return render(request, 'quiz/frontend/reset_exam_status.html', {
+        'class_obj': class_obj,
+        'assignment': assignment
+    })
+
 
 @login_required
 def student_class_assignments(request):
@@ -1432,6 +1506,11 @@ def do_class_assignment(request, assignment_id):
     
     if assignment.status != 1:
         messages.error(request, '该作业尚未发布')
+        return redirect('student_class_assignments')
+    
+    # 考试模式：检查是否允许考试
+    if assignment.type == 2 and not assignment.is_allow_exam:
+        messages.error(request, '该考试已关闭')
         return redirect('student_class_assignments')
     
     # 获取用户最新的答题记录
@@ -1532,7 +1611,7 @@ def do_class_assignment(request, assignment_id):
     if assignment.type == 2 and assignment.time_limit:
         if record.start_time:
             elapsed_seconds = (timezone.now() - record.start_time).total_seconds()
-            remaining_seconds = max(0, assignment.time_limit * 60 - elapsed_seconds)
+            remaining_seconds = int(max(0, assignment.time_limit * 60 - elapsed_seconds))
     
     # 作业模式：始终可以查看答案
     show_answer = assignment.type == 1
@@ -1551,23 +1630,44 @@ def submit_class_assignment(request, assignment_id):
     assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
     
     if request.method == 'POST':
-        record, created = ClassAssignmentRecord.objects.get_or_create(
+        # 获取用户最新的答题记录
+        latest_record = ClassAssignmentRecord.objects.filter(
             assignment=assignment,
-            user=request.user,
-            defaults={'is_submitted': False}
-        )
+            user=request.user
+        ).order_by('-attempt').first()
         
-        if record.is_submitted:
+        # 考试模式：只能提交一次
+        if assignment.type == 2 and latest_record and latest_record.is_submitted:
             return JsonResponse({'success': False, 'message': '已经提交过'})
         
-        if assignment.type == 2 and assignment.test_paper:
+        # 使用当前记录或创建新记录
+        if latest_record and not latest_record.is_submitted:
+            record = latest_record
+        else:
+            # 创建新的答题记录（作业模式允许多次练习）
+            attempt = latest_record.attempt + 1 if latest_record else 1
+            record = ClassAssignmentRecord.objects.create(
+                assignment=assignment,
+                user=request.user,
+                attempt=attempt
+            )
+        
+        if assignment.test_paper:
             test_paper = assignment.test_paper
             questions = list(test_paper.questions.all())
             
             user_answers = {}
             for q in questions:
                 answer_key = f'question_{q.id}'
-                if answer_key in request.POST:
+                if q.type == 2:
+                    # 多选题：获取所有选中的选项
+                    selected_options = []
+                    for opt in ['A', 'B', 'C', 'D']:
+                        if f'question_{q.id}_{opt}' in request.POST:
+                            selected_options.append(opt)
+                    if selected_options:
+                        user_answers[q.id] = ''.join(sorted(selected_options))
+                elif answer_key in request.POST:
                     user_answers[q.id] = request.POST[answer_key]
             
             score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
@@ -1585,14 +1685,15 @@ def submit_class_assignment(request, assignment_id):
                 completed_at=timezone.now()
             )
             
-            AnswerRecord.objects.create(
-                test_record=test_record,
-                question=questions[0],
-                user_answer=user_answers.get(questions[0].id, ''),
-                correct_answer=questions[0].correct_answer,
-                is_correct=(score == test_paper.total_score),
-                score=score
-            )
+            for result in question_results:
+                AnswerRecord.objects.create(
+                    test_record=test_record,
+                    question=result['question'],
+                    user_answer=result.get('user_answer', ''),
+                    correct_answer=result['correct_answer'],
+                    is_correct=result['is_correct'],
+                    score=result['score']
+                )
             
             return JsonResponse({
                 'success': True,

@@ -261,7 +261,7 @@ class Class(models.Model):
         return [admin.user for admin in admins]
 
     def get_students(self):
-        return User.objects.filter(profile__class_obj=self)
+        return User.objects.filter(profile__class_obj=self, profile__approval_status=1)
 
     def get_pending_applications(self):
         return ClassApplication.objects.filter(class_obj=self, status=0)
@@ -314,6 +314,7 @@ class ClassAssignment(models.Model):
     time_limit = models.IntegerField(verbose_name='考试时长(分钟)', null=True, blank=True, help_text='仅考试模式有效，单位分钟')
     STATUS_CHOICE = ((0, '未发布'), (1, '已发布'))
     status = models.IntegerField(choices=STATUS_CHOICE, default=0, verbose_name='状态')
+    is_allow_exam = models.BooleanField(default=True, verbose_name='是否允许考试')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, verbose_name='创建人', null=True, blank=True, related_name='created_assignments')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     published_at = models.DateTimeField(verbose_name='发布时间', null=True, blank=True)

@@ -1,62 +1,67 @@
 {% extends 'quiz/frontend/base.html' %}
 
-{% block title %}{{ assignment.title }} - 班级{% if assignment.type == 1 %}作业{% else %}考试{% endif %}{% endblock %}
+{% block title %}{{ assignment.title }} - 在线考试系统{% endblock %}
 
 {% block extra_styles %}
 <style>
+    /* 全局样式 */
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* 容器样式 */
     .paper-container {
         max-width: 800px;
         margin: 0 auto;
-        background: white;
-        border-radius: 12px;
-        padding: 30px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         margin-top: 20px;
     }
 
-    .paper-header {
-        background: {
-            % if assignment.type==2 %
-        }
-
-        linear-gradient(135deg, #e74c3c 0%, #c0392b 100%) {
-            % else %
-        }
-
-        linear-gradient(135deg, #667eea 0%, #764ba2 100%) {
-            % endif %
-        }
-
-        ;
-        color: white;
-        padding: 20px;
+    /* 试卷基本信息 */
+    .paper-info {
+        background-color: #fafafa;
+        padding: 15px;
         border-radius: 8px;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
+        border-left: 4px solid #2ecc71;
     }
 
-    .paper-header h1 {
-        margin: 0 0 10px 0;
+    .paper-title {
         font-size: 24px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 10px;
     }
 
-    .paper-header p {
-        margin: 5px 0;
-        opacity: 0.9;
+    .paper-description {
+        color: #666;
+        margin: 10px 0;
         font-size: 14px;
     }
 
+    .paper-meta {
+        color: #999;
+        font-size: 12px;
+        margin-top: 15px;
+    }
+
+    /* 计时器样式 */
     .timer-box {
         background: #fff3cd;
         border-left: 4px solid #ffc107;
-        padding: 15px 20px;
+        padding: 12px 16px;
         border-radius: 4px;
         margin-bottom: 20px;
+        font-weight: 500;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        justify-content: space-between;
     }
 
     .timer-text {
@@ -73,35 +78,17 @@
     @keyframes blink {
 
         0%,
-        100% {
+        50% {
             opacity: 1;
         }
 
-        50% {
+        51%,
+        100% {
             opacity: 0.5;
         }
     }
 
-    .paper-info {
-        background-color: #fafafa;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 30px;
-        border-left: 4px solid #2ecc71;
-    }
-
-    .paper-description {
-        color: #666;
-        margin: 10px 0;
-        font-size: 14px;
-    }
-
-    .paper-meta {
-        color: #999;
-        font-size: 12px;
-        margin-top: 15px;
-    }
-
+    /* 题目列表 */
     .question-list {
         margin-bottom: 30px;
     }
@@ -121,6 +108,7 @@
         color: #333;
     }
 
+    /* 题目类型 */
     .question-type {
         display: inline-block;
         padding: 4px 8px;
@@ -131,12 +119,14 @@
         margin-right: 10px;
     }
 
+    /* 题目内容 */
     .question-content {
         margin-bottom: 15px;
         color: #555;
         line-height: 1.5;
     }
 
+    /* 选项 */
     .options {
         margin-bottom: 15px;
     }
@@ -147,34 +137,28 @@
         padding-left: 35px;
         position: relative;
         cursor: pointer;
-        padding-top: 8px;
-        padding-bottom: 8px;
-        border-radius: 6px;
-        transition: background-color 0.2s ease;
     }
 
-    .option:hover {
-        background-color: #e8f4fd;
-    }
-
+    /* 圆形单选按钮 */
     .option::after {
         content: '';
         position: absolute;
         left: 0;
         top: 50%;
         transform: translateY(-50%);
-        width: 18px;
-        height: 18px;
+        width: 12px;
+        height: 12px;
         border: 2px solid #3498db;
         border-radius: 50%;
         background-color: #fff;
         transition: all 0.2s ease;
     }
 
+    /* 选项字母（A, B, C, D） */
     .option::before {
         content: attr(data-option);
         position: absolute;
-        left: 24px;
+        left: 20px;
         top: 50%;
         transform: translateY(-50%);
         font-weight: bold;
@@ -183,21 +167,75 @@
         text-align: left;
     }
 
+    /* 选中状态的内圆点效果 */
     .option.selected::after {
         background-color: #3498db;
         box-shadow: inset 0 0 0 3px #fff;
     }
 
-    .option.selected {
-        background-color: #e8f4fd;
-    }
-
+    /* 题目分值 */
     .question-score {
         color: #e74c3c;
         font-weight: bold;
         font-size: 14px;
     }
 
+    /* 返回按钮 */
+    .back-btn {
+        display: inline-block;
+        padding: 8px 16px;
+        background-color: #3498db;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 4px;
+        font-size: 14px;
+        transition: background-color 0.3s ease;
+        margin-bottom: 20px;
+    }
+
+    .back-btn:hover {
+        background-color: #2980b9;
+    }
+
+    /* 答题按钮 */
+    .submit-btn {
+        background-color: #2ecc71;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        margin-top: 20px;
+        width: 100%;
+    }
+
+    .submit-btn:hover {
+        background-color: #27ae60;
+    }
+
+    /* 模式徽章 */
+    .mode-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: 10px;
+    }
+
+    .mode-homework {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .mode-exam {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    /* 答案解析 */
     .answer-box {
         background: #e8f5e9;
         border-left: 4px solid #4caf50;
@@ -220,283 +258,274 @@
     .answer-content {
         color: #388e3c;
     }
-
-    .btn {
-        padding: 12px 24px;
-        border: none;
-        border-radius: 8px;
-        font-weight: 500;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 14px;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-secondary {
-        background: #f5f7fa;
-        color: #666;
-    }
-
-    .btn-secondary:hover {
-        background: #eee;
-    }
-
-    .btn-submit {
-        background: {
-            % if assignment.type==2 %
-        }
-
-        #dc3545 {
-            % else %
-        }
-
-        #2ecc71 {
-            % endif %
-        }
-
-        ;
-        color: white;
-        width: 100%;
-        justify-content: center;
-        margin-top: 30px;
-        font-size: 16px;
-        padding: 15px;
-    }
-
-    .btn-submit:hover {
-        background: {
-            % if assignment.type==2 %
-        }
-
-        #c0392b {
-            % else %
-        }
-
-        #27ae60 {
-            % endif %
-        }
-
-        ;
-    }
-
-    .back-btn {
-        margin-bottom: 20px;
-    }
-
-    .deadline-warning {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin-bottom: 20px;
-        color: #856404;
-        font-weight: 500;
-    }
-
-    .question-navigation {
-        margin: 20px 0;
-        text-align: center;
-    }
-
-    .question-counter {
-        font-size: 14px;
-        color: #888;
-    }
-
-    .mode-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    .mode-homework {
-        background: #e8f5e9;
-        color: #2e7d32;
-    }
-
-    .mode-exam {
-        background: #ffebee;
-        color: #c62828;
-    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="paper-container">
-    <div class="paper-header">
-        <h1>
-            {% if assignment.type == 1 %}📋{% else %}📝{% endif %} {{ assignment.title }}
-        </h1>
-        <p>
-            <span class="mode-badge {% if assignment.type == 1 %}mode-homework{% else %}mode-exam{% endif %}">
-                {% if assignment.type == 1 %}作业模式{% else %}考试模式{% endif %}
-            </span>
-        </p>
-        <p>班级：{{ assignment.class_obj.name }} ({{ assignment.class_obj.code }})</p>
-        <p>截止时间：{{ assignment.deadline|date:"Y-m-d H:i" }}</p>
-        {% if assignment.type == 2 and assignment.time_limit %}
-        <p>考试时长：{{ assignment.time_limit }} 分钟</p>
+    <h1 class="paper-title">
+        {% if assignment.type == 1 %}📋{% else %}📝{% endif %} {{ assignment.title }}
+        <span class="mode-badge {% if assignment.type == 1 %}mode-homework{% else %}mode-exam{% endif %}">
+            {% if assignment.type == 1 %}作业模式{% else %}考试模式{% endif %}
+        </span>
+    </h1>
+
+    <div class="paper-info">
+        {% if assignment.description %}
+        <div class="paper-description">{{ assignment.description }}</div>
         {% endif %}
+        <div class="paper-meta">
+            截止时间：{{ assignment.deadline|date:"Y-m-d H:i" }}
+            {% if assignment.type == 2 and assignment.time_limit %}
+            | 考试时长：{{ assignment.time_limit }}分钟
+            {% endif %}
+        </div>
     </div>
 
     {% if assignment.type == 2 and remaining_seconds is not None %}
-    <div class="timer-box" id="timer-box">
+    <div class="timer-box">
         <span>⏱️ 剩余时间：</span>
         <span class="timer-text" id="timer">--:--</span>
     </div>
     {% endif %}
 
-    {% now "Y-m-d H:i" as current_time %}
-    {% if assignment.deadline|date:"Y-m-d H:i" > current_time %}
-    {% if assignment.deadline|timeuntil < "1 day" %} <div class="deadline-warning">
-        ⚠️ 注意：将在 {{ assignment.deadline|timeuntil }} 后截止，请尽快完成！
-</div>
-{% endif %}
-{% endif %}
+    <a href="{% url 'student_class_assignments' %}" class="back-btn">← 返回列表</a>
 
-<a href="{% url 'student_class_assignments' %}" class="btn btn-secondary back-btn">← 返回列表</a>
-
-<div class="paper-info">
-    {% if test_paper.description %}
-    <div class="paper-description">{{ test_paper.description }}</div>
-    {% endif %}
-    <div class="paper-meta">
-        总分：{{ test_paper.total_score }}分 | 出题人：{{ test_paper.created_by }} | 题目数：{{ test_paper.questions.count }}题
-    </div>
-</div>
-
-<form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}">
-    {% csrf_token %}
-    <div class="question-list">
-        {% for question in test_paper.questions.all %}
-        <div class="question-item" data-question-id="{{ question.id }}">
-            <div class="question-header">
-                <span class="question-type">
-                    {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
-                </span>
-                <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
-                {{ question.content }}
-            </div>
-
-            <div class="options">
-                {% if question.type == 1 %}
-                <input type="radio" name="question_{{ question.id }}" value="A" id="id_question_{{ question.id }}_A"
-                    style="display: none;">
-                <input type="radio" name="question_{{ question.id }}" value="B" id="id_question_{{ question.id }}_B"
-                    style="display: none;">
-                <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C"
-                    style="display: none;">
-                <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D"
-                    style="display: none;">
-
-                {% if 'A' in question.options %}
-                <div class="option" data-option="A">A. {{ question.options.A }}</div>
-                {% elif 'a' in question.options %}
-                <div class="option" data-option="A">A. {{ question.options.a }}</div>
-                {% endif %}
-                {% if 'B' in question.options %}
-                <div class="option" data-option="B">B. {{ question.options.B }}</div>
-                {% elif 'b' in question.options %}
-                <div class="option" data-option="B">B. {{ question.options.b }}</div>
-                {% endif %}
-                {% if 'C' in question.options %}
-                <div class="option" data-option="C">C. {{ question.options.C }}</div>
-                {% elif 'c' in question.options %}
-                <div class="option" data-option="C">C. {{ question.options.c }}</div>
-                {% endif %}
-                {% if 'D' in question.options %}
-                <div class="option" data-option="D">D. {{ question.options.D }}</div>
-                {% elif 'd' in question.options %}
-                <div class="option" data-option="D">D. {{ question.options.d }}</div>
-                {% endif %}
-                {% elif question.type == 2 %}
-                <input type="checkbox" name="question_{{ question.id }}_A" value="A"
-                    id="id_question_{{ question.id }}_A" style="display: none;">
-                <input type="checkbox" name="question_{{ question.id }}_B" value="B"
-                    id="id_question_{{ question.id }}_B" style="display: none;">
-                <input type="checkbox" name="question_{{ question.id }}_C" value="C"
-                    id="id_question_{{ question.id }}_C" style="display: none;">
-                <input type="checkbox" name="question_{{ question.id }}_D" value="D"
-                    id="id_question_{{ question.id }}_D" style="display: none;">
-
-                {% if 'A' in question.options %}
-                <div class="option" data-option="A">A. {{ question.options.A }}</div>
-                {% elif 'a' in question.options %}
-                <div class="option" data-option="A">A. {{ question.options.a }}</div>
-                {% endif %}
-                {% if 'B' in question.options %}
-                <div class="option" data-option="B">B. {{ question.options.B }}</div>
-                {% elif 'b' in question.options %}
-                <div class="option" data-option="B">B. {{ question.options.b }}</div>
-                {% endif %}
-                {% if 'C' in question.options %}
-                <div class="option" data-option="C">C. {{ question.options.C }}</div>
-                {% elif 'c' in question.options %}
-                <div class="option" data-option="C">C. {{ question.options.c }}</div>
-                {% endif %}
-                {% if 'D' in question.options %}
-                <div class="option" data-option="D">D. {{ question.options.D }}</div>
-                {% elif 'd' in question.options %}
-                <div class="option" data-option="D">D. {{ question.options.d }}</div>
-                {% endif %}
-                {% else %}
-                <input type="radio" name="question_{{ question.id }}" value="对" id="id_question_{{ question.id }}_对"
-                    style="display: none;">
-                <input type="radio" name="question_{{ question.id }}" value="错" id="id_question_{{ question.id }}_错"
-                    style="display: none;">
-
-                <div class="option" data-option="对">✅ 对</div>
-                <div class="option" data-option="错">❌ 错</div>
-                {% endif %}
-            </div>
-
-            {% if show_answer %}
-            <div class="answer-box show">
-                <div class="answer-title">📝 正确答案：{{ question.correct_answer }}</div>
-                {% if question.explanation %}
-                <div class="answer-content">💡 解析：{{ question.explanation }}</div>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <div class="question-score">分值：{{ question.score }}分</div>
+    <div class="paper-info">
+        {% if test_paper.description %}
+        <div class="paper-description">{{ test_paper.description }}</div>
+        {% endif %}
+        <div class="paper-meta">
+            总分：{{ test_paper.total_score }}分 | 出题人：{{ test_paper.created_by }} | 题目数：{{ test_paper.questions.count }}题
         </div>
-        {% endfor %}
     </div>
 
-    <div class="question-navigation">
-        <span class="question-counter">共 {{ test_paper.questions.count }} 题</span>
+    <!-- 答题模式选择 -->
+    <div class="test-mode-selector">
+        <label><input type="radio" name="test_mode" value="full" checked> 全页答题</label>
+        <label><input type="radio" name="test_mode" value="single"> 逐题答题</label>
     </div>
+    <style>
+        .test-mode-selector {
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+    </style>
 
-    <button type="submit" class="btn btn-submit">📤 提交{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</button>
-</form>
+    <form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}">
+        {% csrf_token %}
+        <div class="question-list">
+            {% for question in test_paper.questions.all %}
+            <div class="question-item" data-question-id="{{ question.id }}"
+                data-question-index="{{ forloop.counter0 }}">
+                <div class="question-header">
+                    <span class="question-type">
+                        {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
+                    </span>
+                    <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
+                    {{ question.content }}
+                </div>
+
+                <div class="options">
+                    {% if question.type == 1 %} <!-- 单选题 -->
+                    <input type="radio" name="question_{{ question.id }}" value="A" id="id_question_{{ question.id }}_A"
+                        style="display: none;">
+                    <input type="radio" name="question_{{ question.id }}" value="B" id="id_question_{{ question.id }}_B"
+                        style="display: none;">
+                    <input type="radio" name="question_{{ question.id }}" value="C" id="id_question_{{ question.id }}_C"
+                        style="display: none;">
+                    <input type="radio" name="question_{{ question.id }}" value="D" id="id_question_{{ question.id }}_D"
+                        style="display: none;">
+
+                    {% if 'A' in question.options %}
+                    <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                    {% elif 'a' in question.options %}
+                    <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                    {% endif %}
+                    {% if 'B' in question.options %}
+                    <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                    {% elif 'b' in question.options %}
+                    <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                    {% endif %}
+                    {% if 'C' in question.options %}
+                    <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                    {% elif 'c' in question.options %}
+                    <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                    {% endif %}
+                    {% if 'D' in question.options %}
+                    <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                    {% elif 'd' in question.options %}
+                    <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                    {% endif %}
+                    {% elif question.type == 2 %} <!-- 多选题 -->
+                    <input type="checkbox" name="question_{{ question.id }}_A" value="A"
+                        id="id_question_{{ question.id }}_A" style="display: none;">
+                    <input type="checkbox" name="question_{{ question.id }}_B" value="B"
+                        id="id_question_{{ question.id }}_B" style="display: none;">
+                    <input type="checkbox" name="question_{{ question.id }}_C" value="C"
+                        id="id_question_{{ question.id }}_C" style="display: none;">
+                    <input type="checkbox" name="question_{{ question.id }}_D" value="D"
+                        id="id_question_{{ question.id }}_D" style="display: none;">
+
+                    {% if 'A' in question.options %}
+                    <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                    {% elif 'a' in question.options %}
+                    <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                    {% endif %}
+                    {% if 'B' in question.options %}
+                    <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                    {% elif 'b' in question.options %}
+                    <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                    {% endif %}
+                    {% if 'C' in question.options %}
+                    <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                    {% elif 'c' in question.options %}
+                    <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                    {% endif %}
+                    {% if 'D' in question.options %}
+                    <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                    {% elif 'd' in question.options %}
+                    <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                    {% endif %}
+                    {% else %} <!-- 判断题 -->
+                    <input type="radio" name="question_{{ question.id }}" value="对" id="id_question_{{ question.id }}_对"
+                        style="display: none;">
+                    <input type="radio" name="question_{{ question.id }}" value="错" id="id_question_{{ question.id }}_错"
+                        style="display: none;">
+
+                    <div class="option" data-option="对">✅ 对</div>
+                    <div class="option" data-option="错">❌ 错</div>
+                    {% endif %}
+                </div>
+
+                {% if show_answer %}
+                <div class="answer-box show">
+                    <div class="answer-title">📝 正确答案：{{ question.correct_answer }}</div>
+                    {% if question.explanation %}
+                    <div class="answer-content">💡 解析：{{ question.explanation }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="question-score">分值：{{ question.score }}分</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- 逐题答题导航 -->
+        <div class="question-navigation">
+            <button type="button" id="prev-question" disabled>上一题</button>
+            <span id="question-counter">1/{{ test_paper.questions.count }}</span>
+            <button type="button" id="next-question">下一题</button>
+        </div>
+        <style>
+            .question-navigation {
+                margin: 20px 0;
+                text-align: center;
+            }
+        </style>
+
+        <button type="submit" class="submit-btn">📤 提交{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</button>
+    </form>
 </div>
+
+<!-- 答题模式切换脚本 -->
+<script>
+    // 答题模式相关变量
+    let currentMode = 'full';
+    let currentQuestionIndex = 0;
+    const questionItems = document.querySelectorAll('.question-item');
+    const questionCount = questionItems.length;
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        // 初始化为全页模式
+        showAllQuestions();
+    });
+
+    // 模式选择切换
+    document.querySelectorAll('input[name="test_mode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            currentMode = radio.value;
+            if (currentMode === 'single') {
+                showSingleQuestion(currentQuestionIndex);
+            } else {
+                showAllQuestions();
+            }
+        });
+    });
+
+    // 显示所有题目
+    function showAllQuestions() {
+        questionItems.forEach(item => {
+            item.style.display = 'block';
+        });
+        document.querySelector('.question-navigation').style.display = 'none';
+    }
+
+    // 显示单个题目
+    function showSingleQuestion(index) {
+        index = Math.max(0, Math.min(index, questionCount - 1));
+        currentQuestionIndex = index;
+
+        questionItems.forEach(item => {
+            item.style.display = 'none';
+        });
+
+        if (questionItems[index]) {
+            questionItems[index].style.display = 'block';
+            questionItems[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        updateNavigationButtons();
+        updateQuestionCounter();
+        document.querySelector('.question-navigation').style.display = 'block';
+    }
+
+    // 更新导航按钮状态
+    function updateNavigationButtons() {
+        const prevBtn = document.getElementById('prev-question');
+        const nextBtn = document.getElementById('next-question');
+
+        prevBtn.disabled = currentQuestionIndex === 0;
+        nextBtn.disabled = currentQuestionIndex === questionCount - 1;
+    }
+
+    // 更新题目计数器
+    function updateQuestionCounter() {
+        const counter = document.getElementById('question-counter');
+        counter.textContent = `${currentQuestionIndex + 1}/${questionCount}`;
+    }
+
+    // 上一题按钮点击事件
+    document.getElementById('prev-question').addEventListener('click', () => {
+        if (currentQuestionIndex > 0) {
+            currentQuestionIndex--;
+            showSingleQuestion(currentQuestionIndex);
+        }
+    });
+
+    // 下一题按钮点击事件
+    document.getElementById('next-question').addEventListener('click', () => {
+        if (currentQuestionIndex < questionCount - 1) {
+            currentQuestionIndex++;
+            showSingleQuestion(currentQuestionIndex);
+        }
+    });
+</script>
 {% endblock %}
 
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('test_paper_form');
+
+        // 计时器功能
         {% if assignment.type == 2 and remaining_seconds is not None %}
         let remainingSeconds = {{ remaining_seconds }
     };
     const timerEl = document.getElementById('timer');
-    const timerBoxEl = document.getElementById('timer-box');
-    const form = document.getElementById('test_paper_form');
+    const timerBoxEl = document.querySelector('.timer-box');
 
     function updateTimer() {
         const minutes = Math.floor(remainingSeconds / 60);
@@ -522,54 +551,104 @@
     updateTimer();
     {% endif %}
 
+    // 选项点击事件
     document.querySelectorAll('.options').forEach(optionsDiv => {
         const questionId = optionsDiv.closest('.question-item').dataset.questionId;
 
         optionsDiv.querySelectorAll('.option').forEach(optionDiv => {
             const optionText = optionDiv.dataset.option;
-            const optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
+            let optionElement = document.querySelector(`input[name="question_${questionId}"][value="${optionText}"]`);
+            if (!optionElement) {
+                optionElement = document.querySelector(`input[name="question_${questionId}_${optionText}"][value="${optionText}"]`);
+            }
 
             if (optionElement && optionElement.checked) {
                 optionDiv.classList.add('selected');
             }
 
             optionDiv.addEventListener('click', () => {
-                optionsDiv.querySelectorAll('.option').forEach(opt => {
-                    opt.classList.remove('selected');
-                });
+                const isCheckbox = optionElement && optionElement.type === 'checkbox';
 
-                optionDiv.classList.add('selected');
+                if (!isCheckbox) {
+                    optionsDiv.querySelectorAll('.option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                }
 
-                if (optionElement) {
-                    optionElement.checked = true;
+                if (isCheckbox && optionDiv.classList.contains('selected')) {
+                    optionDiv.classList.remove('selected');
+                    optionElement.checked = false;
+                } else {
+                    optionDiv.classList.add('selected');
+                    if (optionElement) {
+                        optionElement.checked = true;
+                    }
                 }
             });
         });
     });
 
-    const form = document.getElementById('test_paper_form');
+    // 表单提交验证
     form.addEventListener('submit', function (e) {
         e.preventDefault();
 
         const unansweredQuestions = [];
         document.querySelectorAll('.question-item').forEach((item, index) => {
             const questionId = item.dataset.questionId;
-            const selectedOption = document.querySelector(`input[name="question_${questionId}"]:checked`);
+            // 检查单选按钮
+            let selectedOption = document.querySelector(`input[name="question_${questionId}"]:checked`);
+            // 如果单选没选中，检查多选框
+            if (!selectedOption) {
+                selectedOption = document.querySelector(`input[name="question_${questionId}_A"]:checked`) ||
+                    document.querySelector(`input[name="question_${questionId}_B"]:checked`) ||
+                    document.querySelector(`input[name="question_${questionId}_C"]:checked`) ||
+                    document.querySelector(`input[name="question_${questionId}_D"]:checked`);
+            }
             if (!selectedOption) {
                 unansweredQuestions.push(index + 1);
             }
         });
 
         if (unansweredQuestions.length > 0) {
-            if (confirm(`您还有 ${unansweredQuestions.length} 题未作答：第 ${unansweredQuestions.join('、')} 题。确定要提交吗？`)) {
-                form.submit();
+            if (!confirm(`您还有 ${unansweredQuestions.length} 题未作答：第 ${unansweredQuestions.join('、')} 题。确定要提交吗？`)) {
+                return;
             }
         } else {
-            if (confirm('确定要提交吗？')) {
-                form.submit();
+            if (!confirm('确定要提交吗？')) {
+                return;
             }
         }
+
+        // 使用 AJAX 提交表单
+        const formData = new FormData(form);
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = '提交中...';
+
+        fetch(form.action, {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // 跳转到作业列表页面
+                    window.location.href = '{% url "student_class_assignments" %}';
+                } else {
+                    alert(data.message);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+            })
+            .catch(error => {
+                console.error('提交失败:', error);
+                alert('提交失败，请重试');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            });
     });
-});
+    });
 </script>
 {% endblock %}

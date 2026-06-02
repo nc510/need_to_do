@@ -210,6 +210,44 @@
         background: #fff3cd;
         color: #856404;
     }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #c82333;
+    }
+
+    .btn-warning {
+        background: #ffc107;
+        color: #212529;
+    }
+
+    .btn-warning:hover {
+        background: #e0a800;
+    }
+
+    .exam-status {
+        font-size: 14px;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-weight: 500;
+        display: inline-block;
+        margin-top: 10px;
+        margin-right: 10px;
+    }
+
+    .exam-allowed {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .exam-closed {
+        background: #f8d7da;
+        color: #721c24;
+    }
 </style>
 {% endblock %}
 
@@ -232,11 +270,27 @@
             class="status-badge-lg {% if assignment.status == 1 %}status-published{% else %}status-unpublished{% endif %}">
             {% if assignment.status == 1 %}已发布{% else %}未发布{% endif %}
         </span>
+        <span class="exam-status {% if assignment.is_allow_exam %}exam-allowed{% else %}exam-closed{% endif %}">
+            {% if assignment.is_allow_exam %}✅ 考试进行中{% else %}❌ 考试已关闭{% endif %}
+        </span>
         <div class="header-actions">
             <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回列表</a>
             {% if assignment.status == 0 %}
             <a href="{% url 'publish_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}"
                 class="btn btn-primary">🚀 发布作业</a>
+            {% endif %}
+            {% if assignment.status == 1 %}
+            {% if is_admin %}
+            {% if assignment.is_allow_exam %}
+            <a href="{% url 'close_exam' class_id=class_obj.id assignment_id=assignment.id %}"
+                class="btn btn-warning">🔒 关闭考试</a>
+            {% else %}
+            <a href="{% url 'allow_exam' class_id=class_obj.id assignment_id=assignment.id %}"
+                class="btn btn-success">🔓 允许考试</a>
+            {% endif %}
+            <a href="{% url 'reset_exam_status' class_id=class_obj.id assignment_id=assignment.id %}"
+                class="btn btn-danger">🗑️ 重置状态</a>
+            {% endif %}
             {% endif %}
         </div>
     </div>

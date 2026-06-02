@@ -302,7 +302,11 @@
 
         <div class="assignment-actions">
             {% if record and record.is_submitted %}
-            <span class="btn btn-secondary" style="cursor: default;">✓ 已完成</span>
+                {% if assignment.type == 1 %}
+                <a href="{% url 'do_class_assignment' assignment_id=assignment.id %}" class="btn btn-secondary">🔄 重新练习</a>
+                {% else %}
+                <span class="btn btn-secondary" style="cursor: default;">✓ 已完成</span>
+                {% endif %}
             {% elif item.is_overdue %}
             <span class="btn btn-secondary" style="cursor: default; background: #f8d7da; color: #721c24;">⏰ 已逾期</span>
             {% else %}

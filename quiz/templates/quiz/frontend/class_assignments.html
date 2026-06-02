@@ -227,7 +227,7 @@
                 {% endif %}
                 
                 <div class="assignment-actions">
-                    <a href="{% url 'class_assignment_detail' class_id=class_obj.id assignment_id=assignment.id %}" class="btn btn-secondary">📊 查看详情</a>
+                    <a href="{% url 'class_assignment_detail' class_id=class_obj.id assignment_id=assignment.id %}" class="btn btn-secondary">📊 作业情况</a>
                     {% if assignment.status == 0 %}
                         <a href="{% url 'publish_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}" class="btn btn-success">🚀 发布作业</a>
                     {% endif %}
