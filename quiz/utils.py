@@ -3,6 +3,16 @@ from django.http import HttpResponse
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils.exceptions import InvalidFileException
+import json
+
+def parse_options(options_str):
+    """解析选项字段，如果是字符串则尝试JSON解析"""
+    if isinstance(options_str, str):
+        try:
+            return json.loads(options_str)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+    return options_str or {}
 
 def paginate_queryset(queryset, page_num, items_per_page=9):
     paginator = Paginator(queryset, items_per_page)
@@ -14,9 +24,34 @@ def paginate_queryset(queryset, page_num, items_per_page=9):
         paginated_items = paginator.page(paginator.num_pages)
     return paginated_items
 
+# 判断题答案映射，将各种表示统一为标准值
+TRUE_VALUES = {'对', '正确', '是', 't', 'true', '1', 'yes', 'y'}
+FALSE_VALUES = {'错', '错误', '否', 'f', 'false', '0', 'no', 'n'}
+
+def normalize_judge_answer(answer):
+    """标准化判断题答案"""
+    if answer is None:
+        return None
+    answer = str(answer).strip().lower()
+    if answer in TRUE_VALUES:
+        return 'true'
+    elif answer in FALSE_VALUES:
+        return 'false'
+    return answer
+
 def compare_answers(user_answer, correct_answer):
     if user_answer is None:
         return False
+    
+    # 尝试判断题特殊处理
+    normalized_user = normalize_judge_answer(user_answer)
+    normalized_correct = normalize_judge_answer(correct_answer)
+    
+    # 如果是判断题答案（已标准化），使用标准化后的值比较
+    if normalized_user in ('true', 'false') and normalized_correct in ('true', 'false'):
+        return normalized_user == normalized_correct
+    
+    # 默认使用精确匹配
     return user_answer.strip().lower() == correct_answer.strip().lower()
 
 def calculate_score(questions, user_answers):

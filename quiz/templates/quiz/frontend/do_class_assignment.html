@@ -517,12 +517,13 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('test_paper_form');
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('test_paper_form');
 
-    // 计时器功能
-    {% if assignment.type == 2 and remaining_seconds is not None %}
-    let remainingSeconds = {{ remaining_seconds }};
+        // 计时器功能
+        {% if assignment.type == 2 and remaining_seconds is not None %}
+        let remainingSeconds = {{ remaining_seconds }
+    };
     const timerEl = document.getElementById('timer');
     const timerBoxEl = document.querySelector('.timer-box');
 
@@ -551,10 +552,10 @@ document.addEventListener('DOMContentLoaded', function () {
     {% endif %}
 
     // 选项点击事件
-    document.querySelectorAll('.options').forEach(function(optionsDiv) {
+    document.querySelectorAll('.options').forEach(function (optionsDiv) {
         const questionId = optionsDiv.closest('.question-item').dataset.questionId;
 
-        optionsDiv.querySelectorAll('.option').forEach(function(optionDiv) {
+        optionsDiv.querySelectorAll('.option').forEach(function (optionDiv) {
             const optionText = optionDiv.dataset.option;
             let optionElement = document.querySelector('input[name="question_' + questionId + '"][value="' + optionText + '"]');
             if (!optionElement) {
@@ -565,11 +566,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 optionDiv.classList.add('selected');
             }
 
-            optionDiv.addEventListener('click', function() {
+            optionDiv.addEventListener('click', function () {
                 const isCheckbox = optionElement && optionElement.type === 'checkbox';
 
                 if (!isCheckbox) {
-                    optionsDiv.querySelectorAll('.option').forEach(function(opt) {
+                    optionsDiv.querySelectorAll('.option').forEach(function (opt) {
                         opt.classList.remove('selected');
                     });
                 }
@@ -588,11 +589,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // 表单提交验证
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', function (e) {
         e.preventDefault();
 
         const unansweredQuestions = [];
-        document.querySelectorAll('.question-item').forEach(function(item, index) {
+        document.querySelectorAll('.question-item').forEach(function (item, index) {
             const questionId = item.dataset.questionId;
             // 检查单选按钮
             let selectedOption = document.querySelector('input[name="question_' + questionId + '"]:checked');
@@ -629,25 +630,29 @@ document.addEventListener('DOMContentLoaded', function () {
             method: 'POST',
             body: formData
         })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            if (data.success) {
-                alert(data.message);
-                window.location.href = '{% url "student_class_assignments" %}';
-            } else {
-                alert(data.message);
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('服务器返回错误状态: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                if (data.success) {
+                    alert(data.message);
+                    // 添加时间戳参数强制刷新页面，避免缓存旧数据
+                    window.location.href = '{% url "student_class_assignments" %}?t=' + Date.now();
+                } else {
+                    alert(data.message);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalText;
+                }
+            })
+            .catch(function (error) {
+                console.error('提交失败:', error);
+                alert('提交失败，请重试: ' + error.message);
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
-            }
-        })
-        .catch(function(error) {
-            console.error('提交失败:', error);
-            alert('提交失败，请重试');
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
-        });
+            });
     });
 });
 </script>

@@ -157,7 +157,7 @@ def update_testpaper_total_score(sender, instance, action, **kwargs):
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='用户')
     name = models.CharField(max_length=50, verbose_name='姓名', blank=True, null=True)
-    APPROVAL_STATUS = (0, '未审核'), (1, '审核通过'), (2, '审核拒绝')
+    APPROVAL_STATUS = ((0, '未审核'), (1, '审核通过'), (2, '审核拒绝'))
     approval_status = models.IntegerField(choices=APPROVAL_STATUS, default=0, verbose_name='审核状态')
     phone_number = models.CharField(max_length=11, verbose_name='手机号码', blank=True, null=True, unique=True)
     qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)

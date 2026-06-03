@@ -237,11 +237,6 @@ class AnswerRecordAdmin(admin.ModelAdmin):
         return format_html('<span style="background: #f44336; color: white; padding: 3px 8px; border-radius: 4px;">❌ 错误</span>')
     is_correct_display.short_description = '答题结果'
 
-    def answered_at(self, obj):
-        if hasattr(obj, 'answered_at'):
-            return obj.answered_at
-        return 'N/A'
-    answered_at.short_description = '答题时间'
 
 class WrongQuestionAdmin(admin.ModelAdmin):
     list_display = ('user', 'question', 'user_answer', 'correct_answer_display', 'added_at')
@@ -252,6 +247,7 @@ class WrongQuestionAdmin(admin.ModelAdmin):
     def correct_answer_display(self, obj):
         return format_html('<span style="color: #4caf50; font-weight: bold;">{}</span>', obj.question.correct_answer)
     correct_answer_display.short_description = '正确答案'
+
 
 class ClassAdminAdmin(admin.ModelAdmin):
     list_display = ('class_obj', 'user', 'get_user_email', 'get_user_profile')

@@ -1,6 +1,6 @@
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import models
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.contrib.sessions.models import Session
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint
-from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel
+from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
 import json
@@ -81,12 +81,7 @@ def test_paper_detail(request, paper_id):
         raise Http404('试卷不存在或无权访问')
     questions = list(test_paper.questions.all())
     for q in questions:
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
+        q.options = parse_options(q.options)
     return render(request, 'quiz/frontend/test_paper_detail.html', {
         'test_paper': test_paper,
         'questions': questions
@@ -125,13 +120,7 @@ def submit_test_paper(request, paper_id):
         wrong_questions_list = []
         for result in question_results:
             question = result['question']
-            options_data = question.options
-            if isinstance(options_data, str):
-                import json
-                try:
-                    options_data = json.loads(options_data)
-                except:
-                    options_data = {}
+            options_data = parse_options(question.options)
             AnswerRecord.objects.create(
                 test_record=test_record,
                 question=question,
@@ -175,12 +164,7 @@ def submit_test_paper(request, paper_id):
         })
     
     for q in questions:
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
+        q.options = parse_options(q.options)
     
     return render(request, 'quiz/frontend/test_paper_detail.html', {
         'test_paper': test_paper,
@@ -206,6 +190,11 @@ def test_history(request):
 def test_history_detail(request, record_id):
     test_record = get_object_or_404(TestRecord, pk=record_id, user=request.user)
     
+    # 检查这个记录是否属于班级作业
+    from .models import ClassAssignmentRecord
+    assignment_record = ClassAssignmentRecord.objects.filter(test_record=test_record).first()
+    is_assignment = assignment_record is not None
+    
     # 获取试卷的题目列表（按原顺序）
     questions = []
     if test_record.test_paper:
@@ -224,17 +213,14 @@ def test_history_detail(request, record_id):
             sorted_answer_records.append(answer_map[question.id])
     
     # 处理 question.options 字段，确保它是正确的字典格式
-    import json
     for ar in sorted_answer_records:
-        if ar.question and isinstance(ar.question.options, str):
-            try:
-                ar.question.options = json.loads(ar.question.options)
-            except:
-                ar.question.options = {}
+        if ar.question:
+            ar.question.options = parse_options(ar.question.options)
     
     return render(request, 'quiz/frontend/test_history_detail.html', {
         'test_record': test_record,
-        'answer_records': sorted_answer_records
+        'answer_records': sorted_answer_records,
+        'is_assignment': is_assignment
     })
 
 def login_view(request):
@@ -412,6 +398,16 @@ def user_center(request):
     except Profile.DoesNotExist:
         profile = Profile.objects.create(user=request.user)
     
+    # 获取统计数据
+    test_count = TestRecord.objects.filter(user=request.user).count()
+    completed_count = TestRecord.objects.filter(user=request.user, completed_at__isnull=False).count()
+    wrong_count = WrongQuestion.objects.filter(user=request.user).count()
+    
+    # 计算正确率
+    total_answered = AnswerRecord.objects.filter(test_record__user=request.user).count()
+    correct_answered = AnswerRecord.objects.filter(test_record__user=request.user, is_correct=True).count()
+    accuracy_rate = int((correct_answered / total_answered) * 100) if total_answered > 0 else 0
+    
     recent_tests = TestRecord.objects.filter(user=request.user).order_by('-completed_at')[:5]
     recent_wrong_questions = WrongQuestion.objects.filter(user=request.user).order_by('-added_at')[:5]
     
@@ -419,7 +415,11 @@ def user_center(request):
         'profile': profile,
         'recent_tests': recent_tests,
         'recent_wrong_questions': recent_wrong_questions,
-        'is_admin': request.user.is_staff
+        'is_admin': request.user.is_staff,
+        'test_count': test_count,
+        'completed_count': completed_count,
+        'wrong_count': wrong_count,
+        'accuracy_rate': accuracy_rate
     }
     
     return render(request, 'quiz/frontend/user_center.html', context)
@@ -428,21 +428,11 @@ def user_center(request):
 def wrong_question_notebook(request):
     wrong_questions = WrongQuestion.objects.filter(user=request.user).select_related('question').order_by('-added_at')
     
-    wrong_questions_list = []
+    # 处理每个错题的选项字段
     for wq in wrong_questions:
-        q = wq.question
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
-        wrong_questions_list.append({
-            'wrong_question': wq,
-            'question': q
-        })
+        wq.question.options = parse_options(wq.question.options)
     
-    paginated_wrong_questions = paginate_queryset(wrong_questions_list, request.GET.get('page', 1), items_per_page=10)
+    paginated_wrong_questions = paginate_queryset(wrong_questions, request.GET.get('page', 1), items_per_page=10)
     
     return render(request, 'quiz/frontend/wrong_question_notebook.html', {
         'wrong_questions': paginated_wrong_questions
@@ -455,12 +445,7 @@ def create_wrong_question_paper(request):
     questions = []
     for wq in wrong_questions:
         q = wq.question
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
+        q.options = parse_options(q.options)
         questions.append(q)
     
     if not questions:
@@ -515,13 +500,7 @@ def submit_wrong_question_paper(request, paper_id):
         wrong_question_ids = set()
         for result in question_results:
             question = result['question']
-            options_data = question.options
-            if isinstance(options_data, str):
-                import json
-                try:
-                    options_data = json.loads(options_data)
-                except:
-                    options_data = {}
+            options_data = parse_options(question.options)
             AnswerRecord.objects.create(
                 test_record=test_record,
                 question=question,
@@ -551,12 +530,7 @@ def submit_wrong_question_paper(request, paper_id):
         })
     
     for q in questions:
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
+        q.options = parse_options(q.options)
     
     return render(request, 'quiz/frontend/test_paper_detail.html', {
         'test_paper': test_paper,
@@ -624,15 +598,7 @@ def create_test_paper(request):
 
     questions_list = []
     for q in questions:
-        options_data = q.options
-        if isinstance(options_data, str):
-            import json
-            try:
-                options_data = json.loads(options_data)
-            except:
-                options_data = {}
-        elif not isinstance(options_data, dict):
-            options_data = {}
+        options_data = parse_options(q.options)
         
         kp_ids = [str(kp.id) for kp in q.knowledge_points.all()]
         
@@ -1354,18 +1320,19 @@ def create_class_assignment(request, class_id):
                 'available_papers': available_papers
             })
         
+        assignment_type_int = int(assignment_type)
         assignment = ClassAssignment.objects.create(
             class_obj=class_obj,
             title=title,
             description=description,
-            type=int(assignment_type),
+            type=assignment_type_int,
             deadline=parse_datetime_local(deadline) if deadline else None,
-            time_limit=int(time_limit) if (time_limit and assignment_type == '2') else None,
+            time_limit=int(time_limit) if (time_limit and assignment_type_int == 2) else None,
             test_paper=TestPaper.objects.get(id=paper_id),
             is_allow_exam=True
         )
         
-        messages.success(request, f'{"考试" if assignment_type == "2" else "作业"} "{title}" 创建成功！')
+        messages.success(request, f'{"考试" if assignment_type_int == 2 else "作业"} "{title}" 创建成功！')
         return redirect('class_assignments', class_id=class_id)
     
     return render(request, 'quiz/frontend/create_class_assignment.html', {
@@ -1524,14 +1491,22 @@ def delete_class_assignment(request, class_id, assignment_id):
 
 @login_required
 def student_class_assignments(request):
+    response = None
     try:
         profile = Profile.objects.get(user=request.user)
         if not profile.class_obj:
             messages.error(request, '您还没有加入任何班级')
-            return redirect('user_center')
+            response = redirect('user_center')
     except Profile.DoesNotExist:
         messages.error(request, '请先完善您的个人信息')
-        return redirect('user_center')
+        response = redirect('user_center')
+    
+    if response:
+        # 设置防缓存响应头
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
     
     # 获取类型参数
     current_type = request.GET.get('type', '1')
@@ -1546,7 +1521,23 @@ def student_class_assignments(request):
         type=current_type
     ).order_by('-published_at')
     
-    records = ClassAssignmentRecord.objects.filter(user=request.user)
+    # 获取用户所有答题记录，确保每个作业保留最新提交的记录
+    # 使用distinct只获取每个作业的最新记录（按submitted_at降序）
+    from django.db.models import F, Window
+    from django.db.models.functions import RowNumber
+    
+    # 使用窗口函数为每个作业的记录编号，按提交时间降序
+    ranked_records = ClassAssignmentRecord.objects.filter(user=request.user).annotate(
+        row_num=Window(
+            expression=RowNumber(),
+            partition_by=F('assignment_id'),
+            order_by=F('submitted_at').desc(nulls_last=True),
+        )
+    )
+    
+    # 获取每个作业的第一条记录（最新的）
+    record_ids = [r.id for r in ranked_records if r.row_num == 1]
+    records = ClassAssignmentRecord.objects.filter(id__in=record_ids)
     record_dict = {r.assignment_id: r for r in records}
     
     assignment_list = []
@@ -1562,12 +1553,19 @@ def student_class_assignments(request):
             'is_overdue': is_overdue
         })
     
-    return render(request, 'quiz/frontend/student_class_assignments.html', {
+    response = render(request, 'quiz/frontend/student_class_assignments.html', {
         'class_obj': profile.class_obj,
         'assignment_list': assignment_list,
         'current_type': current_type,
         'now': now
     })
+    
+    # 设置防缓存响应头，确保浏览器不会缓存旧数据
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    
+    return response
 
 @login_required
 def do_class_assignment(request, assignment_id):
@@ -1659,8 +1657,17 @@ def do_class_assignment(request, assignment_id):
                 
                 return redirect('student_class_assignments')
     
-    # 创建新的答题记录（作业模式允许多次）
-    if not latest_record or latest_record.is_submitted:
+    # 创建新的答题记录（作业模式允许多次，考试模式只能一次）
+    # 作业模式：始终创建新记录
+    # 考试模式：如果有未提交的记录则重用，否则创建新记录
+    if assignment.type == 2 and latest_record and not latest_record.is_submitted:
+        # 考试模式：重用未提交的记录
+        record = latest_record
+        if not record.start_time:
+            record.start_time = timezone.now()
+            record.save()
+    else:
+        # 作业模式或考试模式但没有未提交记录：创建新记录
         attempt = latest_record.attempt + 1 if latest_record else 1
         record = ClassAssignmentRecord.objects.create(
             assignment=assignment,
@@ -1668,11 +1675,6 @@ def do_class_assignment(request, assignment_id):
             start_time=timezone.now(),
             attempt=attempt
         )
-    else:
-        record = latest_record
-        if not record.start_time:
-            record.start_time = timezone.now()
-            record.save()
     
     if request.method == 'POST':
         if assignment.test_paper:
@@ -1702,13 +1704,7 @@ def do_class_assignment(request, assignment_id):
             
             for result in question_results:
                 question = result['question']
-                options_data = question.options
-                if isinstance(options_data, str):
-                    import json
-                    try:
-                        options_data = json.loads(options_data)
-                    except:
-                        options_data = {}
+                options_data = parse_options(question.options)
                 AnswerRecord.objects.create(
                     test_record=test_record,
                     question=question,
@@ -1735,16 +1731,12 @@ def do_class_assignment(request, assignment_id):
         return redirect('student_class_assignments')
     
     questions = []
+    test_paper = None
     if assignment.test_paper:
         test_paper = assignment.test_paper
         questions = list(test_paper.questions.all())
         for q in questions:
-            if isinstance(q.options, str):
-                import json
-                try:
-                    q.options = json.loads(q.options)
-                except:
-                    q.options = {}
+            q.options = parse_options(q.options)
     
     # 计算剩余时间
     remaining_seconds = None
@@ -1767,101 +1759,104 @@ def do_class_assignment(request, assignment_id):
 
 @login_required
 def submit_class_assignment(request, assignment_id):
-    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
-    
-    if request.method == 'POST':
-        # 获取用户最新的答题记录
-        latest_record = ClassAssignmentRecord.objects.filter(
-            assignment=assignment,
-            user=request.user
-        ).order_by('-attempt').first()
+    try:
+        assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
         
-        # 考试模式：只能提交一次
-        if assignment.type == 2 and latest_record and latest_record.is_submitted:
-            return JsonResponse({'success': False, 'message': '已经提交过'})
-        
-        # 使用当前记录或创建新记录
-        if latest_record and not latest_record.is_submitted:
-            record = latest_record
-        else:
-            # 创建新的答题记录（作业模式允许多次练习）
-            attempt = latest_record.attempt + 1 if latest_record else 1
-            record = ClassAssignmentRecord.objects.create(
+        if request.method == 'POST':
+            # 获取用户最新的答题记录
+            latest_record = ClassAssignmentRecord.objects.filter(
                 assignment=assignment,
-                user=request.user,
-                attempt=attempt
-            )
-        
-        if assignment.test_paper:
-            test_paper = assignment.test_paper
-            questions = list(test_paper.questions.all())
+                user=request.user
+            ).order_by('-attempt').first()
             
-            user_answers = {}
-            for q in questions:
-                answer_key = f'question_{q.id}'
-                if q.type == 2:
-                    # 多选题：获取所有选中的选项
-                    selected_options = []
-                    for opt in ['A', 'B', 'C', 'D']:
-                        if f'question_{q.id}_{opt}' in request.POST:
-                            selected_options.append(opt)
-                    if selected_options:
-                        user_answers[q.id] = ''.join(sorted(selected_options))
-                elif answer_key in request.POST:
-                    user_answers[q.id] = request.POST[answer_key]
+            # 考试模式：只能提交一次
+            if assignment.type == 2 and latest_record and latest_record.is_submitted:
+                return JsonResponse({'success': False, 'message': '已经提交过'})
             
-            score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-            
-            record.score = score
-            record.is_submitted = True
-            record.submitted_at = timezone.now()
-            record.save()
-            
-            test_record = TestRecord.objects.create(
-                user=request.user,
-                test_paper=test_paper,
-                score=score,
-                total_score=test_paper.total_score,
-                completed_at=timezone.now()
-            )
-            
-            for result in question_results:
-                question = result['question']
-                options_data = question.options
-                if isinstance(options_data, str):
-                    import json
-                    try:
-                        options_data = json.loads(options_data)
-                    except:
-                        options_data = {}
-                AnswerRecord.objects.create(
-                    test_record=test_record,
-                    question=question,
-                    user_answer=result.get('user_answer', ''),
-                    correct_answer=result['correct_answer'],
-                    is_correct=result['is_correct'],
-                    original_question_content=question.content,
-                    original_question_type=question.type,
-                    original_options=options_data,
-                    original_explanation=question.explanation
+            # 使用当前记录或创建新记录
+            # 作业模式：始终创建新记录
+            # 考试模式：如果有未提交的记录则重用，否则创建新记录
+            if assignment.type == 2 and latest_record and not latest_record.is_submitted:
+                # 考试模式：重用未提交的记录
+                record = latest_record
+            else:
+                # 作业模式或考试模式但没有未提交记录：创建新记录
+                attempt = latest_record.attempt + 1 if latest_record else 1
+                record = ClassAssignmentRecord.objects.create(
+                    assignment=assignment,
+                    user=request.user,
+                    attempt=attempt
                 )
             
-            # 关联答题记录到作业记录
-            record.test_record = test_record
-            record.save()
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'提交成功！得分：{score}分',
-                'score': score
-            })
-        else:
-            record.is_submitted = True
-            record.submitted_at = timezone.now()
-            record.save()
-            return JsonResponse({'success': True, 'message': '提交成功！'})
-    
-    return JsonResponse({'success': False, 'message': '无效的请求'})
+            if assignment.test_paper:
+                test_paper = assignment.test_paper
+                questions = list(test_paper.questions.all())
+                
+                user_answers = {}
+                for q in questions:
+                    answer_key = f'question_{q.id}'
+                    if q.type == 2:
+                        # 多选题：获取所有选中的选项
+                        selected_options = []
+                        for opt in ['A', 'B', 'C', 'D']:
+                            if f'question_{q.id}_{opt}' in request.POST:
+                                selected_options.append(opt)
+                        if selected_options:
+                            user_answers[q.id] = ''.join(sorted(selected_options))
+                    elif answer_key in request.POST:
+                        user_answers[q.id] = request.POST[answer_key]
+                
+                score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+                
+                record.score = score
+                record.is_submitted = True
+                record.submitted_at = timezone.now()
+                record.save()
+                
+                test_record = TestRecord.objects.create(
+                    user=request.user,
+                    test_paper=test_paper,
+                    score=score,
+                    total_score=test_paper.total_score,
+                    completed_at=timezone.now()
+                )
+                
+                for result in question_results:
+                    question = result['question']
+                    options_data = parse_options(question.options)
+                    AnswerRecord.objects.create(
+                        test_record=test_record,
+                        question=question,
+                        user_answer=result.get('user_answer', ''),
+                        correct_answer=result['correct_answer'],
+                        is_correct=result['is_correct'],
+                        original_question_content=question.content,
+                        original_question_type=question.type,
+                        original_options=options_data,
+                        original_explanation=question.explanation
+                    )
+                
+                # 关联答题记录到作业记录
+                record.test_record = test_record
+                record.save()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'提交成功！得分：{score}分',
+                    'score': score
+                })
+            else:
+                record.is_submitted = True
+                record.submitted_at = timezone.now()
+                record.save()
+                return JsonResponse({'success': True, 'message': '提交成功！'})
+        
+        return JsonResponse({'success': False, 'message': '无效的请求'})
+    except Exception as e:
+        import traceback
+        error_info = f'Error: {str(e)}\n{traceback.format_exc()}'
+        print(error_info)
+        return JsonResponse({'success': False, 'message': f'提交失败: {str(e)}'})
 
 # 后台管理视图
 @staff_member_required
@@ -2031,8 +2026,10 @@ def admin_create_testpaper(request):
                 question = Question.objects.get(id=int(q_id))
                 test_paper.questions.add(question)
                 total_score += question.score
-            except:
-                pass
+            except Question.DoesNotExist:
+                messages.warning(request, f'题目ID {q_id} 不存在，已跳过')
+            except (ValueError, TypeError):
+                messages.warning(request, f'无效的题目ID: {q_id}')
         
         test_paper.total_score = total_score
         test_paper.save()
@@ -2042,12 +2039,7 @@ def admin_create_testpaper(request):
     
     questions_list = []
     for q in all_questions:
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
+        q.options = parse_options(q.options)
         questions_list.append(q)
     
     return render(request, 'quiz/admin/create_testpaper.html', {
@@ -2060,12 +2052,7 @@ def admin_preview_testpaper(request, paper_id):
     questions = list(test_paper.questions.all())
     
     for q in questions:
-        if isinstance(q.options, str):
-            import json
-            try:
-                q.options = json.loads(q.options)
-            except:
-                q.options = {}
+        q.options = parse_options(q.options)
     
     return render(request, 'quiz/admin/preview_testpaper.html', {
         'test_paper': test_paper,

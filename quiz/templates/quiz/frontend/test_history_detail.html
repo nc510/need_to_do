@@ -185,9 +185,37 @@
         color: #f44336;
         font-weight: bold;
     }
+
+    .back-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 20px;
+        background-color: #3498db;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+    }
+
+    .back-btn:hover {
+        background-color: #2980b9;
+        transform: translateX(-2px);
+        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+    }
+
+    .back-btn:active {
+        transform: translateX(0);
+    }
 </style>
 {% endblock %}
 {% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="{% url 'student_class_assignments' %}" class="back-btn">
+        ← 返回班级作业
+    </a>
+</div>
 <h1>答题记录详情</h1>
 
 <div class="record-container">
