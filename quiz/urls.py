@@ -60,6 +60,7 @@ urlpatterns = [
     path('class/<int:class_id>/assignments/<int:assignment_id>/allow/', views.allow_exam, name='allow_exam'),  # 允许考试
     path('class/<int:class_id>/assignments/<int:assignment_id>/close/', views.close_exam, name='close_exam'),  # 关闭考试
     path('class/<int:class_id>/assignments/<int:assignment_id>/reset/', views.reset_exam_status, name='reset_exam_status'),  # 重置考试状态
+    path('class/<int:class_id>/assignments/<int:assignment_id>/delete/', views.delete_class_assignment, name='delete_class_assignment'),  # 删除作业
     path('student/assignments/', views.student_class_assignments, name='student_class_assignments'),  # 学生作业列表
     path('student/assignments/<int:assignment_id>/', views.do_class_assignment, name='do_class_assignment'),  # 完成作业
     path('student/assignments/<int:assignment_id>/submit/', views.submit_class_assignment, name='submit_class_assignment'),  # 提交作业

@@ -193,10 +193,10 @@ def test_history(request):
     paginated_records = paginate_queryset(test_records, request.GET.get('page', 1), items_per_page=10)
     
     for record in paginated_records:
-        if isinstance(record.test_paper.questions, list):
-            record.question_count = len(record.test_paper.questions)
-        else:
+        if record.test_paper:
             record.question_count = record.test_paper.questions.count()
+        else:
+            record.question_count = 0
     
     return render(request, 'quiz/frontend/test_history.html', {
         'test_records': paginated_records
@@ -205,11 +205,27 @@ def test_history(request):
 @login_required
 def test_history_detail(request, record_id):
     test_record = get_object_or_404(TestRecord, pk=record_id, user=request.user)
+    
+    # 获取试卷的题目列表（按原顺序）
+    questions = []
+    if test_record.test_paper:
+        questions = list(test_record.test_paper.questions.all())
+    
+    # 获取所有答案记录
     answer_records = AnswerRecord.objects.filter(test_record=test_record).select_related('question')
+    
+    # 创建题目ID到答案记录的映射
+    answer_map = {ar.question.id: ar for ar in answer_records}
+    
+    # 按照试卷题目顺序重新排列答案记录
+    sorted_answer_records = []
+    for question in questions:
+        if question.id in answer_map:
+            sorted_answer_records.append(answer_map[question.id])
     
     # 处理 question.options 字段，确保它是正确的字典格式
     import json
-    for ar in answer_records:
+    for ar in sorted_answer_records:
         if ar.question and isinstance(ar.question.options, str):
             try:
                 ar.question.options = json.loads(ar.question.options)
@@ -218,7 +234,7 @@ def test_history_detail(request, record_id):
     
     return render(request, 'quiz/frontend/test_history_detail.html', {
         'test_record': test_record,
-        'answer_records': answer_records
+        'answer_records': sorted_answer_records
     })
 
 def login_view(request):
@@ -1475,6 +1491,38 @@ def reset_exam_status(request, class_id, assignment_id):
 
 
 @login_required
+def delete_class_assignment(request, class_id, assignment_id):
+    """删除班级作业/考试"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj=class_obj)
+    
+    is_admin = ClassAdmin.objects.filter(class_obj=class_obj, user=request.user).exists()
+    if not is_admin:
+        messages.error(request, '只有班级管理员才能删除作业')
+        return redirect('class_assignments', class_id=class_id)
+    
+    if request.method == 'POST':
+        # 删除相关的答题记录和测试记录
+        records = ClassAssignmentRecord.objects.filter(assignment=assignment)
+        for record in records:
+            if record.test_record:
+                record.test_record.delete()
+        records.delete()
+        
+        # 删除作业本身
+        assignment_title = assignment.title
+        assignment.delete()
+        
+        messages.success(request, f'已删除作业：{assignment_title}')
+        return redirect('class_assignments', class_id=class_id)
+    
+    return render(request, 'quiz/frontend/delete_class_assignment.html', {
+        'class_obj': class_obj,
+        'assignment': assignment
+    })
+
+
+@login_required
 def student_class_assignments(request):
     try:
         profile = Profile.objects.get(user=request.user)
@@ -1551,8 +1599,64 @@ def do_class_assignment(request, assignment_id):
             # 检查是否超时
             time_elapsed = (timezone.now() - latest_record.start_time).total_seconds() / 60
             if time_elapsed > assignment.time_limit:
-                messages.error(request, '考试已超时，自动提交')
-                # 自动提交当前答案（如果有）
+                # 自动提交当前答案
+                messages.error(request, '考试已超时，系统已自动提交您的答案')
+                
+                if assignment.test_paper:
+                    test_paper = assignment.test_paper
+                    questions = list(test_paper.questions.all())
+                    
+                    # 获取用户已保存的答案（如果有）
+                    user_answers = {}
+                    answer_records = AnswerRecord.objects.filter(
+                        test_record__user=request.user,
+                        question__in=questions
+                    ).order_by('-created_at')
+                    
+                    for q in questions:
+                        # 查找该题的最新答案记录
+                        q_answer = answer_records.filter(question=q).first()
+                        if q_answer and q_answer.user_answer:
+                            user_answers[q.id] = q_answer.user_answer
+                    
+                    # 计算分数
+                    score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+                    
+                    # 更新答题记录
+                    latest_record.score = score
+                    latest_record.is_submitted = True
+                    latest_record.submitted_at = timezone.now()
+                    latest_record.save()
+                    
+                    # 创建测试记录
+                    test_record = TestRecord.objects.create(
+                        user=request.user,
+                        test_paper=test_paper,
+                        score=score,
+                        total_score=test_paper.total_score,
+                        completed_at=timezone.now()
+                    )
+                    
+                    # 更新或创建答案记录
+                    for result in question_results:
+                        question = result['question']
+                        AnswerRecord.objects.update_or_create(
+                            test_record=test_record,
+                            question=question,
+                            defaults={
+                                'user_answer': result.get('user_answer', ''),
+                                'is_correct': result['is_correct'],
+                                'correct_answer': result['correct_answer'],
+                                'original_question_content': result.get('original_question_content', question.content),
+                                'original_options': result.get('original_options', ''),
+                                'original_explanation': result.get('original_explanation', question.explanation or '')
+                            }
+                        )
+                    
+                    # 关联测试记录到班级作业记录
+                    latest_record.test_record = test_record
+                    latest_record.save()
+                
                 return redirect('student_class_assignments')
     
     # 创建新的答题记录（作业模式允许多次）

@@ -292,6 +292,10 @@
                 class="btn btn-danger">🗑️ 重置状态</a>
             {% endif %}
             {% endif %}
+            {% if is_admin %}
+            <a href="{% url 'delete_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}"
+                class="btn btn-danger" style="background: #dc3545;">🗑️ 删除作业</a>
+            {% endif %}
         </div>
     </div>
 

@@ -240,9 +240,8 @@
 {% block content %}
 <h1 class="page-title">{% if current_type == 2 %}📝 我的班级考试{% else %}📋 我的班级作业{% endif %}</h1>
 
-{% if request.user.profile.class_obj %}
-<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ request.user.profile.class_obj.name }}【{{
-    request.user.profile.class_obj.code }}】</p>
+{% if class_obj %}
+<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ class_obj.name }}【{{ class_obj.code }}】</p>
 {% endif %}
 
 <div class="tabs-container">
