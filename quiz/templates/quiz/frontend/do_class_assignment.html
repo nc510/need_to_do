@@ -338,24 +338,24 @@
                         style="display: none;">
 
                     {% if 'A' in question.options %}
-                    <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                    <div class="option" data-option="A">{{ question.options.A }}</div>
                     {% elif 'a' in question.options %}
-                    <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                    <div class="option" data-option="A">{{ question.options.a }}</div>
                     {% endif %}
                     {% if 'B' in question.options %}
-                    <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                    <div class="option" data-option="B">{{ question.options.B }}</div>
                     {% elif 'b' in question.options %}
-                    <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                    <div class="option" data-option="B">{{ question.options.b }}</div>
                     {% endif %}
                     {% if 'C' in question.options %}
-                    <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                    <div class="option" data-option="C">{{ question.options.C }}</div>
                     {% elif 'c' in question.options %}
-                    <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                    <div class="option" data-option="C">{{ question.options.c }}</div>
                     {% endif %}
                     {% if 'D' in question.options %}
-                    <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                    <div class="option" data-option="D">{{ question.options.D }}</div>
                     {% elif 'd' in question.options %}
-                    <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                    <div class="option" data-option="D">{{ question.options.d }}</div>
                     {% endif %}
                     {% elif question.type == 2 %} <!-- 多选题 -->
                     <input type="checkbox" name="question_{{ question.id }}_A" value="A"
@@ -368,24 +368,24 @@
                         id="id_question_{{ question.id }}_D" style="display: none;">
 
                     {% if 'A' in question.options %}
-                    <div class="option" data-option="A">A. {{ question.options.A }}</div>
+                    <div class="option" data-option="A">{{ question.options.A }}</div>
                     {% elif 'a' in question.options %}
-                    <div class="option" data-option="A">A. {{ question.options.a }}</div>
+                    <div class="option" data-option="A">{{ question.options.a }}</div>
                     {% endif %}
                     {% if 'B' in question.options %}
-                    <div class="option" data-option="B">B. {{ question.options.B }}</div>
+                    <div class="option" data-option="B">{{ question.options.B }}</div>
                     {% elif 'b' in question.options %}
-                    <div class="option" data-option="B">B. {{ question.options.b }}</div>
+                    <div class="option" data-option="B">{{ question.options.b }}</div>
                     {% endif %}
                     {% if 'C' in question.options %}
-                    <div class="option" data-option="C">C. {{ question.options.C }}</div>
+                    <div class="option" data-option="C">{{ question.options.C }}</div>
                     {% elif 'c' in question.options %}
-                    <div class="option" data-option="C">C. {{ question.options.c }}</div>
+                    <div class="option" data-option="C">{{ question.options.c }}</div>
                     {% endif %}
                     {% if 'D' in question.options %}
-                    <div class="option" data-option="D">D. {{ question.options.D }}</div>
+                    <div class="option" data-option="D">{{ question.options.D }}</div>
                     {% elif 'd' in question.options %}
-                    <div class="option" data-option="D">D. {{ question.options.d }}</div>
+                    <div class="option" data-option="D">{{ question.options.d }}</div>
                     {% endif %}
                     {% else %} <!-- 判断题 -->
                     <input type="radio" name="question_{{ question.id }}" value="对" id="id_question_{{ question.id }}_对"
@@ -522,10 +522,9 @@
 
         // 计时器功能
         {% if assignment.type == 2 and remaining_seconds is not None %}
-        let remainingSeconds = {{ remaining_seconds }
-    };
-    const timerEl = document.getElementById('timer');
-    const timerBoxEl = document.querySelector('.timer-box');
+        var remainingSeconds = {{ remaining_seconds }};
+        const timerEl = document.getElementById('timer');
+        const timerBoxEl = document.querySelector('.timer-box');
 
     function updateTimer() {
         const minutes = Math.floor(remainingSeconds / 60);

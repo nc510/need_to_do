@@ -165,6 +165,9 @@ class Profile(models.Model):
     class_obj = models.ForeignKey('Class', on_delete=models.SET_NULL, verbose_name='所属班级', null=True, blank=True, related_name='profiles')
     # 单点登录：存储当前活跃的session_key
     session_key = models.CharField(max_length=40, verbose_name='当前会话ID', blank=True, null=True)
+    total_score = models.IntegerField(default=0, verbose_name='总得分')
+    tests_taken = models.IntegerField(default=0, verbose_name='答题次数')
+    accuracy_rate = models.FloatField(default=0.0, verbose_name='正确率')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -224,6 +227,7 @@ class WrongQuestion(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='题目')
     user_answer = models.CharField(max_length=10, verbose_name='用户错误答案', null=True, blank=True)
+    correct_answer = models.CharField(max_length=10, verbose_name='正确答案', null=True, blank=True)
     added_at = models.DateTimeField(auto_now_add=True, verbose_name='添加时间')
 
     class Meta:

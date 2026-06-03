@@ -9,7 +9,7 @@
         padding: 20px;
         background: #fff;
         border-radius: 8px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     }
 
     .section-title {
@@ -125,7 +125,8 @@
         color: #333;
     }
 
-    .form-group input, .form-group textarea {
+    .form-group input,
+    .form-group textarea {
         width: 100%;
         padding: 10px;
         border: 1px solid #ddd;
@@ -134,7 +135,8 @@
         box-sizing: border-box;
     }
 
-    .form-group input:focus, .form-group textarea:focus {
+    .form-group input:focus,
+    .form-group textarea:focus {
         border-color: #4caf50;
         outline: none;
     }
@@ -271,7 +273,8 @@
         color: white;
     }
 
-    .preview-table th, .preview-table td {
+    .preview-table th,
+    .preview-table td {
         padding: 10px 12px;
         text-align: left;
         border-bottom: 1px solid #eee;
@@ -290,9 +293,17 @@
         color: white;
     }
 
-    .type-single { background: #2196f3; }
-    .type-multi { background: #9c27b0; }
-    .type-judge { background: #ff9800; }
+    .type-single {
+        background: #2196f3;
+    }
+
+    .type-multi {
+        background: #9c27b0;
+    }
+
+    .type-judge {
+        background: #ff9800;
+    }
 
     .error-list {
         background: #f8d7da;
@@ -356,8 +367,15 @@
         margin-bottom: 4px;
     }
 
-    .status-valid { color: #4caf50; font-weight: 600; }
-    .status-missing { color: #ff9800; font-weight: 600; }
+    .status-valid {
+        color: #4caf50;
+        font-weight: 600;
+    }
+
+    .status-missing {
+        color: #ff9800;
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -383,7 +401,8 @@
 
     {% if messages %}
     {% for message in messages %}
-    <div style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
+    <div
+        style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
         {{ message }}
     </div>
     {% endfor %}
@@ -398,18 +417,21 @@
         <div class="form-row">
             <div class="form-group">
                 <label for="title">试卷标题 <span style="color: #f44336;">*</span></label>
-                <input type="text" id="title" name="title" required placeholder="请输入试卷标题" value="{{ title|default:'' }}">
+                <input type="text" id="title" name="title" required placeholder="请输入试卷标题"
+                    value="{{ title|default:'' }}">
             </div>
             <div class="form-group">
                 <label for="description">试卷描述</label>
-                <input type="text" id="description" name="description" placeholder="请输入试卷描述（可选）" value="{{ description|default:'' }}">
+                <input type="text" id="description" name="description" placeholder="请输入试卷描述（可选）"
+                    value="{{ description|default:'' }}">
             </div>
         </div>
 
         <div class="section-title">上传 Excel 文件</div>
 
         <div class="upload-area" onclick="document.getElementById('paper_file').click()">
-            <input type="file" id="paper_file" name="paper_file" accept=".xlsx,.xls" onchange="updateFileName()" required>
+            <input type="file" id="paper_file" name="paper_file" accept=".xlsx,.xls" onchange="updateFileName()"
+                required>
             <label>
                 <div class="upload-icon">📁</div>
                 <div class="upload-text">点击选择 Excel 文件</div>
@@ -420,7 +442,8 @@
         <div class="file-name-display" id="fileNameDisplay"></div>
 
         <div style="margin-top: 15px;">
-            <a href="/quiz/admin/import_questions/template/" class="btn-download" style="font-size: 14px; padding: 10px 20px;">
+            <a href="/quiz/admin/import_questions/template/" class="btn-download"
+                style="font-size: 14px; padding: 10px 20px;">
                 📥 下载导入模板
             </a>
         </div>
@@ -428,11 +451,13 @@
         <div class="format-guide">
             <h4>📋 Excel 格式说明</h4>
             <ul>
-                <li>表头：题目内容、题型、选项A、选项B、选项C、选项D、正确答案、分值、解析</li>
-                <li>题型：选择题、判断题</li>
+                <li>表头：题目内容、题型、选项A、选项B、选项C、选项D、正确答案、分值、解析、<strong>学科</strong>、<strong>章节</strong>、<strong>小节</strong>、<strong>知识点</strong>
+                </li>
+                <li>题型：单选题、多选题、判断题</li>
                 <li>选择题：填写选项A/B/C/D的内容，正确答案填 A/B/C/D 或 ABCD（多选）</li>
                 <li>判断题：只需填写题目内容和正确答案（正确/错误），其他选项留空</li>
                 <li>分值：整数分数</li>
+                <li>学科、章节、小节、知识点：可选字段，用于题目分类和筛选</li>
                 <li>解析为可选字段</li>
             </ul>
         </div>
@@ -448,7 +473,7 @@
         <input type="hidden" name="action" value="confirm_import">
         <input type="hidden" name="title" value="{{ title }}">
         <input type="hidden" name="description" value="{{ description }}">
-        <input type="hidden" name="questions_data" id="questionsDataInput" value="{{ questions_json }}">
+        <input type="hidden" name="questions_json" id="questionsJsonInput" value="{{ questions_json }}">
 
         {% if errors %}
         <div class="error-list">
@@ -483,7 +508,6 @@
             </div>
         </div>
 
-        <div class="section-title">试卷信息</div>
         <div class="form-row">
             <div class="form-group">
                 <label>试卷标题</label>
@@ -495,19 +519,29 @@
                 <input type="text" value="{{ description }}" readonly style="background: #f5f5f5;">
             </div>
             {% endif %}
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="is_published" id="is_published">
+                    立即发布
+                </label>
+            </div>
         </div>
 
-        <div class="section-title">📝 题目预览</div>
+        <div class="section-title">📝 题目预览（可编辑学科/章节/知识点）</div>
 
         <table class="preview-table">
             <thead>
                 <tr>
                     <th style="width: 40px;">#</th>
-                    <th style="width: 70px;">题型</th>
+                    <th style="width: 60px;">题型</th>
                     <th>题目内容</th>
                     <th style="width: 80px;">答案</th>
-                    <th style="width: 60px;">分值</th>
-                    <th style="width: 70px;">状态</th>
+                    <th style="width: 50px;">分值</th>
+                    <th style="width: 80px;">学科</th>
+                    <th style="width: 80px;">章节</th>
+                    <th style="width: 80px;">小节</th>
+                    <th style="width: 80px;">知识点</th>
+                    <th style="width: 60px;">状态</th>
                 </tr>
             </thead>
             <tbody>
@@ -515,13 +549,63 @@
                 <tr>
                     <td>{{ forloop.counter }}</td>
                     <td>
-                        <span class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
+                        <span
+                            class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
                             {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
                         </span>
                     </td>
-                    <td>{{ q.content|truncatechars:60 }}</td>
-                    <td>{% if q.correct_answer %}{{ q.correct_answer }}{% else %}<span style="color:#f44336;">未填</span>{% endif %}</td>
-                    <td>{% if q.score %}{{ q.score }}{% else %}<span style="color:#f44336;">未填</span>{% endif %}</td>
+                    <td>
+                        <textarea name="content_{{ forloop.counter0 }}"
+                            style="width: 100%; min-height: 36px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; resize: vertical; box-sizing: border-box;"
+                            data-index="{{ forloop.counter0 }}"
+                            data-field="content">{{ q.content|default:'' }}</textarea>
+                        {% if q.type == 1 or q.type == 2 %}
+                        <div style="margin-top: 3px; font-size: 11px; color: #888;">
+                            选项：
+                            {% for letter, opt in q.options.items %}
+                            {% if opt %}
+                            <span style="margin-right: 6px;"><strong>{{ letter }}.</strong> {{ opt|truncatechars:20
+                                }}</span>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <input type="text" name="answer_{{ forloop.counter0 }}"
+                            value="{{ q.correct_answer|default:'' }}"
+                            style="width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; box-sizing: border-box;"
+                            data-index="{{ forloop.counter0 }}" data-field="correct_answer">
+                    </td>
+                    <td>
+                        <input type="number" name="score_{{ forloop.counter0 }}" value="{{ q.score|default:'' }}"
+                            style="width: 50px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px;"
+                            data-index="{{ forloop.counter0 }}" data-field="score">
+                    </td>
+                    <td>
+                        <input type="text" name="subject_{{ forloop.counter0 }}" value="{{ q.subject_name|default:'' }}"
+                            placeholder="学科名称"
+                            style="width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; box-sizing: border-box;"
+                            data-index="{{ forloop.counter0 }}" data-field="subject_name">
+                    </td>
+                    <td>
+                        <input type="text" name="chapter_{{ forloop.counter0 }}"
+                            value="{{ q.chapter_title|default:'' }}" placeholder="章节名称"
+                            style="width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; box-sizing: border-box;"
+                            data-index="{{ forloop.counter0 }}" data-field="chapter_title">
+                    </td>
+                    <td>
+                        <input type="text" name="section_{{ forloop.counter0 }}"
+                            value="{{ q.section_title|default:'' }}" placeholder="小节名称"
+                            style="width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; box-sizing: border-box;"
+                            data-index="{{ forloop.counter0 }}" data-field="section_title">
+                    </td>
+                    <td>
+                        <input type="text" name="knowledge_{{ forloop.counter0 }}"
+                            value="{{ q.knowledge_points_str|default:'' }}" placeholder="知识点（逗号分隔）"
+                            style="width: 100%; padding: 4px 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px; box-sizing: border-box;"
+                            data-index="{{ forloop.counter0 }}" data-field="knowledge_points_str">
+                    </td>
                     <td>
                         {% if q.correct_answer and q.score and q.content %}
                         <span class="status-valid">✓ 完整</span>
@@ -530,18 +614,6 @@
                         {% endif %}
                     </td>
                 </tr>
-                {% if q.options %}
-                <tr style="background: #fafafa;">
-                    <td colspan="6" style="padding: 5px 12px; font-size: 12px; color: #666;">
-                        选项：
-                        {% for letter, opt in q.options.items %}
-                        {% if opt %}
-                        <span style="margin-right: 10px;"><strong>{{ letter }}.</strong> {{ opt|truncatechars:30 }}</span>
-                        {% endif %}
-                        {% endfor %}
-                    </td>
-                </tr>
-                {% endif %}
                 {% endfor %}
             </tbody>
         </table>
@@ -555,7 +627,8 @@
                 <li>第 {{ forloop.counter }} 题：
                     {% if not q.content %}缺少题目内容{% endif %}
                     {% if not q.correct_answer %}{% if not q.content %}、{% endif %}缺少答案{% endif %}
-                    {% if not q.score %}{% if not q.content and not q.correct_answer %}{% else %}、{% endif %}缺少分值{% endif %}
+                    {% if not q.score %}{% if not q.content and not q.correct_answer %}{% else %}、{% endif %}缺少分值{%
+                    endif %}
                 </li>
                 {% endif %}
                 {% endfor %}
@@ -564,10 +637,11 @@
         {% endif %}
 
         <div class="action-buttons">
-            <a href="{% url 'admin_import_testpaper' %}" class="btn-secondary" style="font-size: 14px; padding: 10px 20px;">
+            <a href="{% url 'admin_import_testpaper' %}" class="btn-secondary"
+                style="font-size: 14px; padding: 10px 20px;">
                 ← 返回重新选择
             </a>
-            <button type="submit" class="btn-primary" id="confirmBtn" {% if missing_count > 0 %}disabled{% endif %}>
+            <button type="submit" class="btn-primary" id="confirmBtn" {% if missing_count> 0 %}disabled{% endif %}>
                 {% if missing_count > 0 %}
                 ⚠ 请补全数据 ({{ missing_count }} 题待补全)
                 {% else %}
@@ -576,6 +650,34 @@
             </button>
         </div>
     </form>
+
+    <script>
+        // 收集编辑后的数据并更新隐藏字段
+        document.getElementById('confirmForm').addEventListener('submit', function (e) {
+            try {
+                var questionsData = JSON.parse(document.getElementById('questionsJsonInput').value);
+
+                questionsData.forEach(function (q, index) {
+                    // 读取学科信息
+                    var subjectInput = document.querySelector('input[name="subject_' + index + '"]');
+                    if (subjectInput) q.subject_name = subjectInput.value.trim();
+
+                    var chapterInput = document.querySelector('input[name="chapter_' + index + '"]');
+                    if (chapterInput) q.chapter_title = chapterInput.value.trim();
+
+                    var sectionInput = document.querySelector('input[name="section_' + index + '"]');
+                    if (sectionInput) q.section_title = sectionInput.value.trim();
+
+                    var knowledgeInput = document.querySelector('input[name="knowledge_' + index + '"]');
+                    if (knowledgeInput) q.knowledge_points_str = knowledgeInput.value.trim();
+                });
+
+                document.getElementById('questionsJsonInput').value = JSON.stringify(questionsData);
+            } catch (e) {
+                console.error('更新题目数据失败:', e);
+            }
+        });
+    </script>
     {% endif %}
 </div>
 

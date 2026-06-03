@@ -1,6 +1,6 @@
 {% extends 'quiz/frontend/base.html' %}
 
-{% block title %}创建试卷 - 在线考试系统{% endblock %}
+{% block title %}手工组卷 - 在线考试系统{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -398,7 +398,7 @@
 
 {% block content %}
 <div class="form-container">
-    <h1 class="page-title">📝 创建试卷</h1>
+    <h1 class="page-title">📝 手工组卷</h1>
 
     {% if messages %}
     {% for message in messages %}
@@ -545,11 +545,23 @@
             </div>
         </div>
 
+        <!-- 发布设置 -->
+        <div style="margin-top: 20px; margin-bottom: 15px;">
+            <div class="section-title">📌 发布设置</div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>
+                    <input type="checkbox" name="is_published" id="is_published">
+                    立即发布
+                </label>
+            </div>
+        </div>
+
         <div class="form-actions">
             <a href="{% url 'my_test_papers' %}" class="btn btn-secondary">← 返回</a>
-            <a href="{% url 'import_test_paper' %}" class="btn btn-secondary">📥 导入试卷</a>
-            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>✓ 创建试卷</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>✓ 确认组卷</button>
         </div>
+
+        <input type="hidden" name="selected_questions" id="selectedQuestions">
     </form>
 </div>
 
@@ -559,6 +571,25 @@
     let knowledgePointsData = {};
 
     document.addEventListener('DOMContentLoaded', function () {
+        // 加载章节和知识点数据（从JSON安全解析，避免模板变量含特殊字符导致JS错误）
+        var chaptersJson = JSON.parse('{{ chapters_json|safe }}');
+        var knowledgePointsJson = JSON.parse('{{ knowledge_points_json|safe }}');
+
+        chaptersData = {};
+        chaptersJson.forEach(function (ch) {
+            if (!chaptersData[ch.subject_id]) {
+                chaptersData[ch.subject_id] = [];
+            }
+            chaptersData[ch.subject_id].push({ id: ch.id, number: ch.number, title: ch.title });
+        });
+
+        knowledgePointsData = {};
+        knowledgePointsJson.forEach(function (kp) {
+            if (!knowledgePointsData[kp.chapter_id]) {
+                knowledgePointsData[kp.chapter_id] = [];
+            }
+            knowledgePointsData[kp.chapter_id].push({ id: kp.id, name: kp.name });
+        });
         document.querySelectorAll('.question-item').forEach(item => {
             item.addEventListener('click', function (event) {
                 const checkbox = this.querySelector('.question-checkbox');
@@ -578,41 +609,22 @@
         document.getElementById('searchBox').addEventListener('input', filterQuestions);
         document.getElementById('typeFilter').addEventListener('change', filterQuestions);
         document.getElementById('subjectFilter').addEventListener('change', onSubjectChange);
-        document.getElementById('chapterFilter').addEventListener('change', filterQuestions);
+        document.getElementById('chapterFilter').addEventListener('change', onChapterChange);
         document.getElementById('knowledgeFilter').addEventListener('change', filterQuestions);
         document.getElementById('minScore').addEventListener('input', filterQuestions);
         document.getElementById('maxScore').addEventListener('input', filterQuestions);
         document.getElementById('title').addEventListener('input', updateSubmitButton);
 
-        loadChapterData();
+        // 表单提交时填充隐藏域
+        document.getElementById('createForm').addEventListener('submit', function () {
+            const ids = selectedQuestions.map(q => q.id).join(',');
+            document.getElementById('selectedQuestions').value = ids;
+        });
+
         updateSubmitButton();
     });
 
-    function loadChapterData() {
-        {% for chapter in chapters %}
-        if (!chaptersData[{{ chapter.subject.id }
-    }]) {
-        chaptersData[{{ chapter.subject.id }
-    }] =[];
-            }
-    chaptersData[{{ chapter.subject.id }}].push({
-        id: {{ chapter.id }},
-        number: {{ chapter.number }},
-        title: '{{ chapter.title }}'
-            });
-    {% endfor %}
-
-    {% for kp in knowledge_points %}
-    if (!knowledgePointsData[{{ kp.section.chapter.id }}]) {
-        knowledgePointsData[{{ kp.section.chapter.id }
-    }] =[];
-            }
-    knowledgePointsData[{{ kp.section.chapter.id }}].push({
-        id: {{ kp.id }},
-        name: '{{ kp.name }}'
-            });
-    {% endfor %}
-    }
+    // loadChapterData 已替换为 JSON 安全加载方式（见 DOMContentLoaded 开头）
 
     function onSubjectChange() {
         const subjectId = document.getElementById('subjectFilter').value;
@@ -777,14 +789,14 @@
     function updateSubmitButton() {
         const submitBtn = document.getElementById('submitBtn');
         const title = document.getElementById('title').value.trim();
-        const checkedCount = document.querySelectorAll('.question-checkbox:checked').length;
+        const count = selectedQuestions.length;
 
-        if (checkedCount > 0 && title) {
+        if (count > 0 && title) {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = `✓ 创建试卷 (${checkedCount}题/${document.getElementById('totalScore').textContent}分)`;
+            submitBtn.innerHTML = `✓ 确认组卷 (${count}题/${document.getElementById('totalScore').textContent}分)`;
         } else {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '✓ 创建试卷';
+            submitBtn.innerHTML = '✓ 确认组卷';
         }
     }
 

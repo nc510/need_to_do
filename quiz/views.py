@@ -440,8 +440,35 @@ def wrong_question_notebook(request):
 
 @login_required
 def create_wrong_question_paper(request):
-    wrong_questions = WrongQuestion.objects.filter(user=request.user).select_related('question')
+    if request.method == 'POST':
+        selected_ids = request.POST.getlist('selected_questions')
+        if not selected_ids:
+            messages.error(request, '请至少选择一道题目')
+            return redirect('wrong_question_notebook')
+        
+        title = request.POST.get('title', '错题巩固试卷')
+        test_paper = TestPaper.objects.create(
+            title=title,
+            description='错题巩固试卷',
+            created_by=request.user.username,
+            is_published=False
+        )
+        
+        total_score = 0
+        for q_id in selected_ids:
+            try:
+                q = Question.objects.get(id=q_id)
+                test_paper.questions.add(q)
+                total_score += q.score
+            except Question.DoesNotExist:
+                pass
+        
+        test_paper.total_score = total_score
+        test_paper.save()
+        
+        return redirect('submit_wrong_question_paper', paper_id=test_paper.id)
     
+    wrong_questions = WrongQuestion.objects.filter(user=request.user).select_related('question')
     questions = []
     for wq in wrong_questions:
         q = wq.question
@@ -452,26 +479,11 @@ def create_wrong_question_paper(request):
         messages.error(request, '您的错题本中没有题目')
         return redirect('wrong_question_notebook')
     
-    if request.method == 'POST':
-        title = request.POST.get('title', '错题巩固试卷')
-        
-        test_paper = TestPaper.objects.create(
-            title=title,
-            description='错题巩固试卷',
-            created_by=request.user.username,
-            is_published=False
-        )
-        
-        for q in questions:
-            test_paper.questions.add(q)
-        
-        test_paper.total_score = sum(q.score for q in questions)
-        test_paper.save()
-        
-        return redirect('submit_wrong_question_paper', paper_id=test_paper.id)
+    total_score = sum(q.score for q in questions)
     
     return render(request, 'quiz/frontend/wrong_question_paper.html', {
-        'questions': questions
+        'questions': questions,
+        'total_score': total_score
     })
 
 @login_required
@@ -559,18 +571,25 @@ def my_test_papers(request):
 
 @login_required
 def create_test_paper(request):
-    """创建试卷视图 - 支持手动添加题目"""
+    """手工组卷 - 创建试卷视图"""
     if request.method == 'POST':
         title = request.POST.get('title')
         description = request.POST.get('description')
-        question_ids = request.POST.getlist('questions')
+        is_published = request.POST.get('is_published') == 'on'
+        
+        # 支持两种提交方式：隐藏域(selected_questions)和复选框(questions)
+        selected_str = request.POST.get('selected_questions', '')
+        if selected_str:
+            question_ids = [id_str.strip() for id_str in selected_str.split(',') if id_str.strip()]
+        else:
+            question_ids = request.POST.getlist('questions')
 
         if title and question_ids:
             test_paper = TestPaper.objects.create(
                 title=title,
                 description=description,
                 created_by=request.user.username,
-                is_published=False
+                is_published=is_published
             )
 
             total_score = 0
@@ -593,6 +612,20 @@ def create_test_paper(request):
     subjects = Subject.objects.all().order_by('name')
     chapters = Chapter.objects.select_related('subject').order_by('subject', 'number')
     knowledge_points = KnowledgePoint.objects.select_related('section', 'section__chapter', 'subject').order_by('subject', 'name')
+
+    # 将章节和知识点序列化为JSON，安全传递给前端JS
+    chapters_json = json.dumps([{
+        'id': ch.id,
+        'number': ch.number,
+        'title': ch.title,
+        'subject_id': ch.subject.id if ch.subject else None
+    } for ch in chapters])
+    
+    knowledge_points_json = json.dumps([{
+        'id': kp.id,
+        'name': kp.name,
+        'chapter_id': kp.section.chapter.id if kp.section and kp.section.chapter else None
+    } for kp in knowledge_points])
 
     questions = get_visible_questions(request.user).select_related('subject', 'chapter', 'section').prefetch_related('knowledge_points').order_by('id')
 
@@ -618,7 +651,9 @@ def create_test_paper(request):
         'questions': questions_list,
         'subjects': subjects,
         'chapters': chapters,
-        'knowledge_points': knowledge_points
+        'knowledge_points': knowledge_points,
+        'chapters_json': chapters_json,
+        'knowledge_points_json': knowledge_points_json
     })
 
 @login_required
@@ -1491,61 +1526,45 @@ def delete_class_assignment(request, class_id, assignment_id):
 
 @login_required
 def student_class_assignments(request):
-    response = None
+    """学生班级作业/考试列表页面 - 显示每个作业的最高分记录"""
+    # 获取用户班级信息
     try:
         profile = Profile.objects.get(user=request.user)
-        if not profile.class_obj:
-            messages.error(request, '您还没有加入任何班级')
-            response = redirect('user_center')
     except Profile.DoesNotExist:
         messages.error(request, '请先完善您的个人信息')
-        response = redirect('user_center')
+        return redirect('user_center')
     
-    if response:
-        # 设置防缓存响应头
-        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response['Pragma'] = 'no-cache'
-        response['Expires'] = '0'
-        return response
+    if not profile.class_obj:
+        messages.error(request, '您还没有加入任何班级')
+        return redirect('user_center')
     
-    # 获取类型参数
+    # 获取类型参数（1=作业，2=考试）
     current_type = request.GET.get('type', '1')
     try:
         current_type = int(current_type)
-    except:
+    except ValueError:
         current_type = 1
     
+    # 获取班级作业列表
     assignments = ClassAssignment.objects.filter(
         class_obj=profile.class_obj,
         status=1,
         type=current_type
     ).order_by('-published_at')
     
-    # 获取用户所有答题记录，确保每个作业保留最新提交的记录
-    # 使用distinct只获取每个作业的最新记录（按submitted_at降序）
-    from django.db.models import F, Window
-    from django.db.models.functions import RowNumber
-    
-    # 使用窗口函数为每个作业的记录编号，按提交时间降序
-    ranked_records = ClassAssignmentRecord.objects.filter(user=request.user).annotate(
-        row_num=Window(
-            expression=RowNumber(),
-            partition_by=F('assignment_id'),
-            order_by=F('submitted_at').desc(nulls_last=True),
-        )
-    )
-    
-    # 获取每个作业的第一条记录（最新的）
-    record_ids = [r.id for r in ranked_records if r.row_num == 1]
-    records = ClassAssignmentRecord.objects.filter(id__in=record_ids)
-    record_dict = {r.assignment_id: r for r in records}
-    
-    assignment_list = []
+    # 构建作业列表数据
     now = timezone.now()
+    assignment_list = []
     for assignment in assignments:
-        record = record_dict.get(assignment.id)
-        is_submitted = record and record.is_submitted
+        # 直接查询每个作业的最新提交记录（按attempt降序）
+        record = ClassAssignmentRecord.objects.filter(
+            assignment=assignment,
+            user=request.user,
+            is_submitted=True
+        ).order_by('-attempt').first()
+        is_submitted = record is not None
         is_overdue = assignment.deadline < now
+        
         assignment_list.append({
             'assignment': assignment,
             'record': record,
@@ -1560,7 +1579,7 @@ def student_class_assignments(request):
         'now': now
     })
     
-    # 设置防缓存响应头，确保浏览器不会缓存旧数据
+    # 设置防缓存响应头
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
@@ -1569,8 +1588,10 @@ def student_class_assignments(request):
 
 @login_required
 def do_class_assignment(request, assignment_id):
+    """完成班级作业/考试页面"""
     assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
     
+    # 检查作业状态
     if assignment.status != 1:
         messages.error(request, '该作业尚未发布')
         return redirect('student_class_assignments')
@@ -1591,109 +1612,48 @@ def do_class_assignment(request, assignment_id):
         messages.error(request, '您已经提交过该考试')
         return redirect('student_class_assignments')
     
-    # 检查考试时间限制
-    if assignment.type == 2 and assignment.time_limit:
-        if latest_record and latest_record.start_time:
-            # 检查是否超时
-            time_elapsed = (timezone.now() - latest_record.start_time).total_seconds() / 60
-            if time_elapsed > assignment.time_limit:
-                # 自动提交当前答案
-                messages.error(request, '考试已超时，系统已自动提交您的答案')
-                
-                if assignment.test_paper:
-                    test_paper = assignment.test_paper
-                    questions = list(test_paper.questions.all())
-                    
-                    # 获取用户已保存的答案（如果有）
-                    user_answers = {}
-                    answer_records = AnswerRecord.objects.filter(
-                        test_record__user=request.user,
-                        question__in=questions
-                    ).order_by('-created_at')
-                    
-                    for q in questions:
-                        # 查找该题的最新答案记录
-                        q_answer = answer_records.filter(question=q).first()
-                        if q_answer and q_answer.user_answer:
-                            user_answers[q.id] = q_answer.user_answer
-                    
-                    # 计算分数
-                    score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-                    
-                    # 更新答题记录
-                    latest_record.score = score
-                    latest_record.is_submitted = True
-                    latest_record.submitted_at = timezone.now()
-                    latest_record.save()
-                    
-                    # 创建测试记录
-                    test_record = TestRecord.objects.create(
-                        user=request.user,
-                        test_paper=test_paper,
-                        score=score,
-                        total_score=test_paper.total_score,
-                        completed_at=timezone.now()
-                    )
-                    
-                    # 更新或创建答案记录
-                    for result in question_results:
-                        question = result['question']
-                        AnswerRecord.objects.update_or_create(
-                            test_record=test_record,
-                            question=question,
-                            defaults={
-                                'user_answer': result.get('user_answer', ''),
-                                'is_correct': result['is_correct'],
-                                'correct_answer': result['correct_answer'],
-                                'original_question_content': result.get('original_question_content', question.content),
-                                'original_options': result.get('original_options', ''),
-                                'original_explanation': result.get('original_explanation', question.explanation or '')
-                            }
-                        )
-                    
-                    # 关联测试记录到班级作业记录
-                    latest_record.test_record = test_record
-                    latest_record.save()
-                
-                return redirect('student_class_assignments')
-    
-    # 创建新的答题记录（作业模式允许多次，考试模式只能一次）
-    # 作业模式：始终创建新记录
-    # 考试模式：如果有未提交的记录则重用，否则创建新记录
-    if assignment.type == 2 and latest_record and not latest_record.is_submitted:
-        # 考试模式：重用未提交的记录
-        record = latest_record
-        if not record.start_time:
-            record.start_time = timezone.now()
-            record.save()
-    else:
-        # 作业模式或考试模式但没有未提交记录：创建新记录
-        attempt = latest_record.attempt + 1 if latest_record else 1
-        record = ClassAssignmentRecord.objects.create(
-            assignment=assignment,
-            user=request.user,
-            start_time=timezone.now(),
-            attempt=attempt
-        )
-    
+    # POST 请求处理提交
     if request.method == 'POST':
+        # 创建新记录（作业模式始终创建新记录，考试模式重用未提交的记录）
+        if assignment.type == 2 and latest_record and not latest_record.is_submitted:
+            record = latest_record
+        else:
+            attempt = latest_record.attempt + 1 if latest_record else 1
+            record = ClassAssignmentRecord.objects.create(
+                assignment=assignment,
+                user=request.user,
+                start_time=timezone.now(),
+                attempt=attempt
+            )
+        
         if assignment.test_paper:
             test_paper = assignment.test_paper
             questions = list(test_paper.questions.all())
             
+            # 获取用户答案
             user_answers = {}
             for q in questions:
                 answer_key = f'question_{q.id}'
-                if answer_key in request.POST:
+                if q.type == 2:  # 多选题
+                    selected_options = []
+                    for opt in ['A', 'B', 'C', 'D']:
+                        if f'question_{q.id}_{opt}' in request.POST:
+                            selected_options.append(opt)
+                    if selected_options:
+                        user_answers[q.id] = ''.join(sorted(selected_options))
+                elif answer_key in request.POST:
                     user_answers[q.id] = request.POST[answer_key]
             
+            # 计算分数
             score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
             
+            # 更新作业记录
             record.score = score
             record.is_submitted = True
             record.submitted_at = timezone.now()
             record.save()
             
+            # 创建测试记录
             test_record = TestRecord.objects.create(
                 user=request.user,
                 test_paper=test_paper,
@@ -1702,6 +1662,7 @@ def do_class_assignment(request, assignment_id):
                 completed_at=timezone.now()
             )
             
+            # 创建答案记录
             for result in question_results:
                 question = result['question']
                 options_data = parse_options(question.options)
@@ -1717,7 +1678,7 @@ def do_class_assignment(request, assignment_id):
                     original_explanation=question.explanation
                 )
             
-            # 关联答题记录到作业记录
+            # 关联测试记录
             record.test_record = test_record
             record.save()
             
@@ -1728,8 +1689,64 @@ def do_class_assignment(request, assignment_id):
             record.save()
             messages.success(request, f'{"考试" if assignment.type == 2 else "作业"}提交成功！')
         
-        return redirect('student_class_assignments')
+        # 重定向到作业列表，添加时间戳防止缓存
+        return redirect(f'{reverse("student_class_assignments")}?t={int(timezone.now().timestamp())}')
     
+    # GET 请求：显示答题页面
+    # 考试模式：自动创建或获取答题记录以启动计时器
+    record_for_timer = latest_record
+    if assignment.type == 2 and assignment.time_limit:
+        if not latest_record or latest_record.is_submitted:
+            # 首次进入考试，创建记录并记录开始时间
+            attempt = 1
+            if latest_record and latest_record.is_submitted:
+                attempt = latest_record.attempt + 1
+            record_for_timer = ClassAssignmentRecord.objects.create(
+                assignment=assignment,
+                user=request.user,
+                start_time=timezone.now(),
+                attempt=attempt
+            )
+        # 检查是否超时
+        if record_for_timer.start_time:
+            time_elapsed = (timezone.now() - record_for_timer.start_time).total_seconds() / 60
+            if time_elapsed > assignment.time_limit:
+                # 超时自动提交（得0分）
+                record_for_timer.score = 0
+                record_for_timer.is_submitted = True
+                record_for_timer.submitted_at = timezone.now()
+                record_for_timer.save()
+                
+                # 创建测试记录
+                if assignment.test_paper:
+                    test_paper = assignment.test_paper
+                    test_record = TestRecord.objects.create(
+                        user=request.user,
+                        test_paper=test_paper,
+                        score=0,
+                        total_score=test_paper.total_score,
+                        completed_at=timezone.now()
+                    )
+                    # 创建空白答案记录
+                    for q in test_paper.questions.all():
+                        AnswerRecord.objects.create(
+                            test_record=test_record,
+                            question=q,
+                            user_answer='',
+                            correct_answer=q.answer,
+                            is_correct=False,
+                            original_question_content=q.content,
+                            original_question_type=q.type,
+                            original_options=parse_options(q.options),
+                            original_explanation=q.explanation
+                        )
+                    record_for_timer.test_record = test_record
+                    record_for_timer.save()
+                
+                messages.error(request, '考试已超时，系统已自动提交（得0分）')
+                return redirect('student_class_assignments')
+    
+    # 获取题目列表
     questions = []
     test_paper = None
     if assignment.test_paper:
@@ -1738,120 +1755,118 @@ def do_class_assignment(request, assignment_id):
         for q in questions:
             q.options = parse_options(q.options)
     
-    # 计算剩余时间
+    # 计算剩余时间（仅考试模式）
     remaining_seconds = None
-    if assignment.type == 2 and assignment.time_limit:
-        if record.start_time:
-            elapsed_seconds = (timezone.now() - record.start_time).total_seconds()
-            remaining_seconds = int(max(0, assignment.time_limit * 60 - elapsed_seconds))
-    
-    # 答题过程中不显示答案（提交后在结果页面查看）
-    show_answer = False
+    if assignment.type == 2 and assignment.time_limit and record_for_timer and record_for_timer.start_time:
+        elapsed_seconds = (timezone.now() - record_for_timer.start_time).total_seconds()
+        remaining_seconds = int(max(0, assignment.time_limit * 60 - elapsed_seconds))
     
     return render(request, 'quiz/frontend/do_class_assignment.html', {
         'assignment': assignment,
         'questions': questions,
         'test_paper': test_paper,
         'remaining_seconds': remaining_seconds,
-        'show_answer': show_answer,
-        'record': record
+        'show_answer': False,
+        'record': latest_record
     })
 
 @login_required
 def submit_class_assignment(request, assignment_id):
+    """提交班级作业/考试（AJAX接口）"""
     try:
         assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
         
-        if request.method == 'POST':
-            # 获取用户最新的答题记录
-            latest_record = ClassAssignmentRecord.objects.filter(
-                assignment=assignment,
-                user=request.user
-            ).order_by('-attempt').first()
-            
-            # 考试模式：只能提交一次
-            if assignment.type == 2 and latest_record and latest_record.is_submitted:
-                return JsonResponse({'success': False, 'message': '已经提交过'})
-            
-            # 使用当前记录或创建新记录
-            # 作业模式：始终创建新记录
-            # 考试模式：如果有未提交的记录则重用，否则创建新记录
-            if assignment.type == 2 and latest_record and not latest_record.is_submitted:
-                # 考试模式：重用未提交的记录
-                record = latest_record
-            else:
-                # 作业模式或考试模式但没有未提交记录：创建新记录
-                attempt = latest_record.attempt + 1 if latest_record else 1
-                record = ClassAssignmentRecord.objects.create(
-                    assignment=assignment,
-                    user=request.user,
-                    attempt=attempt
-                )
-            
-            if assignment.test_paper:
-                test_paper = assignment.test_paper
-                questions = list(test_paper.questions.all())
-                
-                user_answers = {}
-                for q in questions:
-                    answer_key = f'question_{q.id}'
-                    if q.type == 2:
-                        # 多选题：获取所有选中的选项
-                        selected_options = []
-                        for opt in ['A', 'B', 'C', 'D']:
-                            if f'question_{q.id}_{opt}' in request.POST:
-                                selected_options.append(opt)
-                        if selected_options:
-                            user_answers[q.id] = ''.join(sorted(selected_options))
-                    elif answer_key in request.POST:
-                        user_answers[q.id] = request.POST[answer_key]
-                
-                score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-                
-                record.score = score
-                record.is_submitted = True
-                record.submitted_at = timezone.now()
-                record.save()
-                
-                test_record = TestRecord.objects.create(
-                    user=request.user,
-                    test_paper=test_paper,
-                    score=score,
-                    total_score=test_paper.total_score,
-                    completed_at=timezone.now()
-                )
-                
-                for result in question_results:
-                    question = result['question']
-                    options_data = parse_options(question.options)
-                    AnswerRecord.objects.create(
-                        test_record=test_record,
-                        question=question,
-                        user_answer=result.get('user_answer', ''),
-                        correct_answer=result['correct_answer'],
-                        is_correct=result['is_correct'],
-                        original_question_content=question.content,
-                        original_question_type=question.type,
-                        original_options=options_data,
-                        original_explanation=question.explanation
-                    )
-                
-                # 关联答题记录到作业记录
-                record.test_record = test_record
-                record.save()
-                
-                return JsonResponse({
-                    'success': True,
-                    'message': f'提交成功！得分：{score}分',
-                    'score': score
-                })
-            else:
-                record.is_submitted = True
-                record.submitted_at = timezone.now()
-                record.save()
-                return JsonResponse({'success': True, 'message': '提交成功！'})
+        if request.method != 'POST':
+            return JsonResponse({'success': False, 'message': '无效的请求'})
         
-        return JsonResponse({'success': False, 'message': '无效的请求'})
+        # 获取用户最新的答题记录（已提交/未提交的都算）
+        latest_record = ClassAssignmentRecord.objects.filter(
+            assignment=assignment,
+            user=request.user
+        ).order_by('-attempt').first()
+        
+        # 考试模式：只能提交一次
+        if assignment.type == 2 and latest_record and latest_record.is_submitted:
+            return JsonResponse({'success': False, 'message': '已经提交过该考试'})
+        
+        # 创建/获取答题记录
+        if assignment.type == 2 and latest_record and not latest_record.is_submitted:
+            record = latest_record
+        else:
+            attempt = latest_record.attempt + 1 if latest_record else 1
+            record = ClassAssignmentRecord.objects.create(
+                assignment=assignment,
+                user=request.user,
+                start_time=timezone.now(),
+                attempt=attempt
+            )
+        
+        if assignment.test_paper:
+            test_paper = assignment.test_paper
+            questions = list(test_paper.questions.all())
+            
+            # 获取用户答案
+            user_answers = {}
+            for q in questions:
+                answer_key = f'question_{q.id}'
+                if q.type == 2:  # 多选题
+                    selected_options = []
+                    for opt in ['A', 'B', 'C', 'D']:
+                        if f'question_{q.id}_{opt}' in request.POST:
+                            selected_options.append(opt)
+                    if selected_options:
+                        user_answers[q.id] = ''.join(sorted(selected_options))
+                elif answer_key in request.POST:
+                    user_answers[q.id] = request.POST[answer_key]
+            
+            # 计算分数
+            score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+            
+            # 更新记录
+            record.score = score
+            record.is_submitted = True
+            record.submitted_at = timezone.now()
+            record.save()
+            
+            # 创建测试记录
+            test_record = TestRecord.objects.create(
+                user=request.user,
+                test_paper=test_paper,
+                score=score,
+                total_score=test_paper.total_score,
+                completed_at=timezone.now()
+            )
+            
+            # 创建答案记录
+            for result in question_results:
+                question = result['question']
+                options_data = parse_options(question.options)
+                AnswerRecord.objects.create(
+                    test_record=test_record,
+                    question=question,
+                    user_answer=result.get('user_answer', ''),
+                    correct_answer=result['correct_answer'],
+                    is_correct=result['is_correct'],
+                    original_question_content=question.content,
+                    original_question_type=question.type,
+                    original_options=options_data,
+                    original_explanation=question.explanation
+                )
+            
+            record.test_record = test_record
+            record.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'提交成功！得分：{score}分',
+                'score': score
+            })
+        else:
+            record.is_submitted = True
+            record.submitted_at = timezone.now()
+            record.save()
+            return JsonResponse({'success': True, 'message': '提交成功！'})
+    
     except Exception as e:
         import traceback
         error_info = f'Error: {str(e)}\n{traceback.format_exc()}'
@@ -2061,23 +2076,20 @@ def admin_preview_testpaper(request, paper_id):
 
 @staff_member_required
 def admin_import_testpaper(request):
-    """后台导入试卷"""
-    if request.method == 'POST':
-        file = request.FILES.get('file')
+    """后台导入试卷 - 支持预览和编辑学科/章节/知识点信息"""
+    # 处理确认导入
+    if request.method == 'POST' and request.POST.get('action') == 'confirm_import':
         title = request.POST.get('title', '导入试卷')
         description = request.POST.get('description', '')
         is_published = request.POST.get('is_published') == 'on'
+        questions_json = request.POST.get('questions_json', '')
         
-        if not file:
-            messages.error(request, '请上传文件')
-            return render(request, 'quiz/admin/import_testpaper.html')
+        if not questions_json:
+            messages.error(request, '没有题目数据，请重新上传文件')
+            return redirect('admin_import_testpaper')
         
         try:
-            questions_data, stats, errors = import_questions_from_excel(file)
-            if errors:
-                messages.error(request, errors[0])
-                return render(request, 'quiz/admin/import_testpaper.html')
-            
+            questions_data = json.loads(questions_json)
             test_paper = TestPaper.objects.create(
                 title=title,
                 description=description,
@@ -2086,6 +2098,7 @@ def admin_import_testpaper(request):
             )
             
             total_score = 0
+            valid_count = 0
             for q_data in questions_data:
                 if not q_data.get('content') or not q_data.get('correct_answer'):
                     continue
@@ -2167,13 +2180,50 @@ def admin_import_testpaper(request):
                 
                 test_paper.questions.add(question)
                 total_score += q_score
+                valid_count += 1
             
             test_paper.total_score = total_score
             test_paper.save()
             
-            messages.success(request, f'试卷 "{title}" 导入成功！共导入 {len(questions_data)} 道题目')
+            messages.success(request, f'试卷 "{title}" 导入成功！共导入 {valid_count} 道题目，总分 {total_score} 分。')
             return redirect('admin_preview_testpaper', paper_id=test_paper.id)
         except Exception as e:
             messages.error(request, f'导入失败：{str(e)}')
+            return redirect('admin_import_testpaper')
     
-    return render(request, 'quiz/admin/import_testpaper.html')
+    # 处理文件上传和预览
+    if request.method == 'POST' and request.FILES.get('file'):
+        title = request.POST.get('title', '导入试卷')
+        description = request.POST.get('description', '')
+        
+        try:
+            file = request.FILES['file']
+            questions_data, stats, errors = import_questions_from_excel(file)
+            
+            if errors:
+                messages.error(request, errors[0])
+                return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+            
+            for idx, q in enumerate(questions_data):
+                q['row'] = idx + 2
+                q['has_error'] = not (q.get('correct_answer') and q.get('score'))
+            
+            total_score = stats['total_score']
+            valid_count = stats['valid_count']
+            missing_count = stats['missing_count']
+            
+            return render(request, 'quiz/admin/import_testpaper.html', {
+                'step': 2,
+                'questions_data': questions_data,
+                'questions_json': json.dumps(questions_data, ensure_ascii=False),
+                'total_score': total_score,
+                'valid_count': valid_count,
+                'missing_count': missing_count,
+                'errors': errors,
+                'title': title,
+                'description': description
+            })
+        except Exception as e:
+            messages.error(request, f'读取文件失败：{str(e)}')
+    
+    return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
