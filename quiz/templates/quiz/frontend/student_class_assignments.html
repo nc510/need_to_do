@@ -241,7 +241,8 @@
 <h1 class="page-title">{% if current_type == 2 %}📝 我的班级考试{% else %}📋 我的班级作业{% endif %}</h1>
 
 {% if request.user.profile.class_obj %}
-<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ request.user.profile.class_obj.name }}【{{ request.user.profile.class_obj.code }}】</p>
+<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ request.user.profile.class_obj.name }}【{{
+    request.user.profile.class_obj.code }}】</p>
 {% endif %}
 
 <div class="tabs-container">
@@ -257,7 +258,8 @@
 <div class="assignment-list">
     {% for item in assignment_list %}
     {% with assignment=item.assignment record=item.record %}
-    <div class="assignment-card {% if item.is_overdue %}overdue{% elif item.is_submitted %}submitted{% endif %} {% if assignment.type == 2 %}exam{% endif %}">
+    <div
+        class="assignment-card {% if item.is_overdue %}overdue{% elif item.is_submitted %}submitted{% endif %} {% if assignment.type == 2 %}exam{% endif %}">
         <div class="assignment-header">
             <h3>
                 {{ assignment.title }}
@@ -302,11 +304,15 @@
 
         <div class="assignment-actions">
             {% if record and record.is_submitted %}
-                {% if assignment.type == 1 %}
-                <a href="{% url 'do_class_assignment' assignment_id=assignment.id %}" class="btn btn-secondary">🔄 重新练习</a>
-                {% else %}
-                <span class="btn btn-secondary" style="cursor: default;">✓ 已完成</span>
-                {% endif %}
+            {% if record.test_record %}
+            <a href="{% url 'test_history_detail' record_id=record.test_record.id %}" class="btn btn-success">📋
+                查看详情</a>
+            {% endif %}
+            {% if assignment.type == 1 %}
+            <a href="{% url 'do_class_assignment' assignment_id=assignment.id %}" class="btn btn-secondary">🔄 重新练习</a>
+            {% else %}
+            <span class="btn btn-secondary" style="cursor: default;">✓ 已完成</span>
+            {% endif %}
             {% elif item.is_overdue %}
             <span class="btn btn-secondary" style="cursor: default; background: #f8d7da; color: #721c24;">⏰ 已逾期</span>
             {% else %}

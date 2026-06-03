@@ -4,193 +4,172 @@
 <style>
     .page-header {
         text-align: center;
-        margin-bottom: 35px;
+        margin-bottom: 25px;
     }
+
     .page-header h1 {
-        font-size: 32px;
+        font-size: 28px;
         font-weight: 700;
         color: #2c3e50;
-        margin: 0 0 10px 0;
+        margin: 0 0 8px 0;
     }
+
     .page-header p {
         color: #7f8c8d;
-        font-size: 16px;
+        font-size: 15px;
         margin: 0;
     }
-    
+
     .history-list {
-        list-style-type: none;
-        padding: 0;
+        margin-top: 20px;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 25px;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
     }
 
-    .history-item {
-        padding: 25px;
-        background-color: #fff;
-        border-radius: 16px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-        transition: all 0.3s ease;
+    .history-card {
+        background: white;
+        border-radius: 12px;
+        padding: 18px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        border-top: 4px solid #667eea;
         display: flex;
         flex-direction: column;
-        position: relative;
-        overflow: hidden;
+        gap: 12px;
+        transition: all 0.2s ease;
     }
-    
-    .history-item::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-    }
-    
-    .history-item.excellent::before { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .history-item.good::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .history-item.pass::before { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .history-item.fail::before { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); }
 
-    .history-item:hover {
-        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
-        transform: translateY(-5px);
+    .history-card:hover {
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
     }
-    
+
+    .history-card.excellent {
+        border-top-color: #28a745;
+    }
+
+    .history-card.good {
+        border-top-color: #667eea;
+    }
+
+    .history-card.pass {
+        border-top-color: #ffc107;
+    }
+
+    .history-card.fail {
+        border-top-color: #dc3545;
+    }
+
     .history-header {
         display: flex;
-        align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 15px;
+        align-items: flex-start;
+        gap: 10px;
     }
 
     .history-title {
-        font-size: 18px;
-        font-weight: 700;
+        font-size: 15px;
+        font-weight: 600;
         color: #2c3e50;
+        margin: 0;
         line-height: 1.4;
         flex: 1;
     }
-    
+
     .history-title a {
         color: inherit;
         text-decoration: none;
-        transition: color 0.3s;
+        transition: color 0.2s;
     }
-    
+
     .history-title a:hover {
         color: #667eea;
     }
 
     .score-badge {
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: 700;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
         white-space: nowrap;
     }
-    .score-badge.excellent { background-color: #e8f5e9; color: #4caf50; }
-    .score-badge.good { background-color: #e8eaf6; color: #5c6bc0; }
-    .score-badge.pass { background-color: #fff3e0; color: #ff9800; }
-    .score-badge.fail { background-color: #ffebee; color: #f44336; }
+
+    .score-badge.excellent {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .score-badge.good {
+        background-color: #e8eaf6;
+        color: #3f51b5;
+    }
+
+    .score-badge.pass {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .score-badge.fail {
+        background-color: #ffebee;
+        color: #c62828;
+    }
 
     .history-meta {
         display: flex;
-        flex-wrap: wrap;
         gap: 15px;
-        margin-bottom: 15px;
-        padding: 15px;
-        background-color: #f8f9fa;
-        border-radius: 10px;
+        font-size: 12px;
+        color: #7f8c8d;
+        flex-wrap: wrap;
     }
-    
+
     .meta-item {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
+    }
+
+    .score-section {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 10px;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .score-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+
+    .score-total {
         font-size: 13px;
         color: #7f8c8d;
     }
-    
-    .meta-item .icon {
-        font-size: 16px;
-    }
-    
-    .score-detail {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 20px;
-    }
-    
-    .score-circle {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-    }
-    
-    .score-circle.excellent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; }
-    .score-circle.good { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-    .score-circle.pass { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
-    .score-circle.fail { background: #ffebee; color: #f44336; }
-    
-    .score-circle .score-value {
-        font-size: 18px;
-        line-height: 1;
-    }
-    
-    .score-circle .score-total {
-        font-size: 11px;
-        opacity: 0.8;
-    }
-
-    .score-text {
-        flex: 1;
-    }
-    
-    .score-text .label {
-        font-size: 13px;
-        color: #95a5a6;
-    }
-    
-    .score-text .text {
-        font-size: 15px;
-        color: #2c3e50;
-        font-weight: 500;
-    }
 
     .view-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 12px 20px;
+        padding: 8px 16px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: #fff;
         text-decoration: none;
-        border-radius: 10px;
-        font-size: 14px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        margin-top: auto;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        white-space: nowrap;
     }
-    
+
     .view-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
     }
 
     .pagination {
-        margin-top: 50px;
+        margin-top: 35px;
         display: flex;
         justify-content: center;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
     }
 
     .pagination a,
@@ -198,24 +177,23 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 44px;
-        height: 44px;
-        padding: 0 16px;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 14px;
         background-color: #fff;
         color: #667eea;
         text-decoration: none;
-        border-radius: 10px;
-        font-size: 15px;
+        border-radius: 8px;
+        font-size: 14px;
         font-weight: 500;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
     }
 
     .pagination a:hover {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: #fff;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
     }
 
     .pagination .current {
@@ -224,141 +202,143 @@
     }
 
     .pagination .disabled {
-        background-color: #f0f0f0;
+        background-color: #f5f5f5;
         color: #ccc;
         pointer-events: none;
     }
-    
+
     .empty-state {
         text-align: center;
-        padding: 80px 20px;
+        padding: 60px 20px;
         background-color: #fff;
-        border-radius: 16px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
     }
+
     .empty-state .icon {
-        font-size: 64px;
-        margin-bottom: 20px;
+        font-size: 50px;
+        margin-bottom: 15px;
     }
+
     .empty-state h3 {
-        margin: 0 0 10px 0;
+        margin: 0 0 8px 0;
         color: #2c3e50;
-        font-size: 22px;
+        font-size: 20px;
     }
+
     .empty-state p {
-        margin: 0 0 25px 0;
+        margin: 0 0 20px 0;
         color: #7f8c8d;
-        font-size: 16px;
+        font-size: 15px;
     }
+
     .empty-state .action-btn {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 14px 28px;
+        gap: 6px;
+        padding: 12px 24px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: #fff;
         text-decoration: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 600;
-        transition: all 0.3s ease;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
     }
+
     .empty-state .action-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
     }
 
     @media (max-width: 768px) {
         .page-header h1 {
-            font-size: 26px;
+            font-size: 24px;
         }
+
         .history-list {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
         }
     }
 </style>
 {% endblock %}
 {% block content %}
 
-            <div class="page-header">
-                <h1>📊 答题历史记录</h1>
-                <p>查看您的答题表现和分析</p>
-            </div>
+<div class="page-header">
+    <h1>📊 答题历史记录</h1>
+    <p>查看您的答题表现和分析</p>
+</div>
 
-            {% if test_records %}
-            <ul class="history-list">
-                {% for record in test_records %}
-                {% widthratio record.score record.total_score 100 as percentage %}
-                <li class="history-item 
+{% if test_records %}
+<div class="history-list">
+    {% for record in test_records %}
+    {% widthratio record.score record.total_score 100 as percentage %}
+    <div
+        class="history-card 
                     {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
-                    <div class="history-header">
-                        <h3 class="history-title">
-                            <a href="{% url 'test_history_detail' record.id %}">
-                                {% if record.is_wrong_paper %}📝 错题复习{% else %}{{ record.test_paper.title }}{% endif %}
-                            </a>
-                        </h3>
-                        <span class="score-badge 
+        <div class="history-header">
+            <h3 class="history-title">
+                <a href="{% url 'test_history_detail' record.id %}">
+                    {% if record.is_wrong_paper %}📝 错题复习{% else %}{{ record.test_paper.title }}{% endif %}
+                </a>
+            </h3>
+            <span
+                class="score-badge 
                             {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
-                            {% if percentage >= 90 %}优秀{% elif percentage >= 75 %}良好{% elif percentage >= 60 %}及格{% else %}不及格{% endif %}
-                        </span>
-                    </div>
-                    <div class="history-meta">
-                        <div class="meta-item">
-                            <span class="icon">📅</span>
-                            <span>{{ record.completed_at|date:"Y-m-d H:i" }}</span>
-                        </div>
-                        <div class="meta-item">
-                            <span class="icon">⏱️</span>
-                            <span>{{ record.completed_at|timesince:record.completed_at }}</span>
-                        </div>
-                    </div>
-                    <div class="score-detail">
-                        <div class="score-circle 
-                            {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
-                            <span class="score-value">{{ record.score }}</span>
-                            <span class="score-total">/{{ record.total_score }}</span>
-                        </div>
-                        <div class="score-text">
-                            <div class="label">得分</div>
-                            <div class="text">{{ percentage }}% 正确率</div>
-                        </div>
-                    </div>
-                    <a href="{% url 'test_history_detail' record.id %}" class="view-btn">
-                        查看详情 →
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
+                {% if percentage >= 90 %}优秀{% elif percentage >= 75 %}良好{% elif percentage >= 60 %}及格{% else %}不及格{%
+                endif %}
+            </span>
+        </div>
+        <div class="history-meta">
+            <span class="meta-item">
+                <span>📅</span>
+                <span>{{ record.completed_at|date:"m-d H:i" }}</span>
+            </span>
+            <span class="meta-item">
+                <span>⏱️</span>
+                <span>{{ record.duration|default:'--' }}分</span>
+            </span>
+        </div>
+        <div class="score-section">
+            <span class="score-value">{{ record.score }}<span class="score-total">/{{ record.total_score
+                    }}</span></span>
+            <a href="{% url 'test_history_detail' record.id %}" class="view-btn">
+                查看
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
 
-            {% if test_records.has_other_pages %}
-                <div class="pagination">
-                    {% if test_records.has_previous %}
-                        <a href="?page={{ test_records.previous_page_number }}">← 上一页</a>
-                    {% else %}
-                        <span class="disabled">← 上一页</span>
-                    {% endif %}
-                    
-                    {% for i in test_records.paginator.page_range %}
-                        {% if test_records.number == i %}
-                            <span class="current">{{ i }}</span>
-                        {% elif i >= test_records.number|add:'-2' and i <= test_records.number|add:'2' %}
-                            <a href="?page={{ i }}">{{ i }}</a>
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if test_records.has_next %}
-                        <a href="?page={{ test_records.next_page_number }}">下一页 →</a>
-                    {% else %}
-                        <span class="disabled">下一页 →</span>
-                    {% endif %}
-                </div>
-            {% endif %}
-            {% else %}
-                <div class="empty-state">
-                    <div class="icon">📝</div>
-                    <h3>暂无答题记录</h3>
-                    <p>您还没有完成任何试卷测试</p>
-                    <a href="{% url 'test_paper_list' %}" class="action-btn">开始答题 →</a>
-                </div>
-            {% endif %}
+{% if test_records.has_other_pages %}
+<div class="pagination">
+    {% if test_records.has_previous %}
+    <a href="?page={{ test_records.previous_page_number }}">← 上一页</a>
+    {% else %}
+    <span class="disabled">← 上一页</span>
+    {% endif %}
+
+    {% for i in test_records.paginator.page_range %}
+    {% if test_records.number == i %}
+    <span class="current">{{ i }}</span>
+    {% elif i >= test_records.number|add:'-2' and i <= test_records.number|add:'2' %} <a href="?page={{ i }}">{{ i
+        }}</a>
+        {% endif %}
+        {% endfor %}
+
+        {% if test_records.has_next %}
+        <a href="?page={{ test_records.next_page_number }}">下一页 →</a>
+        {% else %}
+        <span class="disabled">下一页 →</span>
+        {% endif %}
+</div>
+{% endif %}
+{% else %}
+<div class="empty-state">
+    <div class="icon">📝</div>
+    <h3>暂无答题记录</h3>
+    <p>您还没有完成任何试卷测试</p>
+    <a href="{% url 'test_paper_list' %}" class="action-btn">开始答题 →</a>
+</div>
+{% endif %}
 {% endblock %}

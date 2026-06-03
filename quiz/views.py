@@ -124,13 +124,24 @@ def submit_test_paper(request, paper_id):
         # 创建答案记录并收集错题
         wrong_questions_list = []
         for result in question_results:
+            question = result['question']
+            options_data = question.options
+            if isinstance(options_data, str):
+                import json
+                try:
+                    options_data = json.loads(options_data)
+                except:
+                    options_data = {}
             AnswerRecord.objects.create(
                 test_record=test_record,
-                question=result['question'],
+                question=question,
                 user_answer=result.get('user_answer', ''),
                 correct_answer=result['correct_answer'],
                 is_correct=result['is_correct'],
-                score=result['score']
+                original_question_content=question.content,
+                original_question_type=question.type,
+                original_options=options_data,
+                original_explanation=question.explanation
             )
             
             if not result['is_correct']:
@@ -196,19 +207,18 @@ def test_history_detail(request, record_id):
     test_record = get_object_or_404(TestRecord, pk=record_id, user=request.user)
     answer_records = AnswerRecord.objects.filter(test_record=test_record).select_related('question')
     
-    question_results = []
+    # 处理 question.options 字段，确保它是正确的字典格式
+    import json
     for ar in answer_records:
-        question_results.append({
-            'question': ar.question,
-            'user_answer': ar.user_answer,
-            'correct_answer': ar.correct_answer,
-            'is_correct': ar.is_correct,
-            'score': ar.score
-        })
+        if ar.question and isinstance(ar.question.options, str):
+            try:
+                ar.question.options = json.loads(ar.question.options)
+            except:
+                ar.question.options = {}
     
     return render(request, 'quiz/frontend/test_history_detail.html', {
         'test_record': test_record,
-        'question_results': question_results
+        'answer_records': answer_records
     })
 
 def login_view(request):
@@ -488,13 +498,24 @@ def submit_wrong_question_paper(request, paper_id):
         
         wrong_question_ids = set()
         for result in question_results:
+            question = result['question']
+            options_data = question.options
+            if isinstance(options_data, str):
+                import json
+                try:
+                    options_data = json.loads(options_data)
+                except:
+                    options_data = {}
             AnswerRecord.objects.create(
                 test_record=test_record,
-                question=result['question'],
+                question=question,
                 user_answer=result.get('user_answer', ''),
                 correct_answer=result['correct_answer'],
                 is_correct=result['is_correct'],
-                score=result['score']
+                original_question_content=question.content,
+                original_question_type=question.type,
+                original_options=options_data,
+                original_explanation=question.explanation
             )
         
         for wq in WrongQuestion.objects.filter(user=request.user, question__in=questions):
@@ -1576,14 +1597,29 @@ def do_class_assignment(request, assignment_id):
             )
             
             for result in question_results:
+                question = result['question']
+                options_data = question.options
+                if isinstance(options_data, str):
+                    import json
+                    try:
+                        options_data = json.loads(options_data)
+                    except:
+                        options_data = {}
                 AnswerRecord.objects.create(
                     test_record=test_record,
-                    question=result['question'],
+                    question=question,
                     user_answer=result.get('user_answer', ''),
                     correct_answer=result['correct_answer'],
                     is_correct=result['is_correct'],
-                    score=result['score']
+                    original_question_content=question.content,
+                    original_question_type=question.type,
+                    original_options=options_data,
+                    original_explanation=question.explanation
                 )
+            
+            # 关联答题记录到作业记录
+            record.test_record = test_record
+            record.save()
             
             messages.success(request, f'{"考试" if assignment.type == 2 else "作业"}提交成功！得分：{score}分')
         else:
@@ -1613,8 +1649,8 @@ def do_class_assignment(request, assignment_id):
             elapsed_seconds = (timezone.now() - record.start_time).total_seconds()
             remaining_seconds = int(max(0, assignment.time_limit * 60 - elapsed_seconds))
     
-    # 作业模式：始终可以查看答案
-    show_answer = assignment.type == 1
+    # 答题过程中不显示答案（提交后在结果页面查看）
+    show_answer = False
     
     return render(request, 'quiz/frontend/do_class_assignment.html', {
         'assignment': assignment,
@@ -1686,14 +1722,29 @@ def submit_class_assignment(request, assignment_id):
             )
             
             for result in question_results:
+                question = result['question']
+                options_data = question.options
+                if isinstance(options_data, str):
+                    import json
+                    try:
+                        options_data = json.loads(options_data)
+                    except:
+                        options_data = {}
                 AnswerRecord.objects.create(
                     test_record=test_record,
-                    question=result['question'],
+                    question=question,
                     user_answer=result.get('user_answer', ''),
                     correct_answer=result['correct_answer'],
                     is_correct=result['is_correct'],
-                    score=result['score']
+                    original_question_content=question.content,
+                    original_question_type=question.type,
+                    original_options=options_data,
+                    original_explanation=question.explanation
                 )
+            
+            # 关联答题记录到作业记录
+            record.test_record = test_record
+            record.save()
             
             return JsonResponse({
                 'success': True,
