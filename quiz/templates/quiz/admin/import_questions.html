@@ -9,22 +9,22 @@
         padding: 20px;
         background: #fff;
         border-radius: 8px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     }
-    
+
     .import-step {
         display: flex;
         margin-bottom: 30px;
         padding-bottom: 20px;
         border-bottom: 2px solid #eee;
     }
-    
+
     .step-item {
         display: flex;
         align-items: center;
         margin-right: 30px;
     }
-    
+
     .step-number {
         width: 30px;
         height: 30px;
@@ -37,19 +37,19 @@
         margin-right: 10px;
         font-weight: bold;
     }
-    
+
     .step-number.active {
         background: #4caf50;
     }
-    
+
     .step-number.done {
         background: #2196f3;
     }
-    
+
     .step-title {
         font-weight: 600;
     }
-    
+
     .upload-area {
         border: 2px dashed #ddd;
         border-radius: 8px;
@@ -58,18 +58,19 @@
         transition: all 0.3s;
         cursor: pointer;
     }
-    
-    .upload-area:hover, .upload-area.dragover {
+
+    .upload-area:hover,
+    .upload-area.dragover {
         border-color: #4caf50;
         background: #f8f9fa;
     }
-    
+
     .upload-icon {
         font-size: 48px;
         margin-bottom: 15px;
         color: #999;
     }
-    
+
     .upload-btn {
         background: #4caf50;
         color: white;
@@ -80,43 +81,44 @@
         font-size: 16px;
         transition: background 0.3s;
     }
-    
+
     .upload-btn:hover {
         background: #43a047;
     }
-    
+
     .template-link {
         margin-top: 15px;
         display: inline-block;
         color: #2196f3;
         text-decoration: none;
     }
-    
+
     .template-link:hover {
         text-decoration: underline;
     }
-    
+
     .questions-table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 20px;
     }
-    
-    .questions-table th, .questions-table td {
+
+    .questions-table th,
+    .questions-table td {
         border: 1px solid #ddd;
         padding: 12px;
         text-align: left;
     }
-    
+
     .questions-table th {
         background: #f5f5f5;
         font-weight: 600;
     }
-    
+
     .questions-table tr:hover {
         background: #f9f9f9;
     }
-    
+
     .type-badge {
         padding: 3px 8px;
         border-radius: 4px;
@@ -124,50 +126,50 @@
         font-weight: 600;
         color: white;
     }
-    
+
     .type-single {
         background: #2196f3;
     }
-    
+
     .type-multiple {
         background: #9c27b0;
     }
-    
+
     .type-judge {
         background: #ff9800;
     }
-    
+
     .status-indicator {
         padding: 3px 8px;
         border-radius: 4px;
         font-size: 12px;
         font-weight: 600;
     }
-    
+
     .success-indicator {
         background: #d4edda;
         color: #155724;
     }
-    
+
     .warning-indicator {
         background: #fff3cd;
         color: #856404;
     }
-    
+
     .highlight-missing {
         border: 2px solid #f44336 !important;
         background: #fff5f5 !important;
     }
-    
+
     .question-content {
         width: 200px;
         min-height: 60px;
     }
-    
+
     .option-input {
         width: 120px;
     }
-    
+
     .validation-warning {
         background: #fff3cd;
         border: 1px solid #ffeeba;
@@ -175,7 +177,7 @@
         padding: 15px;
         margin-top: 15px;
     }
-    
+
     .validation-success {
         background: #d4edda;
         border: 1px solid #c3e6cb;
@@ -183,13 +185,13 @@
         padding: 15px;
         margin-top: 15px;
     }
-    
+
     .action-buttons {
         margin-top: 20px;
         display: flex;
         gap: 15px;
     }
-    
+
     .btn-primary {
         background: #4caf50;
         color: white;
@@ -200,16 +202,16 @@
         font-size: 16px;
         transition: background 0.3s;
     }
-    
+
     .btn-primary:hover {
         background: #43a047;
     }
-    
+
     .btn-primary:disabled {
         background: #ccc;
         cursor: not-allowed;
     }
-    
+
     .btn-secondary {
         background: #6c757d;
         color: white;
@@ -220,11 +222,11 @@
         font-size: 16px;
         transition: background 0.3s;
     }
-    
+
     .btn-secondary:hover {
         background: #5a6268;
     }
-    
+
     .error-list {
         background: #f8d7da;
         border: 1px solid #f5c6cb;
@@ -232,12 +234,12 @@
         padding: 15px;
         margin-bottom: 20px;
     }
-    
+
     .error-list h4 {
         margin: 0 0 10px 0;
         color: #721c24;
     }
-    
+
     .error-list ul {
         margin: 0;
         padding-left: 20px;
@@ -249,12 +251,13 @@
 {% block content %}
 <div class="import-container">
     <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-        <a href="/admin/quiz/question/" style="background: #6c757d; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 14px;">
+        <a href="/admin/quiz/question/"
+            style="background: #6c757d; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 14px;">
             ← 返回试题列表
         </a>
         <h2>📥 后台导入试题</h2>
     </div>
-    
+
     <div class="import-step">
         <div class="step-item">
             <div class="step-number {% if step >= 1 %}active{% endif %}">1</div>
@@ -278,7 +281,8 @@
             <p style="font-size: 18px; margin-bottom: 10px;">点击或拖拽文件到此处上传</p>
             <p style="color: #666; margin-bottom: 20px;">支持 .xlsx 格式的 Excel 文件</p>
             <input type="file" name="file" id="fileInput" accept=".xlsx" style="display: none;">
-            <button type="button" class="upload-btn" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">选择文件</button>
+            <button type="button" class="upload-btn"
+                onclick="event.stopPropagation(); document.getElementById('fileInput').click()">选择文件</button>
             <p><a href="{% url 'admin_export_template' %}" class="template-link">📥 下载导入模板</a></p>
         </div>
         <div class="action-buttons" style="justify-content: flex-end;">
@@ -324,8 +328,8 @@
 
     <form method="post" id="importForm">
         {% csrf_token %}
-        <input type="hidden" name="questions_json" id="questionsJson">
-        
+        <input type="hidden" name="questions_json" id="questionsJson" value="{{ questions_json }}">
+
         <table class="questions-table">
             <thead>
                 <tr>
@@ -336,6 +340,10 @@
                     <th>答案</th>
                     <th>分值</th>
                     <th>解析</th>
+                    <th>学科</th>
+                    <th>章节</th>
+                    <th>小节</th>
+                    <th>知识点</th>
                     <th>状态</th>
                 </tr>
             </thead>
@@ -344,12 +352,13 @@
                 <tr>
                     <td>{{ forloop.counter }}</td>
                     <td>
-                        <span class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multiple{% else %}type-judge{% endif %}">
+                        <span
+                            class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multiple{% else %}type-judge{% endif %}">
                             {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
                         </span>
                     </td>
                     <td>
-                        <textarea name="content_{{ forloop.counter0 }}" 
+                        <textarea name="content_{{ forloop.counter0 }}"
                             class="question-content {% if not q.content %}highlight-missing{% endif %}"
                             data-index="{{ forloop.counter0 }}" data-field="content"
                             oninput="validateForm()">{{ q.content|default:'' }}</textarea>
@@ -357,22 +366,22 @@
                     <td>
                         {% if q.type == 1 or q.type == 2 %}
                         <div style="display: flex; flex-direction: column; gap: 5px;">
-                            <input type="text" name="option_a_{{ forloop.counter0 }}" 
+                            <input type="text" name="option_a_{{ forloop.counter0 }}"
                                 value="{{ q.options.A|default:'' }}"
                                 class="option-input {% if not q.options.A %}highlight-missing{% endif %}"
                                 placeholder="选项A" data-index="{{ forloop.counter0 }}" data-field="option_A"
                                 oninput="validateForm()">
-                            <input type="text" name="option_b_{{ forloop.counter0 }}" 
+                            <input type="text" name="option_b_{{ forloop.counter0 }}"
                                 value="{{ q.options.B|default:'' }}"
                                 class="option-input {% if not q.options.B %}highlight-missing{% endif %}"
                                 placeholder="选项B" data-index="{{ forloop.counter0 }}" data-field="option_B"
                                 oninput="validateForm()">
-                            <input type="text" name="option_c_{{ forloop.counter0 }}" 
+                            <input type="text" name="option_c_{{ forloop.counter0 }}"
                                 value="{{ q.options.C|default:'' }}"
                                 class="option-input {% if not q.options.C %}highlight-missing{% endif %}"
                                 placeholder="选项C" data-index="{{ forloop.counter0 }}" data-field="option_C"
                                 oninput="validateForm()">
-                            <input type="text" name="option_d_{{ forloop.counter0 }}" 
+                            <input type="text" name="option_d_{{ forloop.counter0 }}"
                                 value="{{ q.options.D|default:'' }}"
                                 class="option-input {% if not q.options.D %}highlight-missing{% endif %}"
                                 placeholder="选项D" data-index="{{ forloop.counter0 }}" data-field="option_D"
@@ -383,26 +392,44 @@
                         {% endif %}
                     </td>
                     <td>
-                        <input type="text" name="answer_{{ forloop.counter0 }}" 
+                        <input type="text" name="answer_{{ forloop.counter0 }}"
                             value="{{ q.correct_answer|default:'' }}"
                             class="option-input {% if not q.correct_answer %}highlight-missing{% endif %}"
                             placeholder="答案" data-index="{{ forloop.counter0 }}" data-field="correct_answer"
                             oninput="validateForm()">
                     </td>
                     <td>
-                        <input type="number" name="score_{{ forloop.counter0 }}" 
-                            value="{{ q.score|default:'' }}"
-                            class="option-input {% if not q.score %}highlight-missing{% endif %}"
-                            placeholder="分值" data-index="{{ forloop.counter0 }}" data-field="score"
-                            oninput="validateForm()">
+                        <input type="number" name="score_{{ forloop.counter0 }}" value="{{ q.score|default:'' }}"
+                            class="option-input {% if not q.score %}highlight-missing{% endif %}" placeholder="分值"
+                            data-index="{{ forloop.counter0 }}" data-field="score" oninput="validateForm()">
                     </td>
                     <td>
-                        <textarea name="explanation_{{ forloop.counter0 }}" 
-                            class="question-content"
+                        <textarea name="explanation_{{ forloop.counter0 }}" class="question-content"
                             placeholder="解析（可选）">{{ q.explanation|default:'' }}</textarea>
                     </td>
                     <td>
-                        <span id="status-indicator-{{ forloop.counter0 }}" 
+                        <input type="text" name="subject_{{ forloop.counter0 }}" value="{{ q.subject_name|default:'' }}"
+                            class="option-input" placeholder="学科名称" data-index="{{ forloop.counter0 }}"
+                            data-field="subject_name" oninput="validateForm()">
+                    </td>
+                    <td>
+                        <input type="text" name="chapter_{{ forloop.counter0 }}"
+                            value="{{ q.chapter_title|default:'' }}" class="option-input" placeholder="章节名称"
+                            data-index="{{ forloop.counter0 }}" data-field="chapter_title" oninput="validateForm()">
+                    </td>
+                    <td>
+                        <input type="text" name="section_{{ forloop.counter0 }}"
+                            value="{{ q.section_title|default:'' }}" class="option-input" placeholder="小节名称"
+                            data-index="{{ forloop.counter0 }}" data-field="section_title" oninput="validateForm()">
+                    </td>
+                    <td>
+                        <input type="text" name="knowledge_{{ forloop.counter0 }}"
+                            value="{{ q.knowledge_points_str|default:'' }}" class="option-input" placeholder="知识点（逗号分隔）"
+                            data-index="{{ forloop.counter0 }}" data-field="knowledge_points_str"
+                            oninput="validateForm()">
+                    </td>
+                    <td>
+                        <span id="status-indicator-{{ forloop.counter0 }}"
                             class="status-indicator {% if q.correct_answer and q.score and q.content %}success-indicator{% else %}warning-indicator{% endif %}">
                             {% if q.correct_answer and q.score and q.content %}✓ 完整{% else %}⚠ 待补全{% endif %}
                         </span>
@@ -413,9 +440,11 @@
         </table>
 
         <div class="action-buttons" style="justify-content: flex-end;">
-            <button type="button" class="btn-secondary" onclick="window.location.href='{% url 'admin_import_questions' %}'">返回上传</button>
+            <button type="button" class="btn-secondary"
+                onclick="window.location.href='{% url 'admin_import_questions' %}'">返回上传</button>
             <button type="submit" class="btn-primary" id="submitBtn" {% if missing_count > 0 %}disabled{% endif %}>
-                {% if missing_count > 0 %}⚠ 请补全数据 ({{ missing_count }} 题待补全){% else %}✓ 确认导入 ({{ questions_data|length }} 题){% endif %}
+                {% if missing_count > 0 %}⚠ 请补全数据 ({{ missing_count }} 题待补全){% else %}✓ 确认导入 ({{ questions_data|length
+                }} 题){% endif %}
             </button>
         </div>
     </form>
@@ -427,9 +456,12 @@
             成功导入 <strong>{{ imported_count }}</strong> 道试题
         </p>
         <div class="action-buttons" style="justify-content: center; margin-top: 30px;">
-            <a href="{% url 'admin:quiz_question_changelist' %}" class="btn-primary" style="text-decoration: none; padding: 12px 30px; border-radius: 4px;">查看题目列表</a>
-            <a href="{% url 'admin_import_questions' %}" class="btn-secondary" style="text-decoration: none; padding: 12px 30px; border-radius: 4px;">继续导入</a>
-            <a href="{% url 'admin_create_testpaper' %}" class="btn-primary" style="text-decoration: none; padding: 12px 30px; border-radius: 4px;">去组卷</a>
+            <a href="{% url 'admin:quiz_question_changelist' %}" class="btn-primary"
+                style="text-decoration: none; padding: 12px 30px; border-radius: 4px;">查看题目列表</a>
+            <a href="{% url 'admin_import_questions' %}" class="btn-secondary"
+                style="text-decoration: none; padding: 12px 30px; border-radius: 4px;">继续导入</a>
+            <a href="{% url 'admin_create_testpaper' %}" class="btn-primary"
+                style="text-decoration: none; padding: 12px 30px; border-radius: 4px;">去组卷</a>
         </div>
     </div>
     {% endif %}
@@ -470,7 +502,8 @@
 <script>
     let questionsData = [];
     try {
-        questionsData = {{ questions_json | safe }};
+        questionsData = {{ questions_json | safe }
+    };
     } catch (e) {
         questionsData = [];
     }
@@ -482,13 +515,17 @@
             options: { A: '', B: '', C: '', D: '' },
             correct_answer: '',
             score: '',
-            explanation: ''
+            explanation: '',
+            subject_name: '',
+            chapter_title: '',
+            section_title: '',
+            knowledge_points_str: ''
         };
 
         const contentInput = document.querySelector('textarea[name="content_' + index + '"]');
         if (contentInput) q.content = contentInput.value.trim();
 
-        ['A', 'B', 'C', 'D'].forEach(function(letter) {
+        ['A', 'B', 'C', 'D'].forEach(function (letter) {
             const input = document.querySelector('input[name="option_' + letter.toLowerCase() + '_' + index + '"]');
             if (input) q.options[letter] = input.value.trim();
         });
@@ -504,6 +541,16 @@
 
         const expInput = document.querySelector('textarea[name="explanation_' + index + '"]');
         if (expInput) q.explanation = expInput.value.trim();
+
+        // 读取学科/章节/小节/知识点
+        const subjectInput = document.querySelector('input[name="subject_' + index + '"]');
+        if (subjectInput) q.subject_name = subjectInput.value.trim();
+        const chapterInput = document.querySelector('input[name="chapter_' + index + '"]');
+        if (chapterInput) q.chapter_title = chapterInput.value.trim();
+        const sectionInput = document.querySelector('input[name="section_' + index + '"]');
+        if (sectionInput) q.section_title = sectionInput.value.trim();
+        const knowledgeInput = document.querySelector('input[name="knowledge_' + index + '"]');
+        if (knowledgeInput) q.knowledge_points_str = knowledgeInput.value.trim();
 
         if (questionsData[index] && questionsData[index].type) {
             q.type = parseInt(questionsData[index].type);
@@ -540,7 +587,7 @@
         const submitBtn = document.getElementById('submitBtn');
         const validationWarning = document.getElementById('validationWarning');
         const questionsContainer = document.querySelector('.questions-table tbody');
-        
+
         const rows = questionsContainer ? questionsContainer.querySelectorAll('tr') : [];
         const questionCount = rows.length;
 
@@ -625,12 +672,31 @@
         }
 
         document.getElementById('questionsJson').value = JSON.stringify(
-            Array.from({length: questionCount}, (_, i) => getQuestionDataFromDOM(i))
+            Array.from({ length: questionCount }, (_, i) => getQuestionDataFromDOM(i))
         );
     }
 
     document.addEventListener('DOMContentLoaded', function () {
         validateForm();
+
+        // 防重复提交
+        var importForm = document.getElementById('importForm');
+        if (importForm) {
+            importForm.addEventListener('submit', function () {
+                // 提交前重新读取所有数据，确保 questionsJson 是最新的
+                var container = document.querySelector('.questions-table tbody');
+                var rows = container ? container.querySelectorAll('tr') : [];
+                document.getElementById('questionsJson').value = JSON.stringify(
+                    Array.from({ length: rows.length }, function (_, i) { return getQuestionDataFromDOM(i); })
+                );
+
+                var btn = document.getElementById('submitBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '⏳ 正在导入...';
+                }
+            });
+        }
     });
 </script>
 {% endif %}

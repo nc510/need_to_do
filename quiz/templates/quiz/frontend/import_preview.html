@@ -1,6 +1,6 @@
 {% extends 'quiz/frontend/base.html' %}
 
-{% block title %}导入预览 - 在线考试系统{% endblock %}
+{% block title %}???? - ??????{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -409,22 +409,22 @@
 
 {% block content %}
 <div class="preview-container">
-    <h1 class="page-title">📥 导入预览</h1>
+    <h1 class="page-title">?? ????</h1>
 
     <div class="step-indicator">
         <div class="step completed">
-            <span class="step-number">✓</span>
-            <span>上传文件</span>
+            <span class="step-number">?</span>
+            <span>????</span>
         </div>
         <div class="step active">
             <span class="step-number">2</span>
-            <span>预览确认</span>
+            <span>????</span>
         </div>
     </div>
 
     {% if errors %}
     <div class="error-list">
-        <h4>⚠️ 数据验证警告 ({{ errors|length }} 条)</h4>
+        <h4>?? ?????? ({{ errors|length }} ?)</h4>
         <ul>
             {% for error in errors %}
             <li>{{ error }}</li>
@@ -434,23 +434,23 @@
     {% endif %}
 
     <div class="summary-card">
-        <h3>📊 试卷信息预览</h3>
+        <h3>?? ??????</h3>
         <div class="summary-stats">
             <div class="summary-stat">
                 <div class="value">{{ questions_data|length }}</div>
-                <div class="label">题目数量</div>
+                <div class="label">????</div>
             </div>
             <div class="summary-stat">
                 <div class="value">{{ total_score }}</div>
-                <div class="label">总分</div>
+                <div class="label">??</div>
             </div>
             <div class="summary-stat">
                 <div class="value">{{ valid_count }}</div>
-                <div class="label">有效题目</div>
+                <div class="label">????</div>
             </div>
             <div class="summary-stat">
                 <div class="value">{{ missing_count }}</div>
-                <div class="label">待补全</div>
+                <div class="label">???</div>
             </div>
         </div>
     </div>
@@ -460,32 +460,36 @@
         <input type="hidden" name="action" value="confirm_import">
         <input type="hidden" name="title" value="{{ title }}">
         <input type="hidden" name="description" value="{{ description }}">
-        <input type="hidden" name="questions_data" id="questionsDataInput">
+        <input type="hidden" name="questions_data" id="questionsDataInput" value="{{ questions_json }}">
 
         <div class="form-group">
-            <label>试卷标题</label>
+            <label>????</label>
             <input type="text" value="{{ title }}" readonly>
         </div>
 
         {% if description %}
         <div class="form-group">
-            <label>试卷描述</label>
+            <label>????</label>
             <textarea readonly>{{ description }}</textarea>
         </div>
         {% endif %}
 
-        <h3 style="margin-top: 20px; color: #2c3e50;">📝 题目预览</h3>
+        <h3 style="margin-top: 20px; color: #2c3e50;">?? ????</h3>
 
         <table class="questions-table">
             <thead>
                 <tr>
                     <th style="width: 40px;">#</th>
-                    <th style="width: 80px;">题型</th>
-                    <th style="width: 45%;">题目内容</th>
-                    <th style="width: 80px;">参考答案</th>
-                    <th style="width: 18%;">解析</th>
-                    <th style="width: 60px;">分值</th>
-                    <th style="width: 60px;">状态</th>
+                    <th style="width: 80px;">??</th>
+                    <th style="width: 35%;">????</th>
+                    <th style="width: 80px;">????</th>
+                    <th style="width: 15%;">??</th>
+                    <th style="width: 60px;">??</th>
+                    <th>??</th>
+                    <th>??</th>
+                    <th style="width: 60px;">??</th>
+                    <th style="width: 60px;">???</th>
+                    <th style="width: 60px;">??</th>
                 </tr>
             </thead>
             <tbody>
@@ -495,28 +499,28 @@
                     <td>
                         <span
                             class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
-                            {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
+                            {% if q.type == 1 %}??{% elif q.type == 2 %}??{% else %}??{% endif %}
                         </span>
                     </td>
                     <td>
                         <div class="question-content-wrapper">
                             <div class="content-row">
-                                <label class="field-label">题目内容</label>
+                                <label class="field-label">????</label>
                                 <textarea name="content_{{ forloop.counter0 }}"
                                     class="{% if not q.content %}highlight-missing{% endif %} q-content-input"
-                                    placeholder="请输入题目内容" data-index="{{ forloop.counter0 }}"
+                                    placeholder="???????" data-index="{{ forloop.counter0 }}"
                                     data-field="content">{{ q.content|default:'' }}</textarea>
                             </div>
                             {% if q.type == 1 or q.type == 2 %}
                             <div class="options-row">
-                                <label class="field-label">选项</label>
+                                <label class="field-label">??</label>
                                 <div class="options-grid">
                                     <div class="option-item">
                                         <span class="option-letter">A</span>
                                         <input type="text" name="option_a_{{ forloop.counter0 }}"
                                             value="{{ q.options.A|default:'' }}"
                                             class="option-input {% if not q.options.A %}highlight-missing{% endif %}"
-                                            placeholder="选项A内容" data-index="{{ forloop.counter0 }}"
+                                            placeholder="??A??" data-index="{{ forloop.counter0 }}"
                                             data-field="option_A">
                                     </div>
                                     <div class="option-item">
@@ -524,7 +528,7 @@
                                         <input type="text" name="option_b_{{ forloop.counter0 }}"
                                             value="{{ q.options.B|default:'' }}"
                                             class="option-input {% if not q.options.B %}highlight-missing{% endif %}"
-                                            placeholder="选项B内容" data-index="{{ forloop.counter0 }}"
+                                            placeholder="??B??" data-index="{{ forloop.counter0 }}"
                                             data-field="option_B">
                                     </div>
                                     <div class="option-item">
@@ -532,7 +536,7 @@
                                         <input type="text" name="option_c_{{ forloop.counter0 }}"
                                             value="{{ q.options.C|default:'' }}"
                                             class="option-input {% if not q.options.C %}highlight-missing{% endif %}"
-                                            placeholder="选项C内容" data-index="{{ forloop.counter0 }}"
+                                            placeholder="??C??" data-index="{{ forloop.counter0 }}"
                                             data-field="option_C">
                                     </div>
                                     <div class="option-item">
@@ -540,7 +544,7 @@
                                         <input type="text" name="option_d_{{ forloop.counter0 }}"
                                             value="{{ q.options.D|default:'' }}"
                                             class="option-input {% if not q.options.D %}highlight-missing{% endif %}"
-                                            placeholder="选项D内容" data-index="{{ forloop.counter0 }}"
+                                            placeholder="??D??" data-index="{{ forloop.counter0 }}"
                                             data-field="option_D">
                                     </div>
                                 </div>
@@ -551,24 +555,45 @@
                     <td>
                         <input type="text" name="answer_{{ forloop.counter0 }}"
                             value="{{ q.correct_answer|default:'' }}"
-                            class="{% if not q.correct_answer %}highlight-missing{% endif %}" placeholder="请输入答案"
+                            class="{% if not q.correct_answer %}highlight-missing{% endif %}" placeholder="?????"
                             data-index="{{ forloop.counter0 }}" data-field="correct_answer">
                     </td>
                     <td>
                         <textarea name="explanation_{{ forloop.counter0 }}"
                             class="{% if not q.explanation %}highlight-missing{% endif %} explanation-input"
-                            placeholder="请输入解析（可选）" data-index="{{ forloop.counter0 }}"
+                            placeholder="?????????" data-index="{{ forloop.counter0 }}"
                             data-field="explanation">{{ q.explanation|default:'' }}</textarea>
                     </td>
                     <td>
                         <input type="number" name="score_{{ forloop.counter0 }}" value="{{ q.score|default:'' }}"
-                            class="{% if not q.score %}highlight-missing{% endif %}" placeholder="分值" min="1" max="100"
+                            class="{% if not q.score %}highlight-missing{% endif %}" placeholder="??" min="1" max="100"
                             data-index="{{ forloop.counter0 }}" data-field="score">
+                    </td>
+                    <td>
+                        <input type="text" name="subject_{{ forloop.counter0 }}" value="{{ q.subject_name|default:'' }}"
+                            style="width:100%;" class="option-input" placeholder="??"
+                            data-index="{{ forloop.counter0 }}" data-field="subject_name">
+                    </td>
+                    <td>
+                        <input type="text" name="chapter_{{ forloop.counter0 }}"
+                            value="{{ q.chapter_title|default:'' }}" style="width:100%;" class="option-input"
+                            placeholder="??" data-index="{{ forloop.counter0 }}" data-field="chapter_title">
+                    </td>
+                    <td>
+                        <input type="text" name="section_{{ forloop.counter0 }}"
+                            value="{{ q.section_title|default:'' }}" style="width:100%;" class="option-input"
+                            placeholder="??" data-index="{{ forloop.counter0 }}" data-field="section_title">
+                    </td>
+                    <td>
+                        <input type="text" name="kp_{{ forloop.counter0 }}"
+                            value="{{ q.knowledge_points_str|default:'' }}" style="width:100%;" class="option-input"
+                            placeholder="?????????" data-index="{{ forloop.counter0 }}"
+                            data-field="knowledge_points_str">
                     </td>
                     <td>
                         <span id="status-indicator-{{ forloop.counter0 }}"
                             class="{% if q.correct_answer and q.score and q.content %}success-indicator{% else %}warning-indicator{% endif %}">
-                            {% if q.correct_answer and q.score and q.content %}✓ 完整{% else %}⚠ 待补全{% endif %}
+                            {% if q.correct_answer and q.score and q.content %}? ??{% else %}? ???{% endif %}
                         </span>
                     </td>
                 </tr>
@@ -577,27 +602,28 @@
         </table>
 
         <div class="form-actions">
-            <button type="button" class="btn btn-secondary" id="backButton">← 返回重新选择</button>
-            <button type="button" class="btn btn-info" id="recheckButton">🔄 重新检查</button>
-            <button type="submit" class="btn btn-primary" id="submitBtn" {% if missing_count > 0 %}disabled{% endif %}>
+            <button type="button" class="btn btn-secondary" id="backButton">? ??????</button>
+            <button type="button" class="btn btn-info" id="recheckButton">?? ????</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn" {% if missing_count> 0 %}disabled{% endif %}>
                 {% if missing_count > 0 %}
-                ⚠ 请补全数据 ({{ missing_count }} 题待补全)
+                ? ????? ({{ missing_count }} ????)
                 {% else %}
-                ✓ 确认导入 ({{ valid_count }} 题完整)
+                ? ???? ({{ valid_count }} ???)
                 {% endif %}
             </button>
         </div>
 
         {% if missing_count > 0 %}
         <div class="validation-warning">
-            <p style="color: #dc3545; font-weight: 600; margin: 0 0 8px 0;">⚠ 请补全以下不完整的题目：</p>
+            <p style="color: #dc3545; font-weight: 600; margin: 0 0 8px 0;">? ????????????</p>
             <ul style="margin: 0; padding-left: 20px; color: #666; font-size: 13px;">
                 {% for q in questions_data %}
                 {% if not q.correct_answer or not q.score or not q.content %}
-                <li>第 {{ forloop.counter }} 题：
-                    {% if not q.content %}缺少题目内容{% endif %}
-                    {% if not q.correct_answer %}{% if not q.content %}、{% endif %}缺少答案{% endif %}
-                    {% if not q.score %}{% if not q.content and not q.correct_answer %}{% else %}、{% endif %}缺少分值{% endif %}
+                <li>? {{ forloop.counter }} ??
+                    {% if not q.content %}??????{% endif %}
+                    {% if not q.correct_answer %}{% if not q.content %}?{% endif %}????{% endif %}
+                    {% if not q.score %}{% if not q.content and not q.correct_answer %}{% else %}?{% endif %}????{%
+                    endif %}
                 </li>
                 {% endif %}
                 {% endfor %}
@@ -608,15 +634,16 @@
 </div>
 
 <script>
-    // 初始化题目数据，防止未定义
+    // ?????????????
     let questionsData = [];
     try {
-        questionsData = {{ questions_json | safe }};
+        questionsData = {{ questions_json | safe }
+    };
     } catch (e) {
         questionsData = [];
     }
 
-    // 从DOM读取单题数据
+    // ?DOM??????
     function getQuestionDataFromDOM(index) {
         const q = {
             content: '',
@@ -624,35 +651,49 @@
             options: { A: '', B: '', C: '', D: '' },
             correct_answer: '',
             score: '',
-            explanation: ''
+            explanation: '',
+            subject_name: '',
+            chapter_title: '',
+            section_title: '',
+            knowledge_points_str: ''
         };
 
-        // 读取题目内容
+        // ??????
         const contentInput = document.querySelector('textarea[name="content_' + index + '"]');
         if (contentInput) q.content = contentInput.value.trim();
 
-        // 读取选项
-        ['A', 'B', 'C', 'D'].forEach(function(letter) {
+        // ????
+        ['A', 'B', 'C', 'D'].forEach(function (letter) {
             const input = document.querySelector('input[name="option_' + letter.toLowerCase() + '_' + index + '"]');
             if (input) q.options[letter] = input.value.trim();
         });
 
-        // 读取答案
+        // ????
         const answerInput = document.querySelector('input[name="answer_' + index + '"]');
         if (answerInput) q.correct_answer = answerInput.value.trim();
 
-        // 读取分值
+        // ????
         const scoreInput = document.querySelector('input[name="score_' + index + '"]');
         if (scoreInput) {
             const score = parseInt(scoreInput.value);
             q.score = isNaN(score) ? '' : score;
         }
 
-        // 读取解析
+        // ????
         const expInput = document.querySelector('textarea[name="explanation_' + index + '"]');
         if (expInput) q.explanation = expInput.value.trim();
 
-        // 获取题目类型（从原始数据）
+        // ????/??/??/???
+        const subjectInput = document.querySelector('input[name="subject_' + index + '"]');
+        if (subjectInput) q.subject_name = subjectInput.value.trim();
+        const chapterInput = document.querySelector('input[name="chapter_' + index + '"]');
+        if (chapterInput) q.chapter_title = chapterInput.value.trim();
+        const sectionInput = document.querySelector('input[name="section_' + index + '"]');
+        if (sectionInput) q.section_title = sectionInput.value.trim();
+        const kpInput = document.querySelector('input[name="kp_' + index + '"]');
+        if (kpInput) q.knowledge_points_str = kpInput.value.trim();
+
+        // ?????????????
         if (questionsData[index] && questionsData[index].type) {
             q.type = parseInt(questionsData[index].type);
         }
@@ -660,21 +701,21 @@
         return q;
     }
 
-    // 更新单题状态指示器
+    // ?????????
     function updateStatusIndicator(index, isComplete) {
         const statusIndicator = document.getElementById('status-indicator-' + index);
         if (statusIndicator) {
             if (isComplete) {
-                statusIndicator.textContent = '✓ 完整';
+                statusIndicator.textContent = '? ??';
                 statusIndicator.className = 'success-indicator';
             } else {
-                statusIndicator.textContent = '⚠ 待补全';
+                statusIndicator.textContent = '? ???';
                 statusIndicator.className = 'warning-indicator';
             }
         }
     }
 
-    // 更新高亮样式
+    // ??????
     function updateHighlight(index, field, hasValue) {
         const inputs = document.querySelectorAll('[data-index="' + index + '"][data-field="' + field + '"]');
         inputs.forEach(function (input) {
@@ -686,40 +727,40 @@
         });
     }
 
-    // 更新顶部错误提示区域
+    // ??????????
     function updateTopErrorArea(isValid) {
         const errorList = document.querySelector('.error-list');
         if (errorList) {
             if (isValid) {
-                errorList.innerHTML = '<h4 style="color: #28a745;">✓ 数据验证通过</h4><ul><li>所有题目数据已完整，可以导入</li></ul>';
+                errorList.innerHTML = '<h4 style="color: #28a745;">? ??????</h4><ul><li>??????????????</li></ul>';
                 errorList.style.background = '#d4edda';
                 errorList.style.borderColor = '#c3e6cb';
             } else {
-                // 保持原有样式
+                // ??????
                 errorList.style.background = '';
                 errorList.style.borderColor = '';
             }
         }
     }
 
-    // 实时验证并更新提交按钮状态（直接从DOM读取数据）
+    // ?????????????????DOM?????
     function validateForm() {
         const submitBtn = document.getElementById('submitBtn');
         const validationWarning = document.querySelector('.validation-warning');
         const questionsContainer = document.querySelector('.questions-table tbody');
-        
-        // 获取题目数量（从DOM）
+
+        // ????????DOM?
         const rows = questionsContainer ? questionsContainer.querySelectorAll('tr') : [];
         const questionCount = rows.length;
 
-        // 如果没有题目数据，显示警告
+        // ?????????????
         if (questionCount === 0) {
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = '⚠ 没有可导入的题目';
+                submitBtn.innerHTML = '? ????????';
             }
             if (validationWarning) {
-                validationWarning.querySelector('ul').innerHTML = '<li>没有找到题目数据，请先上传文件</li>';
+                validationWarning.querySelector('ul').innerHTML = '<li>???????????????</li>';
                 validationWarning.style.display = 'block';
             }
             updateTopErrorArea(false);
@@ -729,7 +770,7 @@
         let incompleteCount = 0;
         const incompleteList = [];
 
-        // 遍历所有题目，从DOM实时读取数据进行验证
+        // ????????DOM??????????
         for (let index = 0; index < questionCount; index++) {
             const q = getQuestionDataFromDOM(index);
             const content = q.content;
@@ -743,18 +784,18 @@
 
             if (!content) {
                 hasError = true;
-                reasons.push('缺少题目内容');
+                reasons.push('??????');
             }
             if (!answer) {
                 hasError = true;
-                reasons.push('缺少答案');
+                reasons.push('????');
             }
             if (!score || score <= 0) {
                 hasError = true;
-                reasons.push('缺少分值');
+                reasons.push('????');
             }
 
-            // 选择题（单选和多选）需要验证选项
+            // ????????????????
             if (qType == 1 || qType == 2) {
                 const missingOptions = [];
                 if (!options.A) missingOptions.push('A');
@@ -764,14 +805,14 @@
 
                 if (missingOptions.length > 0) {
                     hasError = true;
-                    reasons.push('缺少选项' + missingOptions.join('、'));
+                    reasons.push('????' + missingOptions.join('?'));
                 }
             }
 
-            // 更新状态指示器
+            // ???????
             updateStatusIndicator(index, !hasError);
 
-            // 更新高亮样式
+            // ??????
             updateHighlight(index, 'content', !!content);
             updateHighlight(index, 'correct_answer', !!answer);
             updateHighlight(index, 'score', !!(score && score > 0));
@@ -784,18 +825,18 @@
 
             if (hasError) {
                 incompleteCount++;
-                incompleteList.push({ index: index + 1, reasons: reasons.join('、') });
+                incompleteList.push({ index: index + 1, reasons: reasons.join('?') });
             }
         }
 
         if (incompleteCount > 0) {
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '⚠ 请补全数据 (' + incompleteCount + ' 题待补全)';
+            submitBtn.innerHTML = '? ????? (' + incompleteCount + ' ????)';
 
             if (validationWarning) {
                 let listHtml = '';
                 incompleteList.forEach(function (item) {
-                    listHtml += '<li>第 ' + item.index + ' 题：' + item.reasons + '</li>';
+                    listHtml += '<li>? ' + item.index + ' ??' + item.reasons + '</li>';
                 });
                 validationWarning.querySelector('ul').innerHTML = listHtml;
                 validationWarning.style.display = 'block';
@@ -803,7 +844,7 @@
             updateTopErrorArea(false);
         } else {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '✓ 确认导入 (' + questionCount + ' 题完整)';
+            submitBtn.innerHTML = '? ???? (' + questionCount + ' ???)';
 
             if (validationWarning) {
                 validationWarning.style.display = 'none';
@@ -813,10 +854,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        // 初始化验证
+        // ?????
         validateForm();
 
-        // 实时监听输入变化，更新验证状态
+        // ???????????????
         document.addEventListener('input', function (e) {
             const target = e.target;
             if (target.dataset.index !== undefined) {
@@ -842,19 +883,27 @@
                     } else if (name.startsWith('score_')) {
                         const score = parseInt(target.value);
                         questionsData[index].score = isNaN(score) ? '' : score;
+                    } else if (name.startsWith('subject_')) {
+                        questionsData[index].subject_name = target.value.trim();
+                    } else if (name.startsWith('chapter_')) {
+                        questionsData[index].chapter_title = target.value.trim();
+                    } else if (name.startsWith('section_')) {
+                        questionsData[index].section_title = target.value.trim();
+                    } else if (name.startsWith('kp_')) {
+                        questionsData[index].knowledge_points_str = target.value.trim();
                     }
 
-                    // 更新验证状态
+                    // ??????
                     validateForm();
                 }
             }
         });
 
-        // 事件监听：返回按钮 - 保存编辑数据后返回
+        // ????????? - ?????????
         const backButton = document.getElementById('backButton');
         if (backButton) {
             backButton.addEventListener('click', function () {
-                // 先更新questionsData
+                // ???questionsData
                 const inputs = document.querySelectorAll('input[data-index], textarea[data-index]');
                 inputs.forEach(function (input) {
                     const index = parseInt(input.dataset.index);
@@ -863,7 +912,7 @@
                     }
 
                     const name = input.name;
-                    // 初始化options对象
+                    // ???options??
                     if (!questionsData[index].options) {
                         questionsData[index].options = {};
                     }
@@ -885,28 +934,36 @@
                     } else if (name.startsWith('score_')) {
                         const score = parseInt(input.value);
                         questionsData[index].score = isNaN(score) ? 1 : score;
+                    } else if (name.startsWith('subject_')) {
+                        questionsData[index].subject_name = input.value.trim();
+                    } else if (name.startsWith('chapter_')) {
+                        questionsData[index].chapter_title = input.value.trim();
+                    } else if (name.startsWith('section_')) {
+                        questionsData[index].section_title = input.value.trim();
+                    } else if (name.startsWith('kp_')) {
+                        questionsData[index].knowledge_points_str = input.value.trim();
                     }
                 });
 
-                // 创建保存数据的表单并提交
+                // ????????????
                 const saveForm = document.createElement('form');
                 saveForm.method = 'POST';
                 saveForm.action = '{% url "import_test_paper" %}';
 
-                // 添加CSRF token
+                // ??CSRF token
                 const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]');
                 if (csrfToken) {
                     saveForm.innerHTML += csrfToken.outerHTML;
                 }
 
-                // 获取标题和描述
+                // ???????
                 const titleInput = document.querySelector('input[value="{{ title }}"]');
                 const titleValue = titleInput ? titleInput.value : '';
 
                 const descTextarea = document.querySelector('textarea');
                 const descValue = descTextarea ? descTextarea.value : '';
 
-                // 添加数据字段
+                // ??????
                 const fields = {
                     'action': 'save_and_back',
                     'title': titleValue,
@@ -927,13 +984,13 @@
             });
         }
 
-        // 事件监听：重新检查按钮 - 手动触发数据校验
+        // ??????????? - ????????
         const recheckButton = document.getElementById('recheckButton');
         if (recheckButton) {
             recheckButton.addEventListener('click', function () {
-                console.log('重新检查按钮被点击');
+                console.log('?????????');
 
-                // 从DOM重新读取所有输入数据到questionsData
+                // ?DOM???????????questionsData
                 const inputs = document.querySelectorAll('input[data-index], textarea[data-index]');
                 inputs.forEach(function (input) {
                     const index = parseInt(input.dataset.index);
@@ -963,26 +1020,45 @@
                     } else if (name.startsWith('score_')) {
                         const score = parseInt(input.value);
                         questionsData[index].score = isNaN(score) ? '' : score;
+                    } else if (name.startsWith('subject_')) {
+                        questionsData[index].subject_name = input.value.trim();
+                    } else if (name.startsWith('chapter_')) {
+                        questionsData[index].chapter_title = input.value.trim();
+                    } else if (name.startsWith('section_')) {
+                        questionsData[index].section_title = input.value.trim();
+                    } else if (name.startsWith('kp_')) {
+                        questionsData[index].knowledge_points_str = input.value.trim();
                     }
                 });
 
-                // 触发验证并更新UI
+                // ???????UI
                 validateForm();
 
-                // 检查是否可以提交
+                // ????????
                 const submitBtn = document.getElementById('submitBtn');
                 if (submitBtn && !submitBtn.disabled) {
-                    alert('✓ 检查通过！所有题目数据完整，可以提交导入。');
+                    alert('? ?????????????????????');
                 } else {
-                    alert('⚠ 检查完成！还有部分题目数据不完整，请继续补全。');
+                    alert('? ???????????????????????');
                 }
             });
         }
 
-        // 表单提交处理
+        // ??????
         const form = document.getElementById('importForm');
         if (form) {
+            let submitting = false;
             form.addEventListener('submit', function (e) {
+                if (submitting) {
+                    e.preventDefault();
+                    return;
+                }
+                submitting = true;
+                const submitBtn = document.getElementById('submitBtn') || this.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = '? ????...';
+                }
                 const inputs = document.querySelectorAll('input[data-index], textarea[data-index]');
                 inputs.forEach(function (input) {
                     const index = parseInt(input.dataset.index);
@@ -991,7 +1067,7 @@
                     }
 
                     const name = input.name;
-                    // 初始化options对象
+                    // ???options??
                     if (!questionsData[index].options) {
                         questionsData[index].options = {};
                     }
@@ -1013,6 +1089,14 @@
                     } else if (name.startsWith('score_')) {
                         const score = parseInt(input.value);
                         questionsData[index].score = isNaN(score) ? 1 : score;
+                    } else if (name.startsWith('subject_')) {
+                        questionsData[index].subject_name = input.value.trim();
+                    } else if (name.startsWith('chapter_')) {
+                        questionsData[index].chapter_title = input.value.trim();
+                    } else if (name.startsWith('section_')) {
+                        questionsData[index].section_title = input.value.trim();
+                    } else if (name.startsWith('kp_')) {
+                        questionsData[index].knowledge_points_str = input.value.trim();
                     }
                 });
 
@@ -1023,7 +1107,7 @@
             });
         }
 
-        // 实时移除高亮
+        // ??????
         document.addEventListener('input', function (e) {
             const target = e.target;
             if (target && target.classList && target.classList.contains('highlight-missing')) {
