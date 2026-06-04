@@ -177,11 +177,11 @@
     <div class="record-container">
         <div class="record-header">
             <h2>答题结果</h2>
-        <p>总分：{{ total_score }}</p>
-        <p>得分：{{ obtained_score }}</p>
+        <p>总分：{{ test_paper.total_score }}</p>
+        <p>得分：{{ score }}</p>
         <p>正确题数：{{ correct_count }}</p>
         <p>错题数：{{ wrong_count }}</p>
-        <p>总题数：{{ total_questions }}</p>
+        <p>总题数：{{ total_count }}</p>
         </div>
         
         <div class="questions-container">
@@ -194,7 +194,8 @@
                         <div class="question-type">{% if result.question.type == 1 %}单选题{% elif result.question.type == 2 %}多选题{% else %}判断题{% endif %}</div>
                     </div>
                     
-                    {% if (result.question.type == 1 or result.question.type == 2) and result.question.options %}
+                    {% if result.question.type == 1 or result.question.type == 2 %}
+                        {% if result.question.options %}
                         <div class="options">
                             {% for option_key, option_value in result.question.options.items %}
                                 <div class="option {% if option_key in result.user_answer %}user-selected{% endif %} {% if option_key in result.correct_answer %}correct{% endif %}" data-option="{{ option_key }}">
@@ -202,6 +203,7 @@
                                 </div>
                             {% endfor %}
                         </div>
+                        {% endif %}
                     {% endif %}
                     
                     <div class="answers">

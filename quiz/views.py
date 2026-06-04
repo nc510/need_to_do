@@ -95,9 +95,17 @@ def submit_test_paper(request, paper_id):
     if request.method == 'POST':
         user_answers = {}
         for q in questions:
-            answer_key = f'question_{q.id}'
-            if answer_key in request.POST:
-                user_answers[q.id] = request.POST[answer_key]
+            if q.type == 2:  # 多选题
+                selected_options = []
+                for opt in ['A', 'B', 'C', 'D']:
+                    if f'question_{q.id}_{opt}' in request.POST:
+                        selected_options.append(opt)
+                if selected_options:
+                    user_answers[q.id] = ''.join(sorted(selected_options))
+            else:
+                answer_key = f'question_{q.id}'
+                if answer_key in request.POST:
+                    user_answers[q.id] = request.POST[answer_key]
         
         score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
         
@@ -441,14 +449,15 @@ def wrong_question_notebook(request):
 @login_required
 def create_wrong_question_paper(request):
     if request.method == 'POST':
+        # 来自错题本页面的组卷请求
         selected_ids = request.POST.getlist('selected_questions')
         if not selected_ids:
             messages.error(request, '请至少选择一道题目')
             return redirect('wrong_question_notebook')
         
-        title = request.POST.get('title', '错题巩固试卷')
+        # 创建试卷
         test_paper = TestPaper.objects.create(
-            title=title,
+            title='错题巩固试卷',
             description='错题巩固试卷',
             created_by=request.user.username,
             is_published=False
@@ -468,23 +477,8 @@ def create_wrong_question_paper(request):
         
         return redirect('submit_wrong_question_paper', paper_id=test_paper.id)
     
-    wrong_questions = WrongQuestion.objects.filter(user=request.user).select_related('question')
-    questions = []
-    for wq in wrong_questions:
-        q = wq.question
-        q.options = parse_options(q.options)
-        questions.append(q)
-    
-    if not questions:
-        messages.error(request, '您的错题本中没有题目')
-        return redirect('wrong_question_notebook')
-    
-    total_score = sum(q.score for q in questions)
-    
-    return render(request, 'quiz/frontend/wrong_question_paper.html', {
-        'questions': questions,
-        'total_score': total_score
-    })
+    # GET请求时重定向到错题本选择页面
+    return redirect('wrong_question_notebook')
 
 @login_required
 def submit_wrong_question_paper(request, paper_id):
@@ -494,9 +488,17 @@ def submit_wrong_question_paper(request, paper_id):
     if request.method == 'POST':
         user_answers = {}
         for q in questions:
-            answer_key = f'question_{q.id}'
-            if answer_key in request.POST:
-                user_answers[q.id] = request.POST[answer_key]
+            if q.type == 2:  # 多选题
+                selected_options = []
+                for opt in ['A', 'B', 'C', 'D']:
+                    if f'question_{q.id}_{opt}' in request.POST:
+                        selected_options.append(opt)
+                if selected_options:
+                    user_answers[q.id] = ''.join(sorted(selected_options))
+            else:
+                answer_key = f'question_{q.id}'
+                if answer_key in request.POST:
+                    user_answers[q.id] = request.POST[answer_key]
         
         score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
         
@@ -525,10 +527,24 @@ def submit_wrong_question_paper(request, paper_id):
                 original_explanation=question.explanation
             )
         
+        # 删除旧错题，然后重新添加答错的题目
         for wq in WrongQuestion.objects.filter(user=request.user, question__in=questions):
             wrong_question_ids.add(wq.question.id)
-        
         WrongQuestion.objects.filter(user=request.user, question__in=questions).delete()
+        
+        # 重新添加这次答错的题
+        re_added_count = 0
+        for result in question_results:
+            if not result['is_correct']:
+                WrongQuestion.objects.get_or_create(
+                    user=request.user,
+                    question=result['question'],
+                    defaults={
+                        'user_answer': result.get('user_answer', ''),
+                        'correct_answer': result['question'].correct_answer
+                    }
+                )
+                re_added_count += 1
         
         return render(request, 'quiz/frontend/wrong_question_paper_result.html', {
             'test_paper': test_paper,
@@ -538,16 +554,17 @@ def submit_wrong_question_paper(request, paper_id):
             'total_count': total_count,
             'question_results': question_results,
             'test_record': test_record,
-            'deleted_wrong_questions': len(wrong_question_ids)
+            'deleted_wrong_questions': len(wrong_question_ids),
+            're_added_count': re_added_count
         })
     
     for q in questions:
         q.options = parse_options(q.options)
     
-    return render(request, 'quiz/frontend/test_paper_detail.html', {
+    return render(request, 'quiz/frontend/wrong_question_paper.html', {
         'test_paper': test_paper,
         'questions': questions,
-        'is_wrong_paper': True
+        'total_score': test_paper.total_score
     })
 
 @login_required
