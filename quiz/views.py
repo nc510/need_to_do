@@ -8,6 +8,233 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.db import IntegrityError
 from django.contrib.auth.models import User
+import json
+
+
+class BaseTestPaperImporter:
+    """试卷导入基类 - 包含前后台共同的导入逻辑"""
+    
+    def __init__(self, request, template_name, success_redirect, created_by='admin', is_public=True, default_is_published=False):
+        self.request = request
+        self.template_name = template_name
+        self.success_redirect = success_redirect
+        self.created_by = created_by
+        self.is_public = is_public
+        self.default_is_published = default_is_published
+    
+    def get_created_by(self):
+        """获取创建者 - 子类可覆盖"""
+        return self.created_by
+    
+    def get_is_public(self):
+        """获取题目是否公开 - 子类可覆盖"""
+        return self.is_public
+    
+    def get_is_published(self, request):
+        """获取试卷是否发布 - 子类可覆盖"""
+        if hasattr(request, 'POST'):
+            return request.POST.get('is_published') == 'on'
+        return self.default_is_published
+    
+    def get_success_redirect(self, test_paper):
+        """获取成功重定向 - 子类可覆盖"""
+        return self.success_redirect
+    
+    def process_confirm_import(self):
+        """处理确认导入"""
+        title = self.request.POST.get('title', '导入试卷')
+        description = self.request.POST.get('description', '')
+        is_published = self.get_is_published(self.request)
+        questions_json = self.request.POST.get('questions_json', '')
+        
+        if not questions_json:
+            messages.error(self.request, '没有题目数据，请重新上传文件')
+            return render(self.request, self.template_name, {'step': 1})
+        
+        try:
+            questions_data = json.loads(questions_json)
+            test_paper = TestPaper.objects.create(
+                title=title,
+                description=description,
+                created_by=self.get_created_by(),
+                is_published=is_published
+            )
+            
+            total_score = 0
+            valid_count = 0
+            for q_data in questions_data:
+                if not q_data.get('content') or not q_data.get('correct_answer'):
+                    continue
+                
+                options_data = q_data.get('options', {})
+                if isinstance(options_data, str):
+                    try:
+                        options_data = json.loads(options_data)
+                    except:
+                        options_data = {}
+                
+                q_type = int(q_data.get('type', 1))
+                if q_type not in [1, 2, 3]:
+                    q_type = 1
+                
+                q_score = q_data.get('score', 1)
+                try:
+                    q_score = int(q_score) if q_score else 1
+                except:
+                    q_score = 1
+                
+                subject_obj = None
+                chapter_obj = None
+                section_obj = None
+                kp_objects = []
+                
+                subject_name = q_data.get('subject_name', '').strip()
+                chapter_title = q_data.get('chapter_title', '').strip()
+                section_title = q_data.get('section_title', '').strip()
+                kp_names = q_data.get('knowledge_points_str', '').strip()
+                
+                if subject_name:
+                    subject_obj, _ = Subject.objects.get_or_create(
+                        name=subject_name,
+                        defaults={'code': subject_name[:10].upper(), 'icon': '📚'}
+                    )
+                
+                if subject_obj and chapter_title:
+                    chapter_obj, _ = Chapter.objects.get_or_create(
+                        subject=subject_obj,
+                        title=chapter_title,
+                        defaults={'number': Chapter.objects.filter(subject=subject_obj).count() + 1}
+                    )
+                
+                if chapter_obj and section_title:
+                    section_obj, _ = Section.objects.get_or_create(
+                        chapter=chapter_obj,
+                        title=section_title,
+                        defaults={'number': Section.objects.filter(chapter=chapter_obj).count() + 1}
+                    )
+                
+                if kp_names and subject_obj:
+                    for kp_name in kp_names.split(','):
+                        kp_name = kp_name.strip()
+                        if kp_name:
+                            kp, created = KnowledgePoint.objects.get_or_create(
+                                subject=subject_obj,
+                                name=kp_name,
+                                defaults={'section': section_obj}
+                            )
+                            kp_objects.append(kp)
+                
+                question = Question.objects.create(
+                    type=q_type,
+                    content=q_data['content'],
+                    options=options_data,
+                    correct_answer=q_data['correct_answer'],
+                    score=q_score,
+                    explanation=q_data.get('explanation', ''),
+                    subject=subject_obj,
+                    chapter=chapter_obj,
+                    section=section_obj,
+                    is_public=self.get_is_public(),
+                    created_by=self.get_created_by()
+                )
+                
+                if kp_objects:
+                    question.knowledge_points.set(kp_objects)
+                
+                test_paper.questions.add(question)
+                total_score += q_score
+                valid_count += 1
+            
+            test_paper.total_score = total_score
+            test_paper.save()
+            
+            messages.success(self.request, f'试卷 "{title}" 导入成功！共导入 {valid_count} 道题目，总分 {total_score} 分。')
+            return self.get_success_redirect(test_paper)
+        except Exception as e:
+            messages.error(self.request, f'导入失败：{str(e)}')
+            return render(self.request, self.template_name, {'step': 1})
+    
+    def process_file_upload(self):
+        """处理文件上传"""
+        title = self.request.POST.get('title', '导入试卷')
+        description = self.request.POST.get('description', '')
+        
+        try:
+            file = self.request.FILES['file']
+            questions_data, stats, errors = import_questions_from_excel(file)
+            
+            if errors:
+                messages.error(self.request, errors[0])
+                return render(self.request, self.template_name, {'step': 1})
+            
+            for idx, q in enumerate(questions_data):
+                q['row'] = idx + 2
+                q['has_error'] = not (q.get('correct_answer') and q.get('score'))
+            
+            total_score = stats['total_score']
+            valid_count = stats['valid_count']
+            missing_count = stats['missing_count']
+            
+            return render(self.request, self.template_name, {
+                'step': 2,
+                'questions_data': questions_data,
+                'questions_json': json.dumps(questions_data, ensure_ascii=False),
+                'total_score': total_score,
+                'valid_count': valid_count,
+                'missing_count': missing_count,
+                'errors': errors,
+                'title': title,
+                'description': description
+            })
+        except Exception as e:
+            messages.error(self.request, f'读取文件失败：{str(e)}')
+            return render(self.request, self.template_name, {'step': 1})
+    
+    def handle(self):
+        """主处理函数"""
+        if self.request.method == 'POST':
+            if self.request.POST.get('action') == 'confirm_import':
+                return self.process_confirm_import()
+            elif self.request.POST.get('action') == 'back':
+                return render(self.request, self.template_name, {'step': 1})
+            elif self.request.FILES.get('file'):
+                return self.process_file_upload()
+        
+        return render(self.request, self.template_name, {'step': 1})
+
+
+class FrontendTestPaperImporter(BaseTestPaperImporter):
+    """前台试卷导入器"""
+    
+    def __init__(self, request):
+        super().__init__(
+            request=request,
+            template_name='quiz/frontend/import_test_paper.html',
+            success_redirect='my_test_papers',
+            created_by=request.user.username,
+            is_public=False,
+            default_is_published=False
+        )
+    
+    def get_success_redirect(self, test_paper):
+        return redirect('my_test_papers')
+
+
+class AdminTestPaperImporter(BaseTestPaperImporter):
+    """后台试卷导入器"""
+    
+    def __init__(self, request):
+        super().__init__(
+            request=request,
+            template_name='quiz/admin/import_testpaper.html',
+            success_redirect='admin_preview_testpaper',
+            created_by='admin',
+            is_public=True,
+            default_is_published=False
+        )
+    
+    def get_success_redirect(self, test_paper):
+        return redirect('admin_preview_testpaper', paper_id=test_paper.id)
 from django.utils import timezone
 from django.contrib.sessions.models import Session
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint
@@ -675,251 +902,9 @@ def create_test_paper(request):
 
 @login_required
 def import_test_paper(request):
-    """导入试卷视图 - 支持从Excel文件导入试卷"""
-    
-    if request.method == 'POST' and request.POST.get('action') == 'save_and_back':
-        title = request.POST.get('title', '')
-        description = request.POST.get('description', '')
-        questions_json = request.POST.get('questions_json', '')
-        
-        request.session['import_title'] = title
-        request.session['import_description'] = description
-        request.session['import_questions_json'] = questions_json
-        
-        messages.success(request, '编辑内容已保存')
-        return redirect('import_test_paper')
-    
-    if request.method == 'POST' and request.POST.get('action') == 'preview':
-        file = request.FILES.get('file')
-        if not file:
-            messages.error(request, '请上传文件')
-            return render(request, 'quiz/frontend/import_test_paper.html')
-        
-        try:
-            questions_data, stats, errors = import_questions_from_excel(file)
-            if errors:
-                messages.error(request, errors[0])
-                return render(request, 'quiz/frontend/import_test_paper.html')
-            
-            for idx, q in enumerate(questions_data):
-                q['row'] = idx + 2
-                q['has_error'] = not (q.get('correct_answer') and q.get('score'))
-            
-            return render(request, 'quiz/frontend/import_preview.html', {
-                'questions_data': questions_data,
-                'questions_json': json.dumps(questions_data, ensure_ascii=False),
-                'total_score': sum(q.get('score', 0) for q in questions_data if isinstance(q.get('score'), int)),
-                'valid_count': sum(1 for q in questions_data if q.get('correct_answer') and q.get('score')),
-                'missing_count': sum(1 for q in questions_data if not q.get('correct_answer') or not q.get('score'))
-            })
-        except Exception as e:
-            messages.error(request, f'预览失败：{str(e)}')
-    
-    if request.method == 'POST' and request.POST.get('action') == 'confirm_import':
-        title = request.POST.get('title')
-        description = request.POST.get('description')
-        questions_json = request.POST.get('questions_data')
-        
-        if title and questions_json:
-            try:
-                questions_data = json.loads(questions_json)
-                
-                if not questions_data:
-                    messages.error(request, '没有有效的题目数据')
-                    return render(request, 'quiz/frontend/import_test_paper.html')
-                
-                test_paper = TestPaper.objects.create(
-                    title=title,
-                    description=description,
-                    created_by=request.user.username,
-                    is_published=False
-                )
-                
-                total_score = 0
-                valid_questions = 0
-                for q_data in questions_data:
-                    if not q_data.get('content') or not q_data.get('correct_answer'):
-                        continue
-                    
-                    options_data = q_data.get('options', {})
-                    if isinstance(options_data, str):
-                        try:
-                            options_data = json.loads(options_data)
-                        except:
-                            options_data = {}
-                    
-                    q_type = int(q_data.get('type', 1))
-                    if q_type not in [1, 2, 3]:
-                        q_type = 1
-                    
-                    q_score = q_data.get('score', 1)
-                    try:
-                        q_score = int(q_score) if q_score else 1
-                    except:
-                        q_score = 1
-                    
-                    subject_obj = None
-                    chapter_obj = None
-                    section_obj = None
-                    kp_objects = []
-                    
-                    subject_name = q_data.get('subject_name', '').strip()
-                    chapter_title = q_data.get('chapter_title', '').strip()
-                    section_title = q_data.get('section_title', '').strip()
-                    kp_names = q_data.get('knowledge_points_str', '').strip()
-                    
-                    if subject_name:
-                        subject_obj, _ = Subject.objects.get_or_create(
-                            name=subject_name,
-                            defaults={'code': subject_name[:10].upper(), 'icon': '📚'}
-                        )
-                    
-                    if subject_obj and chapter_title:
-                        chapter_obj, _ = Chapter.objects.get_or_create(
-                            subject=subject_obj,
-                            title=chapter_title,
-                            defaults={'number': Chapter.objects.filter(subject=subject_obj).count() + 1}
-                        )
-                    
-                    if chapter_obj and section_title:
-                        section_obj, _ = Section.objects.get_or_create(
-                            chapter=chapter_obj,
-                            title=section_title,
-                            defaults={'number': Section.objects.filter(chapter=chapter_obj).count() + 1}
-                        )
-                    
-                    if kp_names and subject_obj:
-                        for kp_name in kp_names.split(','):
-                            kp_name = kp_name.strip()
-                            if kp_name:
-                                kp, created = KnowledgePoint.objects.get_or_create(
-                                    subject=subject_obj,
-                                    name=kp_name,
-                                    defaults={'section': section_obj}
-                                )
-                                kp_objects.append(kp)
-                    
-                    question = Question.objects.create(
-                        type=q_type,
-                        content=q_data['content'],
-                        options=options_data,
-                        correct_answer=q_data['correct_answer'],
-                        score=q_score,
-                        explanation=q_data.get('explanation', ''),
-                        subject=subject_obj,
-                        chapter=chapter_obj,
-                        section=section_obj,
-                        is_public=False,
-                        created_by=request.user.username
-                    )
-                    
-                    if kp_objects:
-                        question.knowledge_points.set(kp_objects)
-                    
-                    test_paper.questions.add(question)
-                    total_score += q_score
-                    valid_questions += 1
-                
-                test_paper.total_score = total_score
-                test_paper.save()
-                
-                messages.success(request, f'试卷 "{title}" 导入成功！共导入 {len(questions_data)} 道题目')
-                return redirect('my_test_papers')
-            except Exception as e:
-                messages.error(request, f'导入失败：{str(e)}')
-        else:
-            messages.error(request, '请填写试卷标题并确认导入')
-        return render(request, 'quiz/frontend/import_test_paper.html')
-    
-    if request.method == 'POST' and request.FILES.get('paper_file'):
-        title = request.POST.get('title', '')
-        description = request.POST.get('description', '')
-        file = request.FILES.get('paper_file')
-        
-        if not title:
-            messages.error(request, '请填写试卷标题')
-            return render(request, 'quiz/frontend/import_test_paper.html')
-        
-        try:
-            import openpyxl
-            from openpyxl.utils.exceptions import InvalidFileException
-            
-            wb = openpyxl.load_workbook(file)
-            ws = wb.active
-            
-            headers = [cell.value for cell in ws[1]]
-            questions_data = []
-            
-            for row_idx, row in enumerate(ws.iter_rows(min_row=2), start=2):
-                row_data = {headers[i]: row[i].value for i in range(len(headers))}
-                content = row_data.get('题目内容', '')
-                if not content:
-                    continue
-                
-                q_type_map = {'单选题': 1, '多选题': 2, '判断题': 3, '1': 1, '2': 2, '3': 3}
-                q_type = q_type_map.get(str(row_data.get('题型', '单选题')), 1)
-                
-                options = {}
-                for letter in ['A', 'B', 'C', 'D']:
-                    option_key = f'选项{letter}'
-                    if row_data.get(option_key):
-                        options[letter] = row_data[option_key]
-                
-                correct_answer = str(row_data.get('正确答案', '')).strip()
-                score = row_data.get('分值', 1)
-                try:
-                    score = int(score) if score else 1
-                except:
-                    score = 1
-                
-                subject_name = str(row_data.get('学科', '') or '').strip()
-                chapter_title = str(row_data.get('章节', '') or '').strip()
-                section_title = str(row_data.get('小节', '') or '').strip()
-                kp_names = str(row_data.get('知识点', '') or '').strip()
-                
-                questions_data.append({
-                    'content': content,
-                    'type': q_type,
-                    'options': options,
-                    'correct_answer': correct_answer,
-                    'score': score,
-                    'explanation': row_data.get('解析', ''),
-                    'subject_name': subject_name,
-                    'chapter_title': chapter_title,
-                    'section_title': section_title,
-                    'knowledge_points_str': kp_names,
-                    'row': row_idx,
-                    'has_error': not (correct_answer and score)
-                })
-            
-            if not questions_data:
-                messages.error(request, '文件中没有有效的题目数据')
-                return render(request, 'quiz/frontend/import_test_paper.html')
-            
-            valid_count = sum(1 for q in questions_data if not q['has_error'])
-            missing_count = len(questions_data) - valid_count
-            
-            return render(request, 'quiz/frontend/import_preview.html', {
-                'questions_data': questions_data,
-                'questions_json': json.dumps(questions_data, ensure_ascii=False),
-                'total_score': sum(q['score'] for q in questions_data),
-                'valid_count': valid_count,
-                'missing_count': missing_count,
-                'title': title,
-                'description': description
-            })
-        except InvalidFileException:
-            messages.error(request, '文件格式不正确，请上传 .xlsx 格式的 Excel 文件')
-        except Exception as e:
-            messages.error(request, f'读取文件失败：{str(e)}')
-    
-    saved_title = request.session.get('import_title', '')
-    saved_description = request.session.get('import_description', '')
-    
-    return render(request, 'quiz/frontend/import_test_paper.html', {
-        'saved_title': saved_title,
-        'saved_description': saved_description
-    })
+    """前台导入试卷 - 使用导入器类"""
+    importer = FrontendTestPaperImporter(request)
+    return importer.handle()
 
 @login_required
 def publish_test_paper(request, paper_id):
@@ -2093,154 +2078,6 @@ def admin_preview_testpaper(request, paper_id):
 
 @staff_member_required
 def admin_import_testpaper(request):
-    """后台导入试卷 - 支持预览和编辑学科/章节/知识点信息"""
-    # 处理确认导入
-    if request.method == 'POST' and request.POST.get('action') == 'confirm_import':
-        title = request.POST.get('title', '导入试卷')
-        description = request.POST.get('description', '')
-        is_published = request.POST.get('is_published') == 'on'
-        questions_json = request.POST.get('questions_json', '')
-        
-        if not questions_json:
-            messages.error(request, '没有题目数据，请重新上传文件')
-            return redirect('admin_import_testpaper')
-        
-        try:
-            questions_data = json.loads(questions_json)
-            test_paper = TestPaper.objects.create(
-                title=title,
-                description=description,
-                created_by='admin',
-                is_published=is_published
-            )
-            
-            total_score = 0
-            valid_count = 0
-            for q_data in questions_data:
-                if not q_data.get('content') or not q_data.get('correct_answer'):
-                    continue
-                
-                options_data = q_data.get('options', {})
-                if isinstance(options_data, str):
-                    try:
-                        options_data = json.loads(options_data)
-                    except:
-                        options_data = {}
-                
-                q_type = int(q_data.get('type', 1))
-                if q_type not in [1, 2, 3]:
-                    q_type = 1
-                
-                q_score = q_data.get('score', 1)
-                try:
-                    q_score = int(q_score) if q_score else 1
-                except:
-                    q_score = 1
-                
-                subject_obj = None
-                chapter_obj = None
-                section_obj = None
-                kp_objects = []
-                
-                subject_name = q_data.get('subject_name', '').strip()
-                chapter_title = q_data.get('chapter_title', '').strip()
-                section_title = q_data.get('section_title', '').strip()
-                kp_names = q_data.get('knowledge_points_str', '').strip()
-                
-                if subject_name:
-                    subject_obj, _ = Subject.objects.get_or_create(
-                        name=subject_name,
-                        defaults={'code': subject_name[:10].upper(), 'icon': '📚'}
-                    )
-                
-                if subject_obj and chapter_title:
-                    chapter_obj, _ = Chapter.objects.get_or_create(
-                        subject=subject_obj,
-                        title=chapter_title,
-                        defaults={'number': Chapter.objects.filter(subject=subject_obj).count() + 1}
-                    )
-                
-                if chapter_obj and section_title:
-                    section_obj, _ = Section.objects.get_or_create(
-                        chapter=chapter_obj,
-                        title=section_title,
-                        defaults={'number': Section.objects.filter(chapter=chapter_obj).count() + 1}
-                    )
-                
-                if kp_names and subject_obj:
-                    for kp_name in kp_names.split(','):
-                        kp_name = kp_name.strip()
-                        if kp_name:
-                            kp, created = KnowledgePoint.objects.get_or_create(
-                                subject=subject_obj,
-                                name=kp_name,
-                                defaults={'section': section_obj}
-                            )
-                            kp_objects.append(kp)
-                
-                question = Question.objects.create(
-                    type=q_type,
-                    content=q_data['content'],
-                    options=options_data,
-                    correct_answer=q_data['correct_answer'],
-                    score=q_score,
-                    explanation=q_data.get('explanation', ''),
-                    subject=subject_obj,
-                    chapter=chapter_obj,
-                    section=section_obj,
-                    is_public=True,
-                    created_by='admin'
-                )
-                
-                if kp_objects:
-                    question.knowledge_points.set(kp_objects)
-                
-                test_paper.questions.add(question)
-                total_score += q_score
-                valid_count += 1
-            
-            test_paper.total_score = total_score
-            test_paper.save()
-            
-            messages.success(request, f'试卷 "{title}" 导入成功！共导入 {valid_count} 道题目，总分 {total_score} 分。')
-            return redirect('admin_preview_testpaper', paper_id=test_paper.id)
-        except Exception as e:
-            messages.error(request, f'导入失败：{str(e)}')
-            return redirect('admin_import_testpaper')
-    
-    # 处理文件上传和预览
-    if request.method == 'POST' and request.FILES.get('file'):
-        title = request.POST.get('title', '导入试卷')
-        description = request.POST.get('description', '')
-        
-        try:
-            file = request.FILES['file']
-            questions_data, stats, errors = import_questions_from_excel(file)
-            
-            if errors:
-                messages.error(request, errors[0])
-                return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
-            
-            for idx, q in enumerate(questions_data):
-                q['row'] = idx + 2
-                q['has_error'] = not (q.get('correct_answer') and q.get('score'))
-            
-            total_score = stats['total_score']
-            valid_count = stats['valid_count']
-            missing_count = stats['missing_count']
-            
-            return render(request, 'quiz/admin/import_testpaper.html', {
-                'step': 2,
-                'questions_data': questions_data,
-                'questions_json': json.dumps(questions_data, ensure_ascii=False),
-                'total_score': total_score,
-                'valid_count': valid_count,
-                'missing_count': missing_count,
-                'errors': errors,
-                'title': title,
-                'description': description
-            })
-        except Exception as e:
-            messages.error(request, f'读取文件失败：{str(e)}')
-    
-    return render(request, 'quiz/admin/import_testpaper.html', {'step': 1})
+    """后台导入试卷 - 使用导入器类"""
+    importer = AdminTestPaperImporter(request)
+    return importer.handle()

@@ -201,12 +201,129 @@
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
     }
+
+    .step.completed .step-number {
+        background: #28a745;
+        color: white;
+    }
+
+    .step.completed {
+        color: #28a745;
+    }
+
+    .action-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 20px;
+    }
+
+    .action-buttons .btn {
+        min-width: 120px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+{% if step == 2 %}
 <div class="form-container">
-    <h1 class="page-title">📥 导入试卷</h1>
+    <h1 class="page-title">� 导入预览</h1>
+
+    <div class="step-indicator">
+        <div class="step completed">
+            <span class="step-number">✓</span>
+            <span>上传文件</span>
+        </div>
+        <div class="step active">
+            <span class="step-number">2</span>
+            <span>预览确认</span>
+        </div>
+    </div>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div
+        style="padding: 12px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'error' %}background: #f8d7da; color: #721c24;{% else %}background: #d4edda; color: #155724;{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div style="background: #e3f2fd; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div><strong>试卷标题：</strong>{{ title }}</div>
+            <div><strong>题目数量：</strong>{{ questions_data|length }} 道</div>
+            <div><strong>总分：</strong>{{ total_score }} 分</div>
+            <div><strong>完整题目：</strong>{{ valid_count }} 道</div>
+            <div><strong>不完整：</strong>{{ missing_count }} 道</div>
+        </div>
+    </div>
+
+    {% if missing_count > 0 %}
+    <div
+        style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ 以下题目信息不完整，请补全后导入：</h4>
+        <ul style="margin: 0; padding-left: 20px; color: #856404;">
+            {% for q in questions_data %}
+            {% if not q.correct_answer or not q.score %}
+            <li>第 {{ forloop.counter }} 题：
+                {% if not q.content %}缺少题目内容{% endif %}
+                {% if not q.correct_answer %}{% if not q.content %}、{% endif %}缺少答案{% endif %}
+                {% if not q.score %}{% if not q.content and not q.correct_answer %}、{% endif %}缺少分值{% endif %}
+            </li>
+            {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div style="background: #d4edda; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+        <h4 style="margin: 0 0 10px 0; color: #155724;">题目预览</h4>
+        <div style="max-height: 400px; overflow-y: auto;">
+            {% for q in questions_data %}
+            <div style="border-bottom: 1px solid #ddd; padding: 10px 0;">
+                <div style="display: flex; justify-content: space-between;">
+                    <strong>第 {{ forloop.counter }} 题</strong>
+                    <span>题型：{% if q.type == 1 %}单选题{% elif q.type == 2 %}多选题{% elif q.type == 3 %}判断题{% else %}未知{%
+                        endif %}</span>
+                    <span>分值：{{ q.score|default:0 }} 分</span>
+                </div>
+                <div style="margin-top: 5px;">{{ q.content|truncatewords:20 }}</div>
+                {% if q.options %}
+                <div style="margin-top: 5px; font-size: 13px; color: #666;">
+                    {% for key, val in q.options.items %}
+                    {{ key }}. {{ val }}{% if not forloop.last %}；{% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div style="margin-top: 5px; color: #28a745;">正确答案：{{ q.correct_answer|default:"未填写" }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm_import">
+        <input type="hidden" name="title" value="{{ title }}">
+        <input type="hidden" name="description" value="{{ description }}">
+        <input type="hidden" name="questions_json" value="{{ questions_json }}">
+
+        <div class="action-buttons">
+            <button type="submit" name="action" value="back" class="btn btn-secondary">← 返回</button>
+            <button type="submit" class="btn btn-primary" id="confirmBtn" {% if missing_count > 0 %}disabled{% endif %}>
+                {% if missing_count > 0 %}
+                ⚠️ 请补全数据
+                {% else %}
+                ✓ 确认导入
+                {% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% else %}
+<div class="form-container">
+    <h1 class="page-title">�� 导入试卷</h1>
 
     <div class="step-indicator">
         <div class="step active">
@@ -229,7 +346,8 @@
     {% endif %}
 
     {% if show_preview_data and saved_questions_json %}
-    <div style="background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+    <div
+        style="background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
         <p style="margin: 0; color: #2e7d32; font-weight: 600;">🔄 检测到之前编辑的数据，可继续编辑或重新上传</p>
     </div>
     {% endif %}
@@ -239,21 +357,20 @@
 
         <div class="form-group">
             <label for="title">试卷标题 <span style="color: #dc3545;">*</span></label>
-            <input type="text" id="title" name="title" placeholder="请输入试卷标题" required 
-                   value="{{ saved_title|default:'' }}">
+            <input type="text" id="title" name="title" placeholder="请输入试卷标题" required value="{{ title|default:'' }}">
         </div>
 
         <div class="form-group">
             <label for="description">试卷描述</label>
-            <textarea id="description" name="description" placeholder="请输入试卷描述（可选）">{{ saved_description|default:'' }}</textarea>
+            <textarea id="description" name="description"
+                placeholder="请输入试卷描述（可选）">{{ description|default:'' }}</textarea>
         </div>
 
         <div class="form-group">
-            <label for="paper_file">上传 Excel 文件 <span style="color: #dc3545;">*</span></label>
+            <label for="file">上传 Excel 文件 <span style="color: #dc3545;">*</span></label>
             <div class="file-input">
-                <input type="file" id="paper_file" name="paper_file" accept=".xlsx,.xls" onchange="updateFileName()"
-                    required>
-                <label for="paper_file">📁 点击选择 Excel 文件</label>
+                <input type="file" id="file" name="file" accept=".xlsx,.xls" onchange="updateFileName()" required>
+                <label for="file">📁 点击选择 Excel 文件</label>
                 <p id="fileName" style="margin: 8px 0 0 0; color: #666; font-size: 13px;">支持 .xlsx 和 .xls 格式</p>
             </div>
         </div>
@@ -299,10 +416,11 @@
         </ul>
     </div>
 </div>
+{% endif %}
 
 <script>
     function updateFileName() {
-        const input = document.getElementById('paper_file');
+        const input = document.getElementById('file');
         const fileName = document.getElementById('fileName');
         if (input.files.length > 0) {
             fileName.textContent = '已选择: ' + input.files[0].name;
@@ -315,7 +433,7 @@
 
     function validateForm() {
         const title = document.getElementById('title').value.trim();
-        const fileInput = document.getElementById('paper_file');
+        const fileInput = document.getElementById('file');
 
         if (!title) {
             alert('请填写试卷标题');
