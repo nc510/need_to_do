@@ -596,12 +596,11 @@ def register(request):
                 first_name=first_name
             )
             
-            Profile.objects.create(
-                user=user,
-                phone_number=phone_number,
-                qq_number=qq_number,
-                approval_status=0
-            )
+            profile = Profile.objects.get(user=user)
+            profile.phone_number = phone_number
+            profile.qq_number = qq_number
+            profile.approval_status = 1
+            profile.save()
             
             messages.success(request, '注册成功！您的账号正在等待管理员审核通过。')
             return redirect('login')
@@ -623,9 +622,9 @@ def approval_pending(request):
 
 def captcha_image(request):
     captcha_text = generate_captcha_text()
-    captcha_image = generate_captcha_image(captcha_text)
+    captcha_buffer = generate_captcha_image(captcha_text)
     cache.set(f'captcha:{request.session.session_key}', captcha_text, 300)
-    return HttpResponse(captcha_image, content_type='image/png')
+    return HttpResponse(captcha_buffer.getvalue(), content_type='image/png')
 
 def refresh_captcha(request):
     return captcha_image(request)

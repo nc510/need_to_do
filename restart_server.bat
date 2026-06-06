@@ -1,97 +1,171 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
-title 在线考试系统 - 重启服务
+title Online Exam System - Restart Service
 
 echo ============================================
-echo   📚 在线考试系统 - 重启服务脚本
+echo   Online Exam System - Restart Service
 echo ============================================
 echo.
 
+setlocal enabledelayedexpansion
+
+set "PROJECT_DIR=D:\CODE\Need_To_Do"
+set "NGINX_DIR=C:\nginx-1.29.3"
+set "BACKEND_PORT=8000"
+set "NGINX_PORT=8090"
+
+cd /d "%PROJECT_DIR%"
+
+:: Get timestamp for log file
+set "LOG_FILE=%PROJECT_DIR%\logs\restart_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log"
+set "LOG_FILE=%LOG_FILE: =0%"
+
+:: Create logs directory if not exists
+if not exist "%PROJECT_DIR%\logs" mkdir "%PROJECT_DIR%\logs"
+
+:: Redirect all output to log file
+call :start_services >> "%LOG_FILE%" 2>&1
+
+:: Exit immediately
+exit
+
+:start_services
+echo ============================================
+echo   Online Exam System - Restart Service
+echo ============================================
+echo.
+echo Started at: %date% %time%
+echo.
+
 :: =============================================
-:: 1. 停止已有的 Waitress 进程（端口 8000）
+:: 1. Stop existing Waitress process (port 8000)
 :: =============================================
-echo [1/4] 正在停止 Waitress 后端服务...
-for /f "tokens=5" %%i in ('netstat -ano ^| findstr :8000') do (
+echo [1/5] Stopping Waitress backend service...
+echo   Searching for process listening on port %BACKEND_PORT%...
+
+for /f "tokens=5" %%i in ('netstat -ano ^| findstr ":%BACKEND_PORT%" ^| findstr "LISTENING"') do (
     if not "%%i"=="" (
+        echo   Terminating process PID: %%i
         taskkill /f /pid %%i >nul 2>&1
-        echo   ✅ 已终止等待中的进程 (PID: %%i)
+        if !ERRORLEVEL! equ 0 (
+            echo   [OK] Process terminated successfully (PID: %%i)
+        ) else (
+            echo   [WARN] Process %%i may already be stopped
+        )
     )
 )
+
+echo   Waiting for process to terminate...
 timeout /t 2 /nobreak >nul
 
 :: =============================================
-:: 2. 重新加载 Nginx 配置
+:: 2. Reload Nginx configuration
 :: =============================================
-echo [2/4] 正在重新加载 Nginx 配置...
-C:\nginx-1.29.3\nginx.exe -s reload >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo   ✅ Nginx 配置已重新加载
+echo [2/5] Reloading Nginx configuration...
+
+if exist "%NGINX_DIR%\nginx.exe" (
+    pushd "%NGINX_DIR%"
+    "%NGINX_DIR%\nginx.exe" -s reload >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        echo   [OK] Nginx configuration reloaded
+    ) else (
+        echo   [INFO] Hot reload failed, trying to restart...
+        taskkill /f /im nginx.exe >nul 2>&1
+        timeout /t 1 /nobreak >nul
+        start "" "%NGINX_DIR%\nginx.exe"
+        echo   [OK] Nginx restarted
+    )
+    popd
 ) else (
-    echo   ⚠️  Nginx 热重载失败，尝试重新启动...
-    taskkill /f /im nginx.exe >nul 2>&1
-    timeout /t 1 /nobreak >nul
-    start /B C:\nginx-1.29.3\nginx.exe
-    echo   ✅ Nginx 已重新启动
+    echo   [ERROR] Nginx not found: %NGINX_DIR%\nginx.exe
+)
+
+timeout /t 1 /nobreak >nul
+
+:: =============================================
+:: 3. Collect static files (refresh staticfiles)
+:: =============================================
+echo [3/5] Collecting static files...
+python manage.py collectstatic --noinput >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    echo   [OK] Static files updated
+) else (
+    echo   [WARN] Static files collection may have issues
 )
 timeout /t 1 /nobreak >nul
 
 :: =============================================
-:: 3. 收集静态文件（刷新 staticfiles）
+:: 4. Start Waitress backend
 :: =============================================
-echo [3/4] 正在收集静态文件...
-cd /d D:\CODE\Need_To_Do
-python manage.py collectstatic --noinput >nul 2>&1
-echo   ✅ 静态文件已更新
+echo [4/5] Starting Waitress backend service...
 
-:: =============================================
-:: 4. 启动 Waitress 后端
-:: =============================================
-echo [4/4] 正在启动 Waitress 后端服务...
-start /B python run.py
+:: Check if already running
+netstat -ano | findstr ":%BACKEND_PORT%" | findstr "LISTENING" >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    echo   [WARN] Port %BACKEND_PORT% is already in use, skipping start
+) else (
+    start "" python run.py
+    echo   [OK] Waitress start command executed
+)
+
 timeout /t 3 /nobreak >nul
 
 :: =============================================
-:: 验证服务状态
+:: 5. Verify service status
 :: =============================================
-echo.
-echo ============================================
-echo   🔍 验证服务状态
-echo ============================================
+echo [5/5] Verifying service status...
 echo.
 
-:: 检查 Nginx
-netstat -ano | findstr :8090 >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo   ✅ Nginx 已启动 (端口 8090)
-) else (
-    echo   ❌ Nginx 启动失败
+set "nginx_status=[ERROR] Nginx not started"
+set "waitress_status=[ERROR] Waitress not started"
+set "admin_status=[ERROR] Admin page not accessible"
+
+:: Check Nginx
+netstat -ano | findstr ":%NGINX_PORT%" | findstr "LISTENING" >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    set "nginx_status=[OK] Nginx started (port %NGINX_PORT%)"
 )
 
-:: 检查 Waitress
-netstat -ano | findstr :8000 >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo   ✅ Waitress 已启动 (端口 8000)
-) else (
-    echo   ❌ Waitress 启动失败
+:: Check Waitress
+netstat -ano | findstr ":%BACKEND_PORT%" | findstr "LISTENING" >nul 2>&1
+if !ERRORLEVEL! equ 0 (
+    set "waitress_status=[OK] Waitress started (port %BACKEND_PORT%)"
 )
 
-:: 检查后台页面是否可访问
+:: Check admin page accessibility
 timeout /t 2 /nobreak >nul
-curl -s -o nul -w "%%{http_code}" http://127.0.0.1:8090/admin/login/ >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo   ✅ 后台页面可正常访问
-) else (
-    echo   ⚠️  后台页面尚在启动中，请稍后刷新
+for /f %%c in ('curl -s -o NUL -w "%%{http_code}" http://127.0.0.1:%NGINX_PORT%/admin/login/ 2^>nul') do (
+    if "%%c"=="200" (
+        set "admin_status=[OK] Admin page accessible"
+    ) else (
+        set "admin_status=[WARN] Admin page returned status: %%c"
+    )
 )
 
 echo.
 echo ============================================
-echo   🎉 服务重启完成！
-echo.
-echo   访问地址:
-echo   - 后台管理: http://localhost:8090/admin/
-echo   - 考试系统: http://localhost:8090/
+echo   Service Status Report
 echo ============================================
 echo.
+echo   %nginx_status%
+echo   %waitress_status%
+echo   %admin_status%
+echo.
 
-pause
+if "!nginx_status:~0,3!"=="[OK]" if "!waitress_status:~0,3!"=="[OK]" (
+    echo ============================================
+    echo   Service Restart Successful!
+    echo.
+    echo   Access URLs:
+    echo   - Admin: http://localhost:%NGINX_PORT%/admin/
+    echo   - Exam System: http://localhost:%NGINX_PORT%/
+    echo ============================================
+) else (
+    echo ============================================
+    echo   Services may not be fully started. Check status above.
+    echo ============================================
+)
+
+echo.
+echo Finished at: %date% %time%
+exit /b
