@@ -227,7 +227,7 @@
 {% block content %}
 {% if step == 2 %}
 <div class="form-container">
-    <h1 class="page-title">� 导入预览</h1>
+    <h1 class="page-title">📋 导入预览</h1>
 
     <div class="step-indicator">
         <div class="step completed">
@@ -284,8 +284,7 @@
             <div style="border-bottom: 1px solid #ddd; padding: 10px 0;">
                 <div style="display: flex; justify-content: space-between;">
                     <strong>第 {{ forloop.counter }} 题</strong>
-                    <span>题型：{% if q.type == 1 %}单选题{% elif q.type == 2 %}多选题{% elif q.type == 3 %}判断题{% else %}未知{%
-                        endif %}</span>
+                    <span>题型：{% if q.type == 1 %}单选题{% elif q.type == 2 %}多选题{% elif q.type == 3 %}判断题{% else %}未知{% endif %}</span>
                     <span>分值：{{ q.score|default:0 }} 分</span>
                 </div>
                 <div style="margin-top: 5px;">{{ q.content|truncatewords:20 }}</div>
@@ -323,7 +322,7 @@
 </div>
 {% else %}
 <div class="form-container">
-    <h1 class="page-title">�� 导入试卷</h1>
+    <h1 class="page-title">📥 导入试卷</h1>
 
     <div class="step-indicator">
         <div class="step active">
@@ -343,13 +342,6 @@
         {{ message }}
     </div>
     {% endfor %}
-    {% endif %}
-
-    {% if show_preview_data and saved_questions_json %}
-    <div
-        style="background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
-        <p style="margin: 0; color: #2e7d32; font-weight: 600;">🔄 检测到之前编辑的数据，可继续编辑或重新上传</p>
-    </div>
     {% endif %}
 
     <form method="post" enctype="multipart/form-data" onsubmit="return validateForm()">
@@ -380,22 +372,6 @@
             <button type="submit" class="btn btn-primary">✓ 上传并预览</button>
         </div>
     </form>
-
-    {% if show_preview_data and saved_questions_json %}
-    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px dashed #ddd;">
-        <p style="margin: 0 0 10px 0; font-weight: 600; color: #2c3e50;">📋 之前编辑的预览数据</p>
-        <form method="post" action="{% url 'import_test_paper' %}">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="restore_preview">
-            <input type="hidden" name="title" value="{{ saved_title }}">
-            <input type="hidden" name="description" value="{{ saved_description }}">
-            <input type="hidden" name="questions_json" value="{{ saved_questions_json }}">
-            <button type="submit" class="btn btn-warning" style="width: 100%;">
-                🔄 使用之前的预览数据继续编辑
-            </button>
-        </form>
-    </div>
-    {% endif %}
 
     <div style="margin-top: 20px;">
         <a href="{% url 'download_import_template' %}" class="btn btn-download"

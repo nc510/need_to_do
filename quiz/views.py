@@ -911,9 +911,12 @@ def publish_test_paper(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id, created_by=request.user.username)
     
     if request.method == 'POST':
-        test_paper.is_published = True
+        test_paper.is_published = not test_paper.is_published
         test_paper.save()
-        messages.success(request, f'试卷 "{test_paper.title}" 已发布到全站')
+        if test_paper.is_published:
+            messages.success(request, f'试卷 "{test_paper.title}" 已发布到全站')
+        else:
+            messages.success(request, f'试卷 "{test_paper.title}" 已取消发布')
         return redirect('my_test_papers')
     
     return render(request, 'quiz/frontend/publish_test_paper.html', {
@@ -1332,8 +1335,10 @@ def create_class_assignment(request, class_id):
         messages.error(request, '只有班级管理员才能创建作业')
         return redirect('class_detail', class_id=class_id)
     
-    # 获取已发布的试卷
-    available_papers = TestPaper.objects.filter(is_published=True)
+    # 获取已发布的试卷 或 自己创建的试卷（未发布也可用）
+    available_papers = TestPaper.objects.filter(
+        models.Q(is_published=True) | models.Q(created_by=request.user.username)
+    )
     
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()

@@ -776,7 +776,7 @@
     document.getElementById('title').addEventListener('input', updateSubmitButton);
 
     document.getElementById('createForm').addEventListener('submit', function (e) {
-        document.getElementById('selectedQuestions').value = JSON.stringify(selectedQuestions.map(q => q.id));
+        document.getElementById('selectedQuestions').value = selectedQuestions.map(q => q.id).join(',');
     });
 </script>
 {% endblock %}

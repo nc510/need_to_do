@@ -429,9 +429,8 @@
 
         <div class="section-title">上传 Excel 文件</div>
 
-        <div class="upload-area" onclick="document.getElementById('paper_file').click()">
-            <input type="file" id="paper_file" name="paper_file" accept=".xlsx,.xls" onchange="updateFileName()"
-                required>
+        <div class="upload-area" onclick="document.getElementById('file').click()">
+            <input type="file" id="file" name="file" accept=".xlsx,.xls" onchange="updateFileName()" required>
             <label>
                 <div class="upload-icon">📁</div>
                 <div class="upload-text">点击选择 Excel 文件</div>
@@ -627,8 +626,7 @@
                 <li>第 {{ forloop.counter }} 题：
                     {% if not q.content %}缺少题目内容{% endif %}
                     {% if not q.correct_answer %}{% if not q.content %}、{% endif %}缺少答案{% endif %}
-                    {% if not q.score %}{% if not q.content and not q.correct_answer %}{% else %}、{% endif %}缺少分值{%
-                    endif %}
+                    {% if not q.score %}{% if not q.content and not q.correct_answer %}{% else %}、{% endif %}缺少分值{% endif %}
                 </li>
                 {% endif %}
                 {% endfor %}
@@ -683,7 +681,7 @@
 
 <script>
     function updateFileName() {
-        const input = document.getElementById('paper_file');
+        const input = document.getElementById('file');
         const display = document.getElementById('fileNameDisplay');
         const submitBtn = document.getElementById('submitBtn');
         if (input.files && input.files.length > 0) {
@@ -698,7 +696,7 @@
 
     function validateForm() {
         const title = document.getElementById('title').value.trim();
-        const fileInput = document.getElementById('paper_file');
+        const fileInput = document.getElementById('file');
 
         if (!title) {
             alert('请填写试卷标题');

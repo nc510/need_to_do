@@ -143,6 +143,11 @@
         color: #155724;
     }
 
+    .unpublished-badge {
+        background: #fff3cd;
+        color: #856404;
+    }
+
     .time-limit-group {
         display: none;
     }
@@ -204,6 +209,9 @@
                 {% for paper in available_papers %}
                 <option value="{{ paper.id }}" class="paper-option">
                     {{ paper.title }} ({{ paper.total_score }}分)
+                    {% if not paper.is_published %}
+                    <span class="paper-badge unpublished-badge">未发布</span>
+                    {% endif %}
                     {% if paper.created_by == request.user.username %}
                     <span class="paper-badge my-paper-badge">我的试卷</span>
                     {% endif %}
@@ -211,7 +219,7 @@
                 {% endfor %}
             </select>
             {% if not available_papers %}
-            <div class="hint" style="color: #dc3545;">⚠️ 暂无可用试卷，请先创建并发布试卷</div>
+            <div class="hint" style="color: #dc3545;">⚠️ 暂无可用试卷，请先创建试卷</div>
             {% endif %}
         </div>
 
@@ -234,24 +242,24 @@
 </div>
 
 <script>
-function toggleTimeLimit() {
-    const type = document.querySelector('input[name="type"]:checked').value;
-    const timeLimitGroup = document.getElementById('time-limit-group');
-    const typeDesc = document.getElementById('type-desc');
-    const submitBtn = document.getElementById('submit-btn');
-    
-    if (type === '2') {
-        timeLimitGroup.style.display = 'block';
-        typeDesc.innerHTML = '<strong>考试模式：</strong>有时间限制，提交后才能查看答案和解析，更严格的防作弊';
-        submitBtn.textContent = '✓ 创建考试';
-    } else {
-        timeLimitGroup.style.display = 'none';
-        typeDesc.innerHTML = '<strong>作业模式：</strong>可以随时查看答案和解析，允许多次提交';
-        submitBtn.textContent = '✓ 创建作业';
-    }
-}
+    function toggleTimeLimit() {
+        const type = document.querySelector('input[name="type"]:checked').value;
+        const timeLimitGroup = document.getElementById('time-limit-group');
+        const typeDesc = document.getElementById('type-desc');
+        const submitBtn = document.getElementById('submit-btn');
 
-// 初始化
-toggleTimeLimit();
+        if (type === '2') {
+            timeLimitGroup.style.display = 'block';
+            typeDesc.innerHTML = '<strong>考试模式：</strong>有时间限制，提交后才能查看答案和解析，更严格的防作弊';
+            submitBtn.textContent = '✓ 创建考试';
+        } else {
+            timeLimitGroup.style.display = 'none';
+            typeDesc.innerHTML = '<strong>作业模式：</strong>可以随时查看答案和解析，允许多次提交';
+            submitBtn.textContent = '✓ 创建作业';
+        }
+    }
+
+    // 初始化
+    toggleTimeLimit();
 </script>
 {% endblock %}
