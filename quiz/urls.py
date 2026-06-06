@@ -16,6 +16,7 @@ urlpatterns = [
     path('paper/<int:paper_id>/submit/', views.submit_test_paper, name='submit_test_paper'),  # 试卷提交
     
     path('register/', views.register, name='register'),  # 注册
+    path('approval_pending/', views.approval_pending, name='approval_pending'),  # 审核状态
     path('login/', views.login_view, name='login'),  # 登录
     path('captcha/', views.captcha_image, name='captcha_image'),  # 验证码图片
     path('captcha/refresh/', views.refresh_captcha, name='refresh_captcha'),  # 刷新验证码

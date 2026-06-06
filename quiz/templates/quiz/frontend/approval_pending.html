@@ -1,15 +1,123 @@
 {% extends 'quiz/frontend/base.html' %}
-{% block title %}审核状态{% endblock %}
-{% block content %}
-    <h1>您的账号审核状态</h1>
-    <div class="test-paper">
-        <h2>审核状态：{{ status }}</h2>
-        {% if status == '未审核' %}
-            <p>您的注册申请正在审核中，请耐心等待管理员审核。</p>
-            <p>审核通过后，您将可以正常进行答题操作。</p>
-        {% elif status == '审核拒绝' %}
-            <p>很抱歉，您的注册申请未通过审核。</p>
-            <p>如果您有疑问，请联系管理员。</p>
-        {% endif %}
-    </div>
+{% block title %}审核状态 - 在线考试系统{% endblock %}
+
+{% block extra_styles %}
+<style>
+    body {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pending-container {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        padding: 40px;
+        width: 100%;
+        max-width: 420px;
+        text-align: center;
+    }
+
+    .pending-icon {
+        font-size: 64px;
+        margin-bottom: 15px;
+    }
+
+    h1 {
+        color: #333;
+        font-size: 22px;
+        margin: 0 0 10px 0;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        margin: 15px 0;
+    }
+
+    .status-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-rejected {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .status-approved {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    p {
+        color: #666;
+        line-height: 1.8;
+        font-size: 14px;
+        margin: 10px 0;
+    }
+
+    .btn {
+        display: inline-block;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 15px;
+        margin-top: 20px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+</style>
 {% endblock %}
+
+{% block content %}
+<div class="pending-container">
+    <div class="pending-icon">
+        {% if status == '未审核' %}⏳{% elif status == '审核拒绝' %}❌{% else %}✅{% endif %}
+    </div>
+    <h1>账号审核状态</h1>
+    <div class="status-badge
+        {% if status == '未审核' %}status-pending
+        {% elif status == '审核拒绝' %}status-rejected
+        {% else %}status-approved{% endif %}">
+        {{ status }}
+    </div>
+
+    {% if status == '未审核' %}
+        <p>您的注册申请正在审核中，请耐心等待管理员审核。</p>
+        <p>审核通过后，您将可以正常登录并进行答题操作。</p>
+    {% elif status == '审核拒绝' %}
+        <p>很抱歉，您的注册申请未通过审核。</p>
+        <p>如果您有疑问，请联系管理员。</p>
+    {% else %}
+        <p>您的账号已通过审核。</p>
+        <a href="{% url 'login' %}" class="btn btn-primary">前往登录</a>
+    {% endif %}
+
+    {% if status != '审核通过' %}
+        <p style="margin-top: 15px; font-size: 13px;">
+            <a href="{% url 'login' %}" style="color: #667eea;">返回登录页面</a>
+        </p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block nav %}{% endblock %}
+{% block footer %}{% endblock %}

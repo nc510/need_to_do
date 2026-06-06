@@ -611,7 +611,15 @@ def register(request):
     return render(request, 'quiz/frontend/register.html')
 
 def approval_pending(request):
-    return render(request, 'quiz/frontend/approval_pending.html')
+    """审核状态页面"""
+    status = '未审核'
+    if request.user.is_authenticated:
+        try:
+            profile = Profile.objects.get(user=request.user)
+            status = dict(Profile.APPROVAL_STATUS).get(profile.approval_status, '未审核')
+        except Profile.DoesNotExist:
+            pass
+    return render(request, 'quiz/frontend/approval_pending.html', {'status': status})
 
 def captcha_image(request):
     captcha_text = generate_captcha_text()
