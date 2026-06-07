@@ -219,7 +219,7 @@
     </div>
 
     <div class="preview-body">
-        {% for q in question_list %}
+        {% for q in questions %}
         <div class="question-card">
             <div class="question-card-header">
                 <span class="q-seq">{{ q.seq }}</span>
@@ -231,8 +231,8 @@
 
             {% if q.options %}
             <ul class="q-options">
-                {% for opt in q.options %}
-                <li><span class="letter">{{ opt.letter }}.</span> {{ opt.content }}</li>
+                {% for letter, content in q.options.items %}
+                <li><span class="letter">{{ letter }}.</span> {{ content }}</li>
                 {% endfor %}
             </ul>
             {% endif %}

@@ -2080,12 +2080,20 @@ def admin_preview_testpaper(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
     questions = list(test_paper.questions.all())
     
-    for q in questions:
+    for idx, q in enumerate(questions):
         q.options = parse_options(q.options)
+        q.seq = idx + 1  # 题目序号
+        # 设置 type_name 用于模板显示
+        type_map = dict(Question.TYPE_CHOICE)
+        q.type_name = type_map.get(q.type, '')
+    
+    total_score = sum(q.score for q in questions)
     
     return render(request, 'quiz/admin/preview_testpaper.html', {
         'test_paper': test_paper,
-        'questions': questions
+        'questions': questions,
+        'total_questions': len(questions),
+        'total_score': total_score,
     })
 
 @staff_member_required
