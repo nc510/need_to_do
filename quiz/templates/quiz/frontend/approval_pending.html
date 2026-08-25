@@ -13,8 +13,8 @@
 
     .pending-container {
         background: white;
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
         padding: 40px;
         width: 100%;
         max-width: 420px;
@@ -28,7 +28,7 @@
 
     h1 {
         color: #333;
-        font-size: 22px;
+        font-size: 24px;
         margin: 0 0 10px 0;
     }
 
@@ -101,20 +101,20 @@
     </div>
 
     {% if status == '未审核' %}
-        <p>您的注册申请正在审核中，请耐心等待管理员审核。</p>
-        <p>审核通过后，您将可以正常登录并进行答题操作。</p>
+    <p>您的注册申请正在审核中，请耐心等待管理员审核。</p>
+    <p>审核通过后，您将可以正常登录并进行答题操作。</p>
     {% elif status == '审核拒绝' %}
-        <p>很抱歉，您的注册申请未通过审核。</p>
-        <p>如果您有疑问，请联系管理员。</p>
+    <p>很抱歉，您的注册申请未通过审核。</p>
+    <p>如果您有疑问，请联系管理员。</p>
     {% else %}
-        <p>您的账号已通过审核。</p>
-        <a href="{% url 'login' %}" class="btn btn-primary">前往登录</a>
+    <p>您的账号已通过审核。</p>
+    <a href="{% url 'login' %}" class="btn btn-primary">前往登录</a>
     {% endif %}
 
     {% if status != '审核通过' %}
-        <p style="margin-top: 15px; font-size: 13px;">
-            <a href="{% url 'login' %}" style="color: #667eea;">返回登录页面</a>
-        </p>
+    <p style="margin-top: 15px; font-size: 13px;">
+        <a href="{% url 'login' %}" style="color: #667eea;">返回登录页面</a>
+    </p>
     {% endif %}
 </div>
 {% endblock %}

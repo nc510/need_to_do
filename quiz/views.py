@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.contrib.auth.models import User
 import json
 
@@ -40,6 +40,7 @@ class BaseTestPaperImporter:
         """获取成功重定向 - 子类可覆盖"""
         return self.success_redirect
     
+    @transaction.atomic
     def process_confirm_import(self):
         """处理确认导入"""
         title = self.request.POST.get('title', '导入试卷')
@@ -151,6 +152,7 @@ class BaseTestPaperImporter:
             messages.success(self.request, f'试卷 "{title}" 导入成功！共导入 {valid_count} 道题目，总分 {total_score} 分。')
             return self.get_success_redirect(test_paper)
         except Exception as e:
+            transaction.set_rollback(True)  # 异常时回滚已创建的 TestPaper/Question，避免脏数据残留
             messages.error(self.request, f'导入失败：{str(e)}')
             return render(self.request, self.template_name, {'step': 1})
     
@@ -351,12 +353,13 @@ def submit_test_paper(request, paper_id):
             completed_at=timezone.now()
         )
         
-        # 创建答案记录并收集错题
+        # 创建答案记录并收集错题（用 bulk_create 一次性插入，减少 N 次 INSERT）
         wrong_questions_list = []
+        answer_records = []
         for result in question_results:
             question = result['question']
             options_data = parse_options(question.options)
-            AnswerRecord.objects.create(
+            answer_records.append(AnswerRecord(
                 test_record=test_record,
                 question=question,
                 user_answer=result.get('user_answer', ''),
@@ -365,11 +368,11 @@ def submit_test_paper(request, paper_id):
                 original_question_content=question.content,
                 original_question_type=question.type,
                 original_options=options_data,
-                original_explanation=question.explanation
-            )
-            
+                original_explanation=question.explanation,
+            ))
             if not result['is_correct']:
                 wrong_questions_list.append(result['question'])
+        AnswerRecord.objects.bulk_create(answer_records)
         
         # 自动添加错题到错题本
         for question in wrong_questions_list:
@@ -382,11 +385,15 @@ def submit_test_paper(request, paper_id):
                 }
             )
         
-        # 更新用户学习统计
-        profile.total_score += score
-        profile.tests_taken += 1
-        profile.accuracy_rate = round(correct_count / total_count * 100, 1) if total_count > 0 else 0
-        profile.save()
+        # 更新用户学习统计（用 F 表达式避免并发读-改-写竞态导致更新丢失）
+        from django.db.models import F
+        accuracy = round(correct_count / total_count * 100, 1) if total_count > 0 else 0
+        Profile.objects.filter(pk=profile.pk).update(
+            total_score=F('total_score') + score,
+            tests_taken=F('tests_taken') + 1,
+            accuracy_rate=accuracy,
+        )
+        profile.refresh_from_db()
         
         return render(request, 'quiz/frontend/test_paper_result.html', {
             'test_paper': test_paper,
@@ -408,15 +415,13 @@ def submit_test_paper(request, paper_id):
 
 @login_required
 def test_history(request):
-    test_records = TestRecord.objects.filter(user=request.user).order_by('-completed_at')
+    from django.db.models import Count
+    # select_related 避免 record.test_paper 外键 N+1；annotate 一次算出 question_count（原循环 count）
+    test_records = TestRecord.objects.filter(user=request.user).select_related(
+        'test_paper'
+    ).annotate(question_count=Count('test_paper__questions')).order_by('-completed_at')
     paginated_records = paginate_queryset(test_records, request.GET.get('page', 1), items_per_page=10)
-    
-    for record in paginated_records:
-        if record.test_paper:
-            record.question_count = record.test_paper.questions.count()
-        else:
-            record.question_count = 0
-    
+
     return render(request, 'quiz/frontend/test_history.html', {
         'test_records': paginated_records
     })
@@ -640,14 +645,23 @@ def user_center(request):
     except Profile.DoesNotExist:
         profile = Profile.objects.create(user=request.user)
     
-    # 获取统计数据
-    test_count = TestRecord.objects.filter(user=request.user).count()
-    completed_count = TestRecord.objects.filter(user=request.user, completed_at__isnull=False).count()
+    # 获取统计数据（合并为聚合查询，原 5 次独立 count）
+    from django.db.models import Count, Q
+    test_stats = TestRecord.objects.filter(user=request.user).aggregate(
+        total=Count('id'),
+        completed=Count('id', filter=Q(completed_at__isnull=False)),
+    )
+    test_count = test_stats['total']
+    completed_count = test_stats['completed']
     wrong_count = WrongQuestion.objects.filter(user=request.user).count()
-    
-    # 计算正确率
-    total_answered = AnswerRecord.objects.filter(test_record__user=request.user).count()
-    correct_answered = AnswerRecord.objects.filter(test_record__user=request.user, is_correct=True).count()
+
+    # 计算正确率（合并为 1 次聚合）
+    answer_stats = AnswerRecord.objects.filter(test_record__user=request.user).aggregate(
+        total=Count('id'),
+        correct=Count('id', filter=Q(is_correct=True)),
+    )
+    total_answered = answer_stats['total']
+    correct_answered = answer_stats['correct']
     accuracy_rate = int((correct_answered / total_answered) * 100) if total_answered > 0 else 0
     
     recent_tests = TestRecord.objects.filter(user=request.user).order_by('-completed_at')[:5]
@@ -697,18 +711,10 @@ def create_wrong_question_paper(request):
             is_published=False
         )
         
-        total_score = 0
-        for q_id in selected_ids:
-            try:
-                q = Question.objects.get(id=q_id)
-                test_paper.questions.add(q)
-                total_score += q.score
-            except Question.DoesNotExist:
-                pass
-        
-        test_paper.total_score = total_score
-        test_paper.save()
-        
+        # 一次查询所有题目（原逐题 get，N+1）；m2m_changed 自动更新 total_score，无需手动算
+        questions = list(Question.objects.filter(id__in=selected_ids))
+        test_paper.questions.set(questions)
+
         return redirect('submit_wrong_question_paper', paper_id=test_paper.id)
     
     # GET请求时重定向到错题本选择页面
@@ -810,12 +816,13 @@ def delete_wrong_question(request, wrong_question_id):
 
 @login_required
 def my_test_papers(request):
-    test_papers = TestPaper.objects.filter(created_by=request.user.username).order_by('-created_at')
+    from django.db.models import Count
+    # annotate 一次算出 question_count（原循环 count，N+1）
+    test_papers = TestPaper.objects.filter(created_by=request.user.username).annotate(
+        question_count=Count('questions')
+    ).order_by('-created_at')
     paginated_test_papers = paginate_queryset(test_papers, request.GET.get('page', 1))
-    
-    for paper in paginated_test_papers:
-        paper.question_count = paper.questions.count()
-    
+
     return render(request, 'quiz/frontend/my_test_papers.html', {
         'test_papers': paginated_test_papers
     })
@@ -843,19 +850,12 @@ def create_test_paper(request):
                 is_published=is_published
             )
 
-            total_score = 0
-            for q_id in question_ids:
-                try:
-                    question = Question.objects.get(id=q_id)
-                    test_paper.questions.add(question)
-                    total_score += question.score
-                except Question.DoesNotExist:
-                    pass
+            # 一次查询所有题目（原逐题 get，N+1）；m2m_changed 自动更新 total_score
+            questions = list(Question.objects.filter(id__in=question_ids))
+            test_paper.questions.set(questions)
+            total_score = sum(q.score for q in questions)
 
-            test_paper.total_score = total_score
-            test_paper.save()
-
-            messages.success(request, f'试卷 "{title}" 创建成功！共 {len(question_ids)} 道题目，总分 {total_score} 分。')
+            messages.success(request, f'试卷 "{title}" 创建成功！共 {len(questions)} 道题目，总分 {total_score} 分。')
             return redirect('my_test_papers')
         else:
             messages.error(request, '请填写试卷标题并至少选择一道题目')

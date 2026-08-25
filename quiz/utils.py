@@ -60,7 +60,10 @@ def calculate_score(questions, user_answers):
     question_results = []
 
     for question in questions:
-        user_answer = user_answers.get(str(question.id), user_answers.get(question.id))
+        # views 用 int key，优先 int 查找；fallback str key 兼容（避免每次两次 dict get）
+        user_answer = user_answers.get(question.id)
+        if user_answer is None:
+            user_answer = user_answers.get(str(question.id))
         is_correct = compare_answers(user_answer, question.correct_answer)
 
         if is_correct:

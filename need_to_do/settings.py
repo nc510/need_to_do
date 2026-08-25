@@ -308,18 +308,19 @@ if DEBUG:
     # 开发模式下使用更快的文件监视
     WATCHFILES_CHANGED_DELAY = 1000  # 毫秒
 
-# 数据库连接池配置
-DATABASES['default'].update({
-    'CONN_MAX_AGE': 60,  # 数据库连接复用时间（秒）
-    'OPTIONS': {
-        'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        'charset': 'utf8mb4',
-        'use_unicode': True,
-    }
-})
-
 # 静态文件缓存（使用 WhiteNoise 压缩和缓存支持）
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# DEBUG=True 时 Manifest 版本会找不到静态文件（需 collectstatic），开发用非 Manifest 版本
+STATICFILES_STORAGE = (
+    'whitenoise.storage.CompressedStaticFilesStorage'
+    if DEBUG
+    else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+)
+
+# 反爬虫中间件配置（IP 白名单，可通过 .env 覆盖）
+ANTISPIDER_IP_WHITELIST = os.getenv(
+    'ANTISPIDER_IP_WHITELIST',
+    '127.0.0.1,::1,192.168.0.109'
+).split(',')
 
 # 模板缓存（开发环境已禁用）
 # TEMPLATES[0]['OPTIONS']['loaders'] = [

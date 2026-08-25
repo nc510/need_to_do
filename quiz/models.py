@@ -141,18 +141,18 @@ class TestPaper(models.Model):
         return self.title
 
     def save(self, *args, **kwargs):
-        # 只有已存在的实例才计算总分（避免新建时访问多对多关系）
-        if self.pk:
-            self.total_score = sum(question.score for question in self.questions.all())
+        # total_score 由 m2m_changed 信号和显式赋值管理，save 不自动重算
+        # （避免改 title/description 等无关字段时触发全表题目查询；原实现每次 save 都重算）
         super().save(*args, **kwargs)
 
 # 使用信号监听ManyToMany关系变化，确保添加/移除题目时更新总分
 @receiver(m2m_changed, sender=TestPaper.questions.through)
 def update_testpaper_total_score(sender, instance, action, **kwargs):
-    # 只有在题目添加、移除或清空后才更新总分
+    # 题目增删后用 update() 更新总分（避免触发 save 再算 + 递归 save 链）
     if action in ['post_add', 'post_remove', 'post_clear']:
-        instance.total_score = sum(question.score for question in instance.questions.all())
-        instance.save()
+        total = instance.questions.aggregate(total=models.Sum('score'))['total'] or 0
+        TestPaper.objects.filter(pk=instance.pk).update(total_score=total)
+        instance.total_score = total  # 同步内存对象，避免后续读旧值
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name='用户')

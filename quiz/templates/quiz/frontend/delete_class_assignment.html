@@ -10,7 +10,7 @@
         background: white;
         border-radius: 12px;
         padding: 30px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
         text-align: center;
     }
 
@@ -69,7 +69,7 @@
     .btn-danger:hover {
         background: #c82333;
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .btn-secondary {
@@ -97,7 +97,7 @@
     <div class="warning-icon">⚠️</div>
     <h1 class="delete-title">确认删除</h1>
     <p class="delete-description">您确定要删除以下作业吗？此操作无法撤销。</p>
-    
+
     <div class="assignment-info">
         <p><strong>作业标题：</strong>{{ assignment.title }}</p>
         <p><strong>类型：</strong>{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</p>

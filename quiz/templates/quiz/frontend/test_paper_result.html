@@ -2,164 +2,157 @@
 {% block title %}考试结果{% endblock %}
 {% block extra_styles %}
 <style>
-        /* 全局样式 */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-        }
+    /* body 背景与字体继承 base.html，不再覆盖 */
+    /* .container 继承 base.html（max-width 1200px + padding 20px），不再覆盖 */
 
-        /* 容器样式 */
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            margin-top: 50px;
-        }
+    /* 标题样式 */
+    h1 {
+        color: #333;
+        margin-bottom: 20px;
+        text-align: center;
+    }
 
-        /* 标题样式 */
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-            text-align: center;
-        }
+    /* 结果概览 */
+    .result-overview {
+        background-color: #fff;
+        padding: 18px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+        text-align: center;
+    }
 
-        /* 结果概览 */
-        .result-overview {
-            background-color: #fafafa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 30px;
-            text-align: center;
-        }
+    .result-overview h2 {
+        color: #2c3e50;
+        margin-bottom: 15px;
+    }
 
-        .result-overview h2 {
-            color: #2ecc71;
-            margin-bottom: 15px;
-        }
+    .result-summary {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 20px;
+        font-size: 18px;
+    }
 
-        .result-summary {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 20px;
-            font-size: 18px;
-        }
+    .result-item {
+        display: inline-block;
+        margin: 0 15px;
+        padding: 12px;
+        background-color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
 
-        .result-item {
-            display: inline-block;
-            margin: 0 15px;
-            padding: 10px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
-        }
+    /* 题目结果 */
+    .question-results {
+        margin-bottom: 30px;
+    }
 
-        /* 题目结果 */
-        .question-results {
-            margin-bottom: 30px;
-        }
+    .question-result {
+        margin-bottom: 25px;
+        padding: 18px;
+        background-color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border-bottom: 2px solid #eee;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
 
-        .question-result {
-            margin-bottom: 25px;
-            padding: 20px;
-            background-color: #fafafa;
-            border-radius: 8px;
-            border-bottom: 2px solid #eee;
-        }
+    .question-result:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+    }
 
-        .question-header {
-            font-weight: bold;
-            margin-bottom: 15px;
-            font-size: 18px;
-            color: #333;
-        }
+    .question-header {
+        font-weight: bold;
+        margin-bottom: 15px;
+        font-size: 18px;
+        color: #333;
+    }
 
-        /* 题目类型 */
-        .question-type {
-            display: inline-block;
-            padding: 4px 8px;
-            background-color: #3498db;
-            color: #fff;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-right: 10px;
-        }
+    /* 题目类型 */
+    .question-type {
+        display: inline-block;
+        padding: 4px 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border-radius: 8px;
+        font-size: 12px;
+        margin-right: 10px;
+    }
 
-        /* 题目内容 */
-        .question-content {
-            margin-bottom: 15px;
-            color: #555;
-            line-height: 1.5;
-        }
+    /* 题目内容 */
+    .question-content {
+        margin-bottom: 15px;
+        color: #555;
+        line-height: 1.5;
+    }
 
-        /* 题目选项 */
-        .question-options {
-            margin-bottom: 15px;
-            color: #666;
-            line-height: 1.6;
-        }
+    /* 题目选项 */
+    .question-options {
+        margin-bottom: 15px;
+        color: #666;
+        line-height: 1.6;
+    }
 
-        .option-item {
-            margin-left: 20px;
-        }
+    .option-item {
+        margin-left: 20px;
+    }
 
-        /* 答案信息 */
-        .answer-info {
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
+    /* 答案信息 */
+    .answer-info {
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
 
-        .result-correct {
-            color: #2ecc71;
-            font-weight: bold;
-        }
+    .result-correct {
+        color: #2ecc71;
+        font-weight: bold;
+    }
 
-        .result-wrong {
-            color: #e74c3c;
-            font-weight: bold;
-        }
+    .result-wrong {
+        color: #e74c3c;
+        font-weight: bold;
+    }
 
-        .correct-answer {
-            color: #2ecc71;
-        }
+    .correct-answer {
+        color: #2ecc71;
+    }
 
-        .user-answer {
-            color: #3498db;
-        }
+    .user-answer {
+        color: #667eea;
+    }
 
-        /* 解析 */
-        .explanation {
-            margin-top: 15px;
-            padding: 15px;
-            background-color: #fff;
-            border-left: 4px solid #3498db;
-            border-radius: 4px;
-            color: #666;
-            font-size: 14px;
-        }
+    /* 解析 */
+    .explanation {
+        margin-top: 15px;
+        padding: 15px;
+        background-color: #fff;
+        border-left: 4px solid #764ba2;
+        border-radius: 8px;
+        color: #666;
+        font-size: 14px;
+    }
 
-        /* 返回按钮 */
-        .back-btn {
-            display: inline-block;
-            padding: 8px 16px;
-            background-color: #3498db;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: background-color 0.3s ease;
-            margin-bottom: 20px;
-        }
+    /* 返回按钮 */
+    .back-btn {
+        display: inline-block;
+        padding: 10px 18px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
+    }
 
-        .back-btn:hover {
-            background-color: #2980b9;
-        }
-    </style>
+    .back-btn:hover {
+        background: linear-gradient(135deg, #5568d3 0%, #5e3a82 100%);
+    }
+</style>
 </head>
+
 <body>
     <div class="container">
         <a href="{% url 'test_paper_list' %}" class="back-btn">返回试卷列表</a>
@@ -189,35 +182,35 @@
 
         <div class="question-results">
             {% for result in question_results %}
-                <div class="question-result">
-                    <div class="question-header">
-                        <span class="question-type">
-                            {% if result.question.type == 1 %}选择题{% else %}判断题{% endif %}
-                        </span>
-                        <span>第{{ forloop.counter }}题 ({{ result.score }}分)</span>
-                        <span class="{% if result.result == '正确' %}result-correct{% else %}result-wrong{% endif %}">
-                            &nbsp;&nbsp;{{ result.result }}
-                        </span>
-                    </div>
-                    <div class="question-content">{{ result.question.content }}</div>
-                    {% if result.question.options %}
-                        <div class="question-options">
-                            {% for option_key, option_value in result.question.options.items %}
-                                <div class="option-item">{{ option_key }}: {{ option_value }}</div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                    <div class="answer-info">
-                        <p>你的答案: <span class="user-answer">{{ result.user_answer|default:'' }}</span></p>
-                        <p>正确答案: <span class="correct-answer">{{ result.correct_answer }}</span></p>
-                    </div>
-                    {% if result.question.explanation %}
-                        <div class="explanation">
-                            <strong>解析:</strong> {{ result.question.explanation }}
-                        </div>
-                    {% endif %}
+            <div class="question-result">
+                <div class="question-header">
+                    <span class="question-type">
+                        {% if result.question.type == 1 %}选择题{% else %}判断题{% endif %}
+                    </span>
+                    <span>第{{ forloop.counter }}题 ({{ result.score }}分)</span>
+                    <span class="{% if result.result == '正确' %}result-correct{% else %}result-wrong{% endif %}">
+                        &nbsp;&nbsp;{{ result.result }}
+                    </span>
                 </div>
+                <div class="question-content">{{ result.question.content }}</div>
+                {% if result.question.options %}
+                <div class="question-options">
+                    {% for option_key, option_value in result.question.options.items %}
+                    <div class="option-item">{{ option_key }}: {{ option_value }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="answer-info">
+                    <p>你的答案: <span class="user-answer">{{ result.user_answer|default:'' }}</span></p>
+                    <p>正确答案: <span class="correct-answer">{{ result.correct_answer }}</span></p>
+                </div>
+                {% if result.question.explanation %}
+                <div class="explanation">
+                    <strong>解析:</strong> {{ result.question.explanation }}
+                </div>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
     </div>
-{% endblock %}
+    {% endblock %}

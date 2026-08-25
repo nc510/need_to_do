@@ -443,8 +443,7 @@
             <button type="button" class="btn-secondary"
                 onclick="window.location.href='{% url 'admin_import_questions' %}'">返回上传</button>
             <button type="submit" class="btn-primary" id="submitBtn" {% if missing_count > 0 %}disabled{% endif %}>
-                {% if missing_count > 0 %}⚠ 请补全数据 ({{ missing_count }} 题待补全){% else %}✓ 确认导入 ({{ questions_data|length
-                }} 题){% endif %}
+                {% if missing_count > 0 %}⚠ 请补全数据 ({{ missing_count }} 题待补全){% else %}✓ 确认导入 ({{ questions_data|length }} 题){% endif %}
             </button>
         </div>
     </form>
@@ -502,8 +501,7 @@
 <script>
     let questionsData = [];
     try {
-        questionsData = {{ questions_json | safe }
-    };
+        questionsData = {{ questions_json | safe }};
     } catch (e) {
         questionsData = [];
     }

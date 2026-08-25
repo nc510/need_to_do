@@ -563,8 +563,7 @@
                             选项：
                             {% for letter, opt in q.options.items %}
                             {% if opt %}
-                            <span style="margin-right: 6px;"><strong>{{ letter }}.</strong> {{ opt|truncatechars:20
-                                }}</span>
+                            <span style="margin-right: 6px;"><strong>{{ letter }}.</strong> {{ opt|truncatechars:20 }}</span>
                             {% endif %}
                             {% endfor %}
                         </div>

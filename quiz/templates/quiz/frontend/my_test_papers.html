@@ -13,16 +13,16 @@
 
     .test-paper-item {
         background: white;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 18px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
         border: 2px solid transparent;
         transition: all 0.3s ease;
     }
 
     .test-paper-item:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
         border-color: #667eea;
     }
 
@@ -100,7 +100,7 @@
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         padding: 7px 14px;
-        border-radius: 6px;
+        border-radius: 8px;
         text-decoration: none;
         font-weight: 500;
         font-size: 12px;
@@ -110,8 +110,8 @@
     }
 
     .view-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
     }
 
     .view-btn.secondary {
@@ -121,7 +121,7 @@
 
     .view-btn.secondary:hover {
         background: #e8ecf1;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .view-btn.danger {
@@ -140,8 +140,8 @@
         margin-top: 16px;
         padding: 12px 20px;
         background: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .stat-item {
@@ -165,14 +165,14 @@
         margin-top: 25px;
         padding: 14px 20px;
         background: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .pagination a,
     .pagination span {
         padding: 8px 14px;
-        border-radius: 6px;
+        border-radius: 8px;
         text-decoration: none;
         font-weight: 500;
         font-size: 13px;
@@ -185,8 +185,8 @@
     }
 
     .pagination a:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
     }
 
     .pagination .disabled {
@@ -196,7 +196,7 @@
     }
 
     .pagination .current {
-        background: #667eea;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         padding: 8px 16px;
     }
@@ -207,7 +207,7 @@
         color: #888;
         background: white;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .empty-state .icon {
@@ -229,7 +229,7 @@
     .status-badge {
         display: inline-block;
         padding: 3px 10px;
-        border-radius: 16px;
+        border-radius: 12px;
         font-size: 11px;
         font-weight: 600;
     }
@@ -261,18 +261,22 @@
         .test-paper-list {
             grid-template-columns: 1fr;
         }
+
         .header-actions {
             flex-direction: column;
         }
+
         .header-actions a {
             width: 100%;
             justify-content: center;
         }
+
         .stats-bar {
             flex-direction: column;
             gap: 10px;
             text-align: center;
         }
+
         .pagination {
             flex-wrap: wrap;
         }
@@ -374,16 +378,15 @@
     {% for num in test_papers.paginator.page_range %}
     {% if num == test_papers.number %}
     <span class="current">{{ num }}</span>
-    {% elif num >= test_papers.number|add:'-2' and num <= test_papers.number|add:'2' %} <a href="?page={{ num }}">{{ num
-        }}</a>
-    {% endif %}
-    {% endfor %}
+    {% elif num >= test_papers.number|add:'-2' and num <= test_papers.number|add:'2' %} <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+        {% endfor %}
 
-    {% if test_papers.has_next %}
-    <a href="?page={{ test_papers.next_page_number }}">下一页 →</a>
-    {% else %}
-    <span class="disabled">下一页 →</span>
-    {% endif %}
+        {% if test_papers.has_next %}
+        <a href="?page={{ test_papers.next_page_number }}">下一页 →</a>
+        {% else %}
+        <span class="disabled">下一页 →</span>
+        {% endif %}
 </div>
 {% else %}
 <div class="empty-state">

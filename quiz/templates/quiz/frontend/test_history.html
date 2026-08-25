@@ -4,210 +4,211 @@
 
 {% block extra_styles %}
 <style>
-.page-header {
-    text-align: center;
-    padding: 30px 0;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 12px;
-    margin-bottom: 30px;
-}
+    .page-header {
+        text-align: center;
+        padding: 30px 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        margin-bottom: 30px;
+    }
 
-.page-header h1 {
-    margin: 0 0 10px 0;
-    font-size: 28px;
-}
+    .page-header h1 {
+        margin: 0 0 10px 0;
+        font-size: 24px;
+    }
 
-.page-header p {
-    margin: 0;
-    opacity: 0.9;
-}
+    .page-header p {
+        margin: 0;
+        opacity: 0.9;
+    }
 
-.history-list {
-    margin-top: 20px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 15px;
-}
+    .history-list {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
 
-.history-card {
-    background: white;
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-    border-top: 4px solid #667eea;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    transition: all 0.2s ease;
-}
+    .history-card {
+        background: white;
+        border-radius: 12px;
+        padding: 18px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border-top: 4px solid #667eea;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: all 0.2s ease;
+    }
 
-.history-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-}
+    .history-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+    }
 
-.history-card.excellent {
-    border-top-color: #10b981;
-}
+    .history-card.excellent {
+        border-top-color: #10b981;
+    }
 
-.history-card.good {
-    border-top-color: #3b82f6;
-}
+    .history-card.good {
+        border-top-color: #3b82f6;
+    }
 
-.history-card.pass {
-    border-top-color: #f59e0b;
-}
+    .history-card.pass {
+        border-top-color: #f59e0b;
+    }
 
-.history-card.fail {
-    border-top-color: #ef4444;
-}
+    .history-card.fail {
+        border-top-color: #ef4444;
+    }
 
-.history-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
+    .history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
 
-.history-title {
-    margin: 0;
-    font-size: 16px;
-    flex: 1;
-    padding-right: 10px;
-}
+    .history-title {
+        margin: 0;
+        font-size: 16px;
+        flex: 1;
+        padding-right: 10px;
+    }
 
-.history-title a {
-    color: #333;
-    text-decoration: none;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
+    .history-title a {
+        color: #333;
+        text-decoration: none;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
 
-.history-title a:hover {
-    color: #667eea;
-}
+    .history-title a:hover {
+        color: #667eea;
+    }
 
-.score-badge {
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
+    .score-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
 
-.score-badge.excellent {
-    background: #dcfce7;
-    color: #166534;
-}
+    .score-badge.excellent {
+        background: #dcfce7;
+        color: #166534;
+    }
 
-.score-badge.good {
-    background: #dbeafe;
-    color: #1e40af;
-}
+    .score-badge.good {
+        background: #dbeafe;
+        color: #1e40af;
+    }
 
-.score-badge.pass {
-    background: #fef3c7;
-    color: #92400e;
-}
+    .score-badge.pass {
+        background: #fef3c7;
+        color: #92400e;
+    }
 
-.score-badge.fail {
-    background: #fee2e2;
-    color: #991b1b;
-}
+    .score-badge.fail {
+        background: #fee2e2;
+        color: #991b1b;
+    }
 
-.history-meta {
-    display: flex;
-    gap: 20px;
-    color: #888;
-    font-size: 13px;
-}
+    .history-meta {
+        display: flex;
+        gap: 20px;
+        color: #888;
+        font-size: 13px;
+    }
 
-.meta-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
 
-.score-section {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 10px;
-    border-top: 1px solid #eee;
-}
+    .score-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+    }
 
-.score-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: #667eea;
-}
+    .score-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #667eea;
+    }
 
-.score-total {
-    font-size: 14px;
-    font-weight: 400;
-    color: #999;
-}
+    .score-total {
+        font-size: 14px;
+        font-weight: 400;
+        color: #999;
+    }
 
-.view-btn {
-    background: #667eea;
-    color: white;
-    padding: 6px 16px;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 13px;
-    transition: background 0.2s;
-}
+    .view-btn {
+        background: #667eea;
+        color: white;
+        padding: 6px 16px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 13px;
+        transition: background 0.2s;
+    }
 
-.view-btn:hover {
-    background: #5a6fd6;
-}
+    .view-btn:hover {
+        background: #5a6fd6;
+    }
 
-.pagination {
-    text-align: center;
-    margin-top: 30px;
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
+    .pagination {
+        text-align: center;
+        margin-top: 30px;
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
 
-.pagination a, .pagination span {
-    padding: 8px 14px;
-    border-radius: 6px;
-    text-decoration: none;
-    background: white;
-    border: 1px solid #ddd;
-    color: #667eea;
-}
+    .pagination a,
+    .pagination span {
+        padding: 8px 14px;
+        border-radius: 8px;
+        text-decoration: none;
+        background: white;
+        border: 1px solid #ddd;
+        color: #667eea;
+    }
 
-.pagination a:hover:not(.disabled) {
-    background: #f0f0ff;
-    border-color: #667eea;
-}
+    .pagination a:hover:not(.disabled) {
+        background: #f0f0ff;
+        border-color: #667eea;
+    }
 
-.pagination .current {
-    background: #667eea;
-    color: white;
-    border-color: #667eea;
-}
+    .pagination .current {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
 
-.pagination .disabled {
-    color: #ccc;
-    cursor: not-allowed;
-}
+    .pagination .disabled {
+        color: #ccc;
+        cursor: not-allowed;
+    }
 
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: #999;
-}
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
 
-.empty-state h3 {
-    margin-bottom: 10px;
-    color: #666;
-}
+    .empty-state h3 {
+        margin-bottom: 10px;
+        color: #666;
+    }
 </style>
 {% endblock %}
 
@@ -222,14 +223,16 @@
 <div class="history-list">
     {% for record in test_records %}
     {% widthratio record.score record.total_score 100 as percentage %}
-    <div class="history-card {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
+    <div
+        class="history-card {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
         <div class="history-header">
             <h3 class="history-title">
                 <a href="{% url 'test_history_detail' record.id %}">
                     {% if record.is_wrong_paper %}📝 错题复习{% elif record.test_paper %}{{ record.test_paper.title }}{% else %}无试卷{% endif %}
                 </a>
             </h3>
-            <span class="score-badge {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
+            <span
+                class="score-badge {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
                 {% if percentage >= 90 %}优秀{% elif percentage >= 75 %}良好{% elif percentage >= 60 %}及格{% else %}不及格{% endif %}
             </span>
         </div>
@@ -258,20 +261,19 @@
     {% else %}
     <span class="disabled">← 上一页</span>
     {% endif %}
-    
+
     {% for i in test_records.paginator.page_range %}
-        {% if test_records.number == i %}
-            <span class="current">{{ i }}</span>
-        {% elif i >= test_records.number|add:'-2' and i <= test_records.number|add:'2' %}
-            <a href="?page={{ i }}">{{ i }}</a>
+    {% if test_records.number == i %}
+    <span class="current">{{ i }}</span>
+    {% elif i >= test_records.number|add:'-2' and i <= test_records.number|add:'2' %} <a href="?page={{ i }}">{{ i }}</a>
         {% endif %}
-    {% endfor %}
-    
-    {% if test_records.has_next %}
-    <a href="?page={{ test_records.next_page_number }}">下一页 →</a>
-    {% else %}
-    <span class="disabled">下一页 →</span>
-    {% endif %}
+        {% endfor %}
+
+        {% if test_records.has_next %}
+        <a href="?page={{ test_records.next_page_number }}">下一页 →</a>
+        {% else %}
+        <span class="disabled">下一页 →</span>
+        {% endif %}
 </div>
 {% endif %}
 

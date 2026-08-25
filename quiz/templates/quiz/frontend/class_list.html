@@ -13,16 +13,16 @@
 
     .class-card {
         background: white;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 18px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
         border-left: 3px solid #667eea;
         transition: all 0.3s ease;
     }
 
     .class-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
     }
 
     .class-card h3 {
@@ -76,7 +76,7 @@
     .btn {
         padding: 8px 16px;
         border: none;
-        border-radius: 6px;
+        border-radius: 8px;
         font-weight: 500;
         text-decoration: none;
         display: inline-flex;
@@ -93,8 +93,8 @@
     }
 
     .btn-primary:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+        transform: translateY(-5px);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
     }
 
     .btn-secondary {
@@ -130,7 +130,7 @@
         color: #999;
         background: white;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
 
     .empty-state h3 {
@@ -148,10 +148,12 @@
         .class-grid {
             grid-template-columns: 1fr;
         }
+
         .header-actions {
             flex-direction: column;
             align-items: stretch;
         }
+
         .header-actions div:last-child {
             display: flex;
             gap: 10px;
@@ -169,43 +171,44 @@
     <div style="display: flex; gap: 8px;">
         <a href="{% url 'apply_to_class' %}" class="btn btn-success">📝 申请加入</a>
         {% if user.is_superuser %}
-            <a href="{% url 'create_class' %}" class="btn btn-primary">➕ 创建班级</a>
+        <a href="{% url 'create_class' %}" class="btn btn-primary">➕ 创建班级</a>
         {% endif %}
     </div>
 </div>
 
 {% if classes %}
-    <div class="class-grid">
-        {% for class_obj in classes %}
-            <div class="class-card">
-                <h3>
-                    📚 {{ class_obj.name }}
-                    <span class="class-code">{{ class_obj.code }}</span>
-                </h3>
-                {% if class_obj.description %}
-                    <p>{{ class_obj.description }}</p>
-                {% endif %}
-                <div class="meta">
-                    <span>👥 {{ class_obj.profiles.count }} 学生</span>
-                    <span>👤 {{ class_obj.class_admins.count }} 管理员</span>
-                    <span>📅 {{ class_obj.created_at|date:"m-d" }}</span>
-                </div>
-                <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-primary">
-                        班级信息
-                    </a>
-                    <a href="{% url 'student_class_assignments' %}" class="btn btn-secondary" style="background:#fff; border:1px solid #667eea; color:#667eea;">
-                        📝 我的作业
-                    </a>
-                </div>
-            </div>
-        {% endfor %}
+<div class="class-grid">
+    {% for class_obj in classes %}
+    <div class="class-card">
+        <h3>
+            📚 {{ class_obj.name }}
+            <span class="class-code">{{ class_obj.code }}</span>
+        </h3>
+        {% if class_obj.description %}
+        <p>{{ class_obj.description }}</p>
+        {% endif %}
+        <div class="meta">
+            <span>👥 {{ class_obj.profiles.count }} 学生</span>
+            <span>👤 {{ class_obj.class_admins.count }} 管理员</span>
+            <span>📅 {{ class_obj.created_at|date:"m-d" }}</span>
+        </div>
+        <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-primary">
+                班级信息
+            </a>
+            <a href="{% url 'student_class_assignments' %}" class="btn btn-secondary"
+                style="background:#fff; border:1px solid #667eea; color:#667eea;">
+                📝 我的作业
+            </a>
+        </div>
     </div>
+    {% endfor %}
+</div>
 {% else %}
-    <div class="empty-state">
-        <span style="font-size: 50px;">📭</span>
-        <h3>暂无班级</h3>
-        <p>{% if user.is_superuser %}点击上方按钮创建第一个班级{% else %}请联系管理员创建班级{% endif %}</p>
-    </div>
+<div class="empty-state">
+    <span style="font-size: 50px;">📭</span>
+    <h3>暂无班级</h3>
+    <p>{% if user.is_superuser %}点击上方按钮创建第一个班级{% else %}请联系管理员创建班级{% endif %}</p>
+</div>
 {% endif %}
 {% endblock %}
