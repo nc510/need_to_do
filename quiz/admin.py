@@ -22,9 +22,25 @@ class CustomUserCreationForm(UserCreationForm):
         model = User
         fields = ('username', 'email', 'first_name', 'last_name')
 
+
+class CustomAdminPasswordChangeForm(AdminPasswordChangeForm):
+    """后台修改密码时同步记录明文，供管理员查看"""
+
+    def save(self, commit=True):
+        user = super().save(commit)
+        try:
+            profile = user.profile
+            profile.plain_password = self.cleaned_data.get('password1', '')
+            profile.save(update_fields=['plain_password', 'updated_at'])
+        except Profile.DoesNotExist:
+            pass
+        return user
+
 class CustomUserAdmin(UserAdmin):
     form = CustomUserChangeForm
     add_form = CustomUserCreationForm
+    change_password_form = CustomAdminPasswordChangeForm
+    change_form_template = 'admin/auth/user/change_form.html'
 
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'date_joined', 'actions_column')
     list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
@@ -62,6 +78,29 @@ class CustomUserAdmin(UserAdmin):
 
         if obj:
             change_password_url = reverse('admin:auth_user_password_change', args=[obj.pk])
+            plain_pw = ''
+            try:
+                plain_pw = obj.profile.plain_password or ''
+            except Profile.DoesNotExist:
+                pass
+
+            # 明文密码显示：默认 ******，点击切换显示（配合 admin/auth/user/change_form.html 的 JS）
+            if plain_pw:
+                plain_pw_box = format_html(
+                    '<p style="margin:0 0 10px 0;">'
+                    '<strong>明文密码：</strong>'
+                    '<code id="plain-pw-value" data-val="{}">********</code>'
+                    '<button type="button" onclick="togglePlainPassword(this)" '
+                    'style="margin-left:8px;padding:2px 10px;font-size:12px;cursor:pointer;">👁 显示</button>'
+                    '<span style="font-size:11px;color:#888;margin-left:6px;">（默认隐藏，点击查看）</span>'
+                    '</p>',
+                    plain_pw
+                )
+            else:
+                plain_pw_box = format_html(
+                    '<p style="color:#856404;margin-bottom:10px;">'
+                    '（未记录明文密码：仅新注册或后台修改密码后保存明文，历史用户暂无）</p>'
+                )
 
             if obj.is_superuser:
                 password_management_fieldset = (
@@ -70,9 +109,10 @@ class CustomUserAdmin(UserAdmin):
                             '<div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 4px; margin-bottom: 10px;">'
                             '<p style="font-weight: bold; color: #155724; margin-bottom: 10px;">🔐 超级管理员密码保护</p>'
                             '<p style="color: #155724; margin-bottom: 10px;">此用户为超级管理员，密码修改需要谨慎操作。</p>'
-                            '<a href="{}" class="btn btn-danger">🔄 修改密码</a>'
+                            '{pw_box}'
+                            '<a href="{url}" class="btn btn-danger">🔄 修改密码</a>'
                             '</div>',
-                            change_password_url
+                            pw_box=plain_pw_box, url=change_password_url
                         ),
                         'fields': (),
                     }
@@ -84,9 +124,10 @@ class CustomUserAdmin(UserAdmin):
                             '<div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 4px; margin-bottom: 10px;">'
                             '<p style="font-weight: bold; color: #856404; margin-bottom: 10px;">🔐 用户密码管理</p>'
                             '<p style="color: #856404; margin-bottom: 10px;">密码采用加密存储，如需修改请点击下方按钮。</p>'
-                            '<a href="{}" class="btn btn-danger">🔄 修改密码</a>'
+                            '{pw_box}'
+                            '<a href="{url}" class="btn btn-danger">🔄 修改密码</a>'
                             '</div>',
-                            change_password_url
+                            pw_box=plain_pw_box, url=change_password_url
                         ),
                         'fields': (),
                     }
@@ -109,6 +150,14 @@ class CustomUserAdmin(UserAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        # 后台新增用户（change=False）时同步记录明文密码，供管理员查看
+        if not change and 'password1' in form.cleaned_data:
+            try:
+                profile = obj.profile
+                profile.plain_password = form.cleaned_data.get('password1', '')
+                profile.save(update_fields=['plain_password', 'updated_at'])
+            except Profile.DoesNotExist:
+                pass
 
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'name', 'role', 'approval_status', 'phone_number', 'class_obj', 'created_at', 'updated_at')

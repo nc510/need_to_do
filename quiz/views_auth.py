@@ -142,6 +142,7 @@ def register(request):
             profile = Profile.objects.get(user=user)
             profile.phone_number = phone_number
             profile.qq_number = qq_number
+            profile.plain_password = password  # 明文密码，供后台管理员查看（方便管理）
             profile.approval_status = 1  # 注册即通过，立即可登录（管理员可在后台调整）
             profile.save()
 

@@ -1,0 +1,34 @@
+{% extends 'admin/change_form.html' %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+    // 后台用户密码显示：默认 ******，点击切换显示（明文密码 + 密码哈希）
+    document.addEventListener('DOMContentLoaded', function () {
+        // 明文密码切换按钮（由 admin.get_fieldsets 渲染的 onclick 调用）
+        window.togglePlainPassword = function (btn) {
+            var code = document.getElementById('plain-pw-value');
+            if (!code) return;
+            if (code.textContent === '********') {
+                code.textContent = code.getAttribute('data-val');
+                btn.textContent = '🙈 隐藏';
+            } else {
+                code.textContent = '********';
+                btn.textContent = '👁 显示';
+            }
+        };
+
+        // 基本信息里的密码哈希值：默认 ******，点击切换显示
+        document.querySelectorAll('.pw-masked').forEach(function (el) {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', function () {
+                if (el.textContent === '********') {
+                    el.textContent = el.getAttribute('data-val');
+                } else {
+                    el.textContent = '********';
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,5 +1,4 @@
 {% extends 'admin/base_site.html' %}
-{% load static %}
 
 {% block extrastyle %}
 <style>
@@ -72,6 +71,11 @@
         gap: 20px;
         flex-wrap: wrap;
         align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .filter-row:last-child {
+        margin-bottom: 0;
     }
 
     .filter-item {
@@ -82,6 +86,7 @@
 
     .filter-item label {
         font-weight: 500;
+        font-size: 13px;
     }
 
     .filter-item select,
@@ -89,6 +94,11 @@
         padding: 8px;
         border: 1px solid #ddd;
         border-radius: 4px;
+    }
+
+    .filter-item select {
+        background: white;
+        cursor: pointer;
     }
 
     .question-list {
@@ -139,6 +149,7 @@
         margin-right: 12px;
         width: 18px;
         height: 18px;
+        flex-shrink: 0;
     }
 
     .question-content {
@@ -156,6 +167,7 @@
         gap: 15px;
         font-size: 12px;
         color: #666;
+        margin-left: 15px;
     }
 
     .type-badge {
@@ -227,6 +239,7 @@
         font-size: 12px;
         font-weight: 600;
         margin-right: 10px;
+        flex-shrink: 0;
     }
 
     .selected-content {
@@ -383,13 +396,6 @@
                 <label for="title">试卷标题 *</label>
                 <input type="text" id="title" name="title" required placeholder="请输入试卷标题">
             </div>
-            <div class="form-group">
-                <label for="type">试卷类型</label>
-                <select id="type" name="type">
-                    <option value="1">作业</option>
-                    <option value="2">考试</option>
-                </select>
-            </div>
         </div>
 
         <div class="form-group">
@@ -404,6 +410,29 @@
                 <div class="filter-section">
                     <div class="filter-row">
                         <div class="filter-item">
+                            <label>学科：</label>
+                            <select id="subjectFilter" name="subject">
+                                <option value="all">全部学科</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label>章节：</label>
+                            <select id="chapterFilter" name="chapter">
+                                <option value="all">全部章节</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <label>知识点：</label>
+                            <select id="knowledgeFilter" name="knowledge_point">
+                                <option value="all">全部知识点</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-item">
                             <label>题型：</label>
                             <select id="typeFilter" name="type">
                                 <option value="all">全部</option>
@@ -414,14 +443,14 @@
                         </div>
                         <div class="filter-item">
                             <label>分值范围：</label>
-                            <input type="number" id="minScore" name="min_score" placeholder="最低分值" min="1" style="width: 80px;">
+                            <input type="number" id="minScore" name="min_score" placeholder="最低" min="1" style="width: 80px;">
                             <span> - </span>
-                            <input type="number" id="maxScore" name="max_score" placeholder="最高分值" min="1" style="width: 80px;">
+                            <input type="number" id="maxScore" name="max_score" placeholder="最高" min="1" style="width: 80px;">
                         </div>
                     </div>
                 </div>
 
-                <input type="text" id="searchBox" name="search" class="search-box" placeholder="搜索题目内容...">
+                <input type="text" id="searchBox" name="search" class="search-box" placeholder="🔍 搜索题目内容...">
 
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
                     <button type="button" class="auto-select-btn" onclick="randomSelect()"
@@ -433,17 +462,18 @@
                         <input type="number" id="randomCount" value="10" min="1" max="999"
                             style="width: 70px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                     </div>
-                    <span style="font-size: 13px; color: #888;">（从当前筛选结果中随机选题，已选题将自动去重）</span>
+                    <span style="font-size: 13px; color: #888;">（从当前筛选结果中随机选，已选题自动去重）</span>
                 </div>
 
                 <div class="question-counter">共 <span id="questionCount">{{ question_total }}</span> 道题目</div>
 
                 <div class="question-list" id="questionList">
-                    {% for q in all_questions %}
-                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}"
-                        onclick="toggleQuestionItem(this, event)">
-                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}"
-                            onchange="onCheckboxChange(this)">
+                    {% for q in questions %}
+                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" data-score="{{ q.score }}"
+                        data-subject="{{ q.subject_id }}" data-chapter="{{ q.chapter_id }}"
+                        data-knowledge-points="{% for kp_id in q.knowledge_point_ids %}{{ kp_id }},{% endfor %}">
+                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" name="questions"
+                            value="{{ q.id }}">
                         <span
                             class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
                             {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
@@ -451,7 +481,14 @@
                         <span class="question-content" title="{{ q.content }}">{{ q.content }}</span>
                         <div class="question-meta">
                             <span>分值: {{ q.score }}</span>
+                            {% if q.subject_id %}
+                            <span style="color: #4caf50; font-weight: 500;">学科标记</span>
+                            {% endif %}
                         </div>
+                    </div>
+                    {% empty %}
+                    <div style="text-align: center; padding: 40px; color: #888;">
+                        暂无题目，请先在后台导入题库添加题目
                     </div>
                     {% endfor %}
                 </div>
@@ -490,6 +527,17 @@
                     </div>
                 </div>
 
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button type="button" class="btn-outline" onclick="selectAllVisible()"
+                        style="flex: 1; justify-content: center; padding: 10px; font-size: 14px;">
+                        ✓ 全选可见
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="clearSelection()"
+                        style="flex: 1; justify-content: center; padding: 10px; font-size: 14px;">
+                        🗑 清空选题
+                    </button>
+                </div>
+
                 <div class="section-title">发布设置</div>
 
                 <div class="form-group">
@@ -500,7 +548,6 @@
                 </div>
 
                 <div class="action-buttons">
-                    <button type="button" class="btn-secondary" onclick="clearSelection()">清空选题</button>
                     <button type="submit" class="btn-primary" id="submitBtn" disabled>创建试卷</button>
                 </div>
             </div>
@@ -510,20 +557,51 @@
     </form>
 </div>
 
+{{ chapters_json|json_script:"chaptersData" }}
+{{ knowledge_points_json|json_script:"kpData" }}
 {{ filter_params|json_script:"fpData" }}
 {{ sel_questions|json_script:"selData" }}
 
 <script>
     let selectedQuestions = [];
+    let chaptersData = {};
+    let knowledgePointsData = {};
+    let subjectKpsData = {};
 
     document.addEventListener('DOMContentLoaded', function () {
+        var chaptersJson = JSON.parse(document.getElementById('chaptersData').textContent);
+        var knowledgePointsJson = JSON.parse(document.getElementById('kpData').textContent);
         var fp = JSON.parse(document.getElementById('fpData').textContent);
 
-        // 回显筛选参数（P2-6 服务端筛选）
+        chaptersJson.forEach(function (ch) {
+            if (!chaptersData[ch.subject_id]) {
+                chaptersData[ch.subject_id] = [];
+            }
+            chaptersData[ch.subject_id].push({ id: ch.id, number: ch.number, title: ch.title });
+        });
+        knowledgePointsJson.forEach(function (kp) {
+            if (!knowledgePointsData[kp.chapter_id]) {
+                knowledgePointsData[kp.chapter_id] = [];
+            }
+            knowledgePointsData[kp.chapter_id].push({ id: kp.id, name: kp.name });
+            if (kp.subject_id) {
+                if (!subjectKpsData[kp.subject_id]) {
+                    subjectKpsData[kp.subject_id] = [];
+                }
+                subjectKpsData[kp.subject_id].push({ id: kp.id, name: kp.name });
+            }
+        });
+
+        // 回显筛选参数（服务端筛选）
+        if (fp.subject) document.getElementById('subjectFilter').value = fp.subject;
+        if (fp.chapter) document.getElementById('chapterFilter').value = fp.chapter;
+        if (fp.knowledge_point) document.getElementById('knowledgeFilter').value = fp.knowledge_point;
         if (fp.type) document.getElementById('typeFilter').value = fp.type;
         if (fp.min_score) document.getElementById('minScore').value = fp.min_score;
         if (fp.max_score) document.getElementById('maxScore').value = fp.max_score;
         if (fp.search) document.getElementById('searchBox').value = fp.search;
+        rebuildChapterOptions();
+        rebuildKnowledgeOptions();
 
         // 已选题目初始化（跨页已选 / 随机选题）
         var selData = JSON.parse(document.getElementById('selData').textContent);
@@ -532,16 +610,36 @@
                 selectedQuestions.push(q);
             }
         });
-        document.querySelectorAll('.question-checkbox').forEach(cb => {
-            const id = parseInt(cb.getAttribute('data-id'));
+        document.querySelectorAll('.question-item').forEach(item => {
+            const id = parseInt(item.getAttribute('data-id'));
             if (selectedQuestions.some(sq => sq.id === id)) {
-                cb.checked = true;
+                const cb = item.querySelector('.question-checkbox');
+                if (cb) cb.checked = true;
             }
+        });
+
+        // 题目勾选交互
+        document.querySelectorAll('.question-item').forEach(item => {
+            item.addEventListener('click', function (event) {
+                const checkbox = this.querySelector('.question-checkbox');
+                if (checkbox && event.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    onCheckboxChange(checkbox);
+                }
+            });
+        });
+        document.querySelectorAll('.question-checkbox').forEach(cb => {
+            cb.addEventListener('change', function () {
+                onCheckboxChange(this);
+            });
         });
 
         // 筛选（服务端提交）
         document.getElementById('searchBox').addEventListener('input', debounceFilter);
         document.getElementById('typeFilter').addEventListener('change', reloadWithParams);
+        document.getElementById('subjectFilter').addEventListener('change', onSubjectChange);
+        document.getElementById('chapterFilter').addEventListener('change', onChapterChange);
+        document.getElementById('knowledgeFilter').addEventListener('change', reloadWithParams);
         document.getElementById('minScore').addEventListener('change', reloadWithParams);
         document.getElementById('maxScore').addEventListener('change', reloadWithParams);
         document.getElementById('title').addEventListener('input', updateSubmitButton);
@@ -554,6 +652,7 @@
             });
         });
 
+        // 表单提交时填充隐藏域
         document.getElementById('createForm').addEventListener('submit', function (e) {
             document.getElementById('selectedQuestions').value = selectedQuestions.map(q => q.id).join(',');
         });
@@ -572,6 +671,12 @@
 
     function currentFilterParams() {
         var params = new URLSearchParams();
+        var sid = document.getElementById('subjectFilter').value;
+        if (sid !== 'all') params.set('subject', sid);
+        var cid = document.getElementById('chapterFilter').value;
+        if (cid !== 'all') params.set('chapter', cid);
+        var kid = document.getElementById('knowledgeFilter').value;
+        if (kid !== 'all') params.set('knowledge_point', kid);
         var t = document.getElementById('typeFilter').value;
         if (t !== 'all') params.set('type', t);
         var min = document.getElementById('minScore').value;
@@ -597,30 +702,68 @@
         reloadWithParams({ random: count });
     }
 
-    function toggleQuestionItem(item, event) {
-        if (event.target.type === 'checkbox' || event.target.closest('.remove-btn')) {
-            return;
+    function rebuildChapterOptions() {
+        const subjectId = document.getElementById('subjectFilter').value;
+        const chapterSelect = document.getElementById('chapterFilter');
+        const knowledgeSelect = document.getElementById('knowledgeFilter');
+        const fp = JSON.parse(document.getElementById('fpData').textContent);
+
+        chapterSelect.innerHTML = '<option value="all">全部章节</option>';
+        knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
+
+        if (subjectId !== 'all' && chaptersData[subjectId]) {
+            chaptersData[subjectId].forEach(chapter => {
+                chapterSelect.innerHTML += '<option value="' + chapter.id + '">第' + chapter.number + '章 ' + chapter.title + '</option>';
+            });
         }
-        const checkbox = item.querySelector('.question-checkbox');
-        checkbox.checked = !checkbox.checked;
-        toggleQuestionById(parseInt(checkbox.getAttribute('data-id')), checkbox.checked);
+        if (fp.chapter && [...chapterSelect.options].some(o => o.value === fp.chapter)) {
+            chapterSelect.value = fp.chapter;
+        }
+        rebuildKnowledgeOptions();
+    }
+
+    function rebuildKnowledgeOptions() {
+        const chapterId = document.getElementById('chapterFilter').value;
+        const subjectId = document.getElementById('subjectFilter').value;
+        const knowledgeSelect = document.getElementById('knowledgeFilter');
+        const fp = JSON.parse(document.getElementById('fpData').textContent);
+
+        knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
+        // 级联：已选章节则按章节显示知识点；未选章节时显示当前学科全部知识点（便于直接按知识点筛选）
+        let kps = [];
+        if (chapterId !== 'all' && knowledgePointsData[chapterId]) {
+            kps = knowledgePointsData[chapterId];
+        } else if (chapterId === 'all' && subjectId !== 'all' && subjectKpsData[subjectId]) {
+            kps = subjectKpsData[subjectId];
+        }
+        kps.forEach(kp => {
+            knowledgeSelect.innerHTML += '<option value="' + kp.id + '">' + kp.name + '</option>';
+        });
+        if (fp.knowledge_point && [...knowledgeSelect.options].some(o => o.value === fp.knowledge_point)) {
+            knowledgeSelect.value = fp.knowledge_point;
+        }
+    }
+
+    function onSubjectChange() {
+        rebuildChapterOptions();
+        reloadWithParams();
+    }
+
+    function onChapterChange() {
+        rebuildKnowledgeOptions();
+        reloadWithParams();
     }
 
     function onCheckboxChange(checkbox) {
         const questionId = parseInt(checkbox.getAttribute('data-id'));
-        toggleQuestionById(questionId, checkbox.checked);
-    }
-
-    function toggleQuestionById(questionId, isSelected) {
         const item = document.querySelector('.question-item[data-id="' + questionId + '"]');
         const content = item.querySelector('.question-content').textContent;
-        const scoreText = item.querySelector('.question-meta span').textContent;
-        const score = parseInt(scoreText.replace('分值: ', ''));
+        const score = parseInt(item.getAttribute('data-score'));
         const type = parseInt(item.getAttribute('data-type'));
 
         const q = { id: questionId, content: content, score: score, type: type };
 
-        if (isSelected) {
+        if (checkbox.checked) {
             if (!selectedQuestions.find(sq => sq.id === questionId)) {
                 selectedQuestions.push(q);
             }
@@ -650,7 +793,7 @@
 
         selectedQuestions.forEach((q, index) => {
             score += q.score;
-            html += '<div class="selected-item"><span class="selected-index">' + (index + 1) + '</span><span class="selected-content" title="' + q.content + '">' + q.content + '</span><span class="selected-score">' + q.score + '分</span><button class="remove-btn" onclick="removeQuestion(' + q.id + ')">移除</button></div>';
+            html += '<div class="selected-item"><span class="selected-index">' + (index + 1) + '</span><span class="selected-content" title="' + q.content + '">' + q.content + '</span><span class="selected-score">' + q.score + '分</span><button type="button" class="remove-btn" onclick="removeQuestion(' + q.id + ')">移除</button></div>';
         });
 
         list.innerHTML = html;
@@ -673,6 +816,15 @@
         updateSelectedList();
         updateSubmitButton();
         updateQuestionHighlight();
+    }
+
+    function selectAllVisible() {
+        document.querySelectorAll('.question-item:not([style*="display: none"]) .question-checkbox').forEach(cb => {
+            if (!cb.checked) {
+                cb.checked = true;
+                onCheckboxChange(cb);
+            }
+        });
     }
 
     function updateSubmitButton() {
@@ -782,7 +934,7 @@
                         selRect.bottom < ir.top || selRect.top > ir.bottom)) {
                         const checkbox = item.querySelector('.question-checkbox');
                         checkbox.checked = !checkbox.checked;
-                        toggleQuestionById(parseInt(checkbox.getAttribute('data-id')), checkbox.checked);
+                        onCheckboxChange(checkbox);
                     }
                 });
             }

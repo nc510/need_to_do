@@ -178,6 +178,8 @@ class Profile(models.Model):
         ('admin', '管理员'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student', verbose_name='用户角色')
+    # 明文密码（后台查看用，仅便于管理；新注册/修改密码时同步记录）
+    plain_password = models.CharField(max_length=128, verbose_name='明文密码', blank=True, null=True)
     phone_number = models.CharField(max_length=11, verbose_name='手机号码', blank=True, null=True, unique=True)
     qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)
     # 关联班级（允许为空，表示未分配班级）

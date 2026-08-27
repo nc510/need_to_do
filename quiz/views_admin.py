@@ -1,5 +1,7 @@
 # 本模块由 quiz/views.py 拆分生成（P2-1），公共依赖（import/类/常量/工具函数）见 views_common.py
 from .views_common import *  # noqa: F401,F403
+# 后台组卷复用前端手工组卷的选题上下文（学科/章节/知识点级联筛选 + 分页 + 随机选题）
+from .views_paper import _paper_editor_context  # noqa: E402
 
 class QuestionImporter:
     """后台导入题库 - 只导入题目到共享题库，可选一键生成试卷"""
@@ -127,14 +129,14 @@ def download_import_template(request):
 @staff_member_required
 def admin_create_testpaper(request):
     """后台组卷"""
-    # P2-11：复用 get_visible_questions（staff 返回全部题目），避免单独写 Question.objects.all()
-    all_questions = get_visible_questions(request.user)
-    
     if request.method == 'POST':
         title = request.POST.get('title')
         description = request.POST.get('description')
         is_published = request.POST.get('is_published') == 'on'
         selected_questions = request.POST.get('selected_questions')
+        # 与前端手工组卷一致：JS 隐藏域为空时回退到复选框 name="questions"
+        if not selected_questions:
+            selected_questions = ','.join(request.POST.getlist('questions'))
         
         if not title:
             messages.error(request, '请输入试卷标题')
@@ -178,66 +180,11 @@ def admin_create_testpaper(request):
         messages.success(request, f'试卷 "{title}" 创建成功！')
         return redirect('admin_preview_testpaper', paper_id=test_paper.id)
     
-    # ===== P2-6 服务端筛选 + 分页（每页 50）=====
-    q_type = request.GET.get('type', '')
-    search = request.GET.get('search', '').strip()
-    min_score = request.GET.get('min_score', '')
-    max_score = request.GET.get('max_score', '')
-
-    if q_type.isdigit():
-        all_questions = all_questions.filter(type=q_type)
-    if search:
-        all_questions = all_questions.filter(models.Q(content__icontains=search))
-    if min_score.isdigit():
-        all_questions = all_questions.filter(score__gte=int(min_score))
-    if max_score.isdigit():
-        all_questions = all_questions.filter(score__lte=int(max_score))
-
-    # 服务端随机选题：按当前筛选结果随机取 N 题
-    random_questions = []
-    random_count = request.GET.get('random', '')
-    if random_count.isdigit() and int(random_count) > 0:
-        random_questions = list(all_questions.order_by('?')[:int(random_count)])
-
-    question_total = all_questions.count()
-    page_obj = paginate_queryset(
-        all_questions.order_by('id'), request.GET.get('page', 1), items_per_page=50)
-
-    questions_list = []
-    for q in page_obj.object_list:
-        q.options = parse_options(q.options)
-        questions_list.append(q)
-
-    # 已选题目（跨页保留）：解析 sel 参数
-    sel_str = request.GET.get('sel', '')
-    sel_ids = [s for s in sel_str.split(',') if s.isdigit()]
-    selected = list(Question.objects.filter(id__in=sel_ids))
-    sel_questions = [{
-        'id': q.id, 'content': q.content, 'score': q.score, 'type': q.type
-    } for q in selected]
-    if random_questions:
-        sel_questions += [{
-            'id': q.id, 'content': q.content, 'score': q.score, 'type': q.type
-        } for q in random_questions]
-
-    filter_params = {'type': q_type, 'min_score': min_score, 'max_score': max_score, 'search': search}
-    filter_query = '&'.join('{}={}'.format(k, v) for k, v in filter_params.items() if v)
-
-    # 随机选题后 redirect 清理 random 参数（避免刷新重复随机）
-    if random_count.isdigit() and int(random_count) > 0 and random_questions:
-        combined_ids = list(dict.fromkeys(sel_ids + [q.id for q in random_questions]))
-        parts = [kv for kv in filter_query.split('&') if kv]
-        parts.append('sel={}'.format(','.join(str(i) for i in combined_ids)))
-        return redirect(request.path + '?' + '&'.join(parts))
-
-    return render(request, 'quiz/admin/create_testpaper.html', {
-        'all_questions': questions_list,
-        'page_obj': page_obj,
-        'question_total': question_total,
-        'filter_params': filter_params,
-        'filter_query': filter_query,
-        'sel_questions': sel_questions,
-    })
+    # ===== 复用前端手工组卷的选题体验（学科/章节/知识点级联筛选 + 分页 + 随机选题）=====
+    context = _paper_editor_context(request)
+    if context.get('redirect_url'):
+        return redirect(request.path + context['redirect_url'])
+    return render(request, 'quiz/admin/create_testpaper.html', context)
 
 @staff_member_required
 def admin_preview_testpaper(request, paper_id):
