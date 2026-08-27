@@ -427,6 +427,8 @@
 
         <button type="submit" class="submit-btn">📤 提交{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</button>
     </form>
+
+    {% include "quiz/frontend/_draft_save_script.html" %}
 </div>
 
 <!-- 答题模式切换脚本 -->
@@ -638,6 +640,8 @@
             .then(function (data) {
                 if (data.success) {
                     alert(data.message);
+                    // 提交成功，离开时不再拦截（避免提交后再触发临时保存）
+                    window.setDraftSubmitted();
                     // 添加时间戳参数强制刷新页面，避免缓存旧数据
                     window.location.href = '{% url "student_class_assignments" %}?t=' + Date.now();
                 } else {

@@ -658,6 +658,8 @@ def reset_exam_status(request, class_id, assignment_id):
         if test_record_ids:
             TestRecord.objects.filter(id__in=test_record_ids).delete()
         records.delete()
+        # 重置时同步清理该作业的学生答题草稿，避免残留"继续测试"
+        TestDraft.objects.filter(assignment=assignment).delete()
 
         students = Profile.objects.filter(class_obj=class_obj, approval_status=1)
         for student in students:
@@ -738,6 +740,9 @@ def student_class_assignments(request):
     
     # 构建作业列表数据
     now = timezone.now()
+    # 草稿：该学生在这些作业上是否有进行中的临时保存
+    draft_ids = set(TestDraft.objects.filter(
+        user=request.user, assignment__in=assignments).values_list('assignment_id', flat=True))
     assignment_list = []
     for assignment in assignments:
         # 直接查询每个作业的最新提交记录（按attempt降序）
@@ -753,7 +758,8 @@ def student_class_assignments(request):
             'assignment': assignment,
             'record': record,
             'is_submitted': is_submitted,
-            'is_overdue': is_overdue
+            'is_overdue': is_overdue,
+            'has_draft': assignment.id in draft_ids
         })
     
     response = render(request, 'quiz/frontend/student_class_assignments.html', {
@@ -790,6 +796,10 @@ def do_class_assignment(request, assignment_id):
         assignment=assignment,
         user=request.user
     ).order_by('-attempt').first()
+
+    # 答题草稿（临时保存，继续测试时预填）
+    draft = TestDraft.objects.filter(user=request.user, assignment=assignment).first()
+    draft_answers = (draft.answers or {}) if draft else {}
     
     # 考试模式：只能有一次提交
     if assignment.type == 2 and latest_record and latest_record.is_submitted:
@@ -845,6 +855,10 @@ def do_class_assignment(request, assignment_id):
             record.save()
             messages.success(request, f'{"考试" if assignment.type == 2 else "作业"}提交成功！')
         
+        # 提交成功，删除答题草稿
+        if draft:
+            draft.delete()
+        
         # 重定向到作业列表，添加时间戳防止缓存
         return redirect(f'{reverse("student_class_assignments")}?t={int(timezone.now().timestamp())}')
     
@@ -867,39 +881,44 @@ def do_class_assignment(request, assignment_id):
         if record_for_timer.start_time:
             time_elapsed = (timezone.now() - record_for_timer.start_time).total_seconds() / 60
             if time_elapsed > assignment.time_limit:
-                # 超时自动提交（得0分）
-                record_for_timer.score = 0
+                # 超时自动提交：有草稿按草稿答案计分，无草稿得0分（避免已答内容丢失）
+                test_record = None
+                score2 = 0
+                if assignment.test_paper:
+                    test_paper2 = assignment.test_paper
+                    questions2 = list(test_paper2.questions.all())
+                    if draft and draft.answers:
+                        score2, _cc, _wc, _tc, question_results = calculate_score(questions2, draft.answers)
+                        test_record, _ = create_test_and_answer_records(
+                            request.user, test_paper2, questions2, score2, question_results)
+                    else:
+                        test_record = TestRecord.objects.create(
+                            user=request.user,
+                            test_paper=test_paper2,
+                            score=0,
+                            total_score=test_paper2.total_score,
+                            completed_at=timezone.now()
+                        )
+                        # 创建空白答案记录（bulk_create 一次插入，替代原逐条 create 的 N+1）
+                        answer_records = []
+                        for q in test_paper2.questions.all():
+                            answer_records.append(AnswerRecord(
+                                test_record=test_record, question=q, user_answer='',
+                                correct_answer=q.correct_answer, is_correct=False,
+                                original_question_content=q.content,
+                                original_question_type=q.type,
+                                original_options=parse_options(q.options),
+                                original_explanation=q.explanation))
+                        AnswerRecord.objects.bulk_create(answer_records)
+                    record_for_timer.test_record = test_record
+                record_for_timer.score = score2
                 record_for_timer.is_submitted = True
                 record_for_timer.submitted_at = timezone.now()
                 record_for_timer.save()
+                if draft:
+                    draft.delete()
                 
-                # 创建测试记录
-                if assignment.test_paper:
-                    test_paper = assignment.test_paper
-                    test_record = TestRecord.objects.create(
-                        user=request.user,
-                        test_paper=test_paper,
-                        score=0,
-                        total_score=test_paper.total_score,
-                        completed_at=timezone.now()
-                    )
-                    # 创建空白答案记录
-                    for q in test_paper.questions.all():
-                        AnswerRecord.objects.create(
-                            test_record=test_record,
-                            question=q,
-                            user_answer='',
-                            correct_answer=q.correct_answer,
-                            is_correct=False,
-                            original_question_content=q.content,
-                            original_question_type=q.type,
-                            original_options=parse_options(q.options),
-                            original_explanation=q.explanation
-                        )
-                    record_for_timer.test_record = test_record
-                    record_for_timer.save()
-                
-                messages.error(request, '考试已超时，系统已自动提交（得0分）')
+                messages.error(request, '考试已超时，系统已自动提交' + (f'（得分{score2}分）' if score2 else '（得0分）'))
                 return redirect('student_class_assignments')
     
     # 获取题目列表
@@ -923,7 +942,10 @@ def do_class_assignment(request, assignment_id):
         'test_paper': test_paper,
         'remaining_seconds': remaining_seconds,
         'show_answer': False,
-        'record': latest_record
+        'record': latest_record,
+        'draft': draft,
+        'draft_answers': draft_answers,
+        'draft_save_url': reverse('save_assignment_draft', args=[assignment_id]),
     })
 
 @login_required
@@ -989,6 +1011,9 @@ def submit_class_assignment(request, assignment_id):
             
             record.test_record = test_record
             record.save()
+
+            # 提交成功，删除答题草稿
+            TestDraft.objects.filter(user=request.user, assignment=assignment).delete()
             
             return JsonResponse({
                 'success': True,
@@ -999,11 +1024,58 @@ def submit_class_assignment(request, assignment_id):
             record.is_submitted = True
             record.submitted_at = timezone.now()
             record.save()
+            # 提交成功，删除答题草稿
+            TestDraft.objects.filter(user=request.user, assignment=assignment).delete()
             return JsonResponse({'success': True, 'message': '提交成功！'})
     
     except Exception as e:
         error_info = f'Error: {str(e)}\n{traceback.format_exc()}'
         print(error_info)
         return JsonResponse({'success': False, 'message': f'提交失败: {str(e)}'})
+
+
+@login_required
+def save_assignment_draft(request, assignment_id):
+    """AJAX 临时保存班级作业/考试答题草稿（作业模式与考试模式共用）"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': '无效的请求'})
+    assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
+    # 权限：仅该作业班级的学生本人
+    try:
+        profile = request.user.profile
+    except Profile.DoesNotExist:
+        return JsonResponse({'success': False, 'message': '无权访问该作业'})
+    if not profile.class_obj or profile.class_obj_id != assignment.class_obj_id:
+        return JsonResponse({'success': False, 'message': '无权访问该作业'})
+    try:
+        answers_raw = json.loads(request.POST.get('answers_json') or '{}')
+    except Exception:
+        answers_raw = {}
+    if not isinstance(answers_raw, dict):
+        answers_raw = {}
+    # 清洗：仅保留该作业试卷的题目答案
+    question_ids = set()
+    if assignment.test_paper:
+        question_ids = set(assignment.test_paper.questions.values_list('id', flat=True))
+    answers = {}
+    for k, v in answers_raw.items():
+        if str(k).isdigit() and int(k) in question_ids and isinstance(v, str) and len(v) <= 10:
+            answers[str(int(k))] = v
+    try:
+        current_index = int(request.POST.get('current_index', '0'))
+    except (TypeError, ValueError):
+        current_index = 0
+    mode = request.POST.get('mode', 'full')
+    if mode not in ('full', 'single'):
+        mode = 'full'
+    draft, created = TestDraft.objects.get_or_create(
+        user=request.user, assignment=assignment,
+        defaults={'answers': answers, 'current_index': current_index, 'mode': mode})
+    if not created:
+        draft.answers = answers
+        draft.current_index = current_index
+        draft.mode = mode
+    draft.save()
+    return JsonResponse({'success': True, 'draft_id': draft.id, 'answered_count': len(answers)})
 
 # 后台管理视图

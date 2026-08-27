@@ -200,7 +200,7 @@ class AdminTestPaperImporter(BaseTestPaperImporter):
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft
 from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
@@ -411,4 +411,37 @@ def create_test_and_answer_records(user, test_paper, questions, score, question_
             wrong_questions.append(question)
     AnswerRecord.objects.bulk_create(answer_records)
     return test_record, wrong_questions
+
+
+def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False):
+    """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
+    公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
+    返回 (test_record, score, correct_count, wrong_count, question_results)。
+    """
+    score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+    test_record, wrong_questions_list = create_test_and_answer_records(
+        user, test_paper, questions, score, question_results, is_wrong_paper=is_wrong_paper)
+    # 自动添加错题到错题本（key 兼容 int/str，草稿 answers 使用 str key）
+    for question in wrong_questions_list:
+        ans = user_answers.get(question.id)
+        if ans is None:
+            ans = user_answers.get(str(question.id))
+        WrongQuestion.objects.get_or_create(
+            user=user,
+            question=question,
+            defaults={
+                'user_answer': ans or '',
+                'correct_answer': question.correct_answer
+            }
+        )
+    try:
+        profile = Profile.objects.get(user=user)
+    except Profile.DoesNotExist:
+        profile = Profile.objects.create(user=user)
+    # 用 F 表达式避免并发读-改-写竞态；不写 accuracy_rate（语义错误，改由 AnswerRecord 聚合）
+    Profile.objects.filter(pk=profile.pk).update(
+        total_score=F('total_score') + score,
+        tests_taken=F('tests_taken') + 1,
+    )
+    return test_record, score, correct_count, wrong_count, question_results
 

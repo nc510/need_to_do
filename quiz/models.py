@@ -1,7 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save, m2m_changed
+from django.db.models.signals import post_save, post_delete, m2m_changed
 from django.dispatch import receiver
+from django.core.cache import cache
 
 # 学科模型
 class Subject(models.Model):
@@ -202,6 +203,15 @@ def ensure_profile_exists(sender, instance, created, **kwargs):
     if created:
         Profile.objects.get_or_create(user=instance)
 
+# 首页 Hero 区全站统计缓存（hero_stats，见 views_paper.test_paper_list）：
+# 试卷/题目任何增删改后即时失效，避免 LocMemCache（进程内）缓存残留旧统计值
+@receiver(post_save, sender=TestPaper)
+@receiver(post_delete, sender=TestPaper)
+@receiver(post_save, sender=Question)
+@receiver(post_delete, sender=Question)
+def invalidate_hero_stats_cache(sender, **kwargs):
+    cache.delete('hero_stats')
+
 class TestRecord(models.Model):
     # 答题记录
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
@@ -400,6 +410,43 @@ class ClassAssignmentRecord(models.Model):
 
     def __str__(self):
         return f'{self.user.username} - {self.assignment.title}'
+
+
+class TestDraft(models.Model):
+    """答题草稿：答题过程临时保存，支持异常中断后继续测试"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户', related_name='test_drafts')
+    # 公开试卷 / 错题组卷走 test_paper；班级作业/考试走 assignment
+    test_paper = models.ForeignKey(TestPaper, on_delete=models.CASCADE, verbose_name='试卷', null=True, blank=True)
+    assignment = models.ForeignKey(ClassAssignment, on_delete=models.CASCADE, verbose_name='班级作业', null=True, blank=True)
+    is_wrong_paper = models.BooleanField(default=False, verbose_name='是否错题组卷')
+    # 答题内容：{"question_id": "答案串"}（单选/判断=值，多选=排序拼接，与 collect_user_answers 一致）
+    answers = models.JSONField(default=dict, verbose_name='答题内容')
+    current_index = models.IntegerField(default=0, verbose_name='逐题答题位置')
+    mode = models.CharField(max_length=10, default='full', verbose_name='答题模式')  # full/single
+    start_time = models.DateTimeField(null=True, blank=True, verbose_name='开始时间')  # 限时考试计时起点
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='最后保存时间')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    class Meta:
+        verbose_name = '答题草稿'
+        verbose_name_plural = '答题草稿'
+        ordering = ['-updated_at']
+        # MySQL 唯一索引对 NULL 去重：test_paper/assignment 为 NULL 时允许多条，不影响各自业务线的唯一性
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'test_paper', 'is_wrong_paper'], name='uniq_draft_test_paper'),
+            models.UniqueConstraint(fields=['user', 'assignment'], name='uniq_draft_assignment'),
+        ]
+
+    def __str__(self):
+        if self.assignment:
+            return f'{self.user.username} - 作业草稿 - {self.assignment.title}'
+        if self.test_paper:
+            return f'{self.user.username} - {"错题" if self.is_wrong_paper else ""}试卷草稿 - {self.test_paper.title}'
+        return f'{self.user.username} - 草稿#{self.id}'
+
+    def answered_count(self):
+        """已答题数（以草稿 answers 键为准）"""
+        return len(self.answers or {})
 
 
 class Notification(models.Model):

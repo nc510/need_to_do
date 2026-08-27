@@ -273,6 +273,9 @@
             {% else %}
             <span class="status-badge status-not-submitted">未提交</span>
             {% endif %}
+            {% if item.has_draft and not item.is_submitted %}
+            <span class="status-badge" style="background:#e8f5e9;color:#2e7d32;">⏸ 临时保存</span>
+            {% endif %}
         </div>
 
         {% if assignment.description %}
@@ -314,6 +317,8 @@
             {% endif %}
             {% elif item.is_overdue %}
             <span class="btn btn-secondary" style="cursor: default; background: #f8d7da; color: #721c24;">⏰ 已逾期</span>
+            {% elif item.has_draft %}
+            <a href="{% url 'do_class_assignment' assignment_id=assignment.id %}" class="btn btn-primary">▶️ 继续答题</a>
             {% else %}
             <a href="{% url 'do_class_assignment' assignment_id=assignment.id %}" class="btn btn-primary">✏️ 开始答题</a>
             {% endif %}

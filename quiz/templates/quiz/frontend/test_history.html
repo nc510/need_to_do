@@ -163,6 +163,43 @@
     .view-btn:hover {
         background: #5a6fd6;
     }
+    .history-card.draft {
+        border-top-color: #f59e0b;
+    }
+
+    .discard-btn {
+        background: #fff;
+        color: #ef4444;
+        border: 1px solid #fecaca;
+        padding: 6px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.2s;
+    }
+
+    .discard-btn:hover {
+        background: #fef2f2;
+        border-color: #ef4444;
+    }
+
+    .draft-title {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 14px;
+    }
+
+    .draft-title::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 18px;
+        background: #f59e0b;
+        border-radius: 3px;
+        margin-right: 8px;
+        vertical-align: middle;
+    }
+
 
     .pagination {
         text-align: center;
@@ -218,6 +255,55 @@
     <h1>📊 答题历史记录</h1>
     <p>查看您的答题表现和分析</p>
 </div>
+
+{% if test_drafts %}
+<div class="draft-section">
+    <h2 class="draft-title">进行中（临时保存）</h2>
+    <div class="history-list">
+        {% for draft in test_drafts %}
+        <div class="history-card draft">
+            <div class="history-header">
+                <h3 class="history-title">
+                    <a href="{{ draft.continue_url }}">{{ draft.title }}</a>
+                </h3>
+                <span class="score-badge pass">⏸ 临时保存</span>
+            </div>
+            <div class="history-meta">
+                <span class="meta-item">
+                    <span>✍️</span>
+                    <span>已答 {{ draft.answered_count }}/{{ draft.question_total }} 题</span>
+                </span>
+                <span class="meta-item">
+                    <span>📅</span>
+                    <span>{{ draft.updated_at|date:"m-d H:i" }}</span>
+                </span>
+                {% if draft.remaining_display %}
+                <span class="meta-item">
+                    <span>⏳</span>
+                    <span>{{ draft.remaining_display }}</span>
+                </span>
+                {% endif %}
+            </div>
+            <div class="score-section">
+                <form method="POST" action="{% url 'discard_draft' draft.id %}" class="discard-form" style="margin:0;display:inline">
+                    {% csrf_token %}
+                    <button type="submit" class="discard-btn">🗑 放弃</button>
+                </form>
+                <a href="{{ draft.continue_url }}" class="view-btn">▶ 继续测试</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+<script>
+    document.querySelectorAll('.discard-form').forEach(function (f) {
+        f.addEventListener('submit', function (e) {
+            if (!confirm('确定放弃这份临时保存的答题进度吗？')) e.preventDefault();
+        });
+    });
+</script>
+{% endif %}
+
 
 {% if test_records %}
 <div class="history-list">

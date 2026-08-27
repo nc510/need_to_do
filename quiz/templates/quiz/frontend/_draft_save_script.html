@@ -1,0 +1,253 @@
+{% if user.is_authenticated and draft_save_url %}
+{{ draft_answers|json_script:"draftAnswers" }}
+<div class="draft-save-bar" id="draftSaveBar">
+    <button type="button" class="draft-save-btn" id="btnTempSave">💾 临时保存</button>
+    <span class="draft-status" id="draftStatus">未保存</span>
+</div>
+<div class="draft-modal-mask" id="draftModal" style="display:none;">
+    <div class="draft-modal">
+        <p class="draft-modal-title">检测到未保存的答题进度</p>
+        <p class="draft-modal-sub">是否临时保存后离开？</p>
+        <div class="draft-modal-actions">
+            <button type="button" class="draft-modal-btn save" id="draftModalSave">保存并离开</button>
+            <button type="button" class="draft-modal-btn leave" id="draftModalLeave">直接离开</button>
+            <button type="button" class="draft-modal-btn cancel" id="draftModalCancel">取消</button>
+        </div>
+    </div>
+</div>
+<style>
+    .draft-save-bar{position:fixed;bottom:20px;left:20px;z-index:9999;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:8px 14px;box-shadow:0 2px 8px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;font-size:14px}
+    .draft-save-btn{background:#2ecc71;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:14px}
+    .draft-save-btn:hover{background:#27ae60}
+    .draft-save-btn:disabled{opacity:.6;cursor:default}
+    .draft-status{color:#999;font-size:12px}
+    .draft-status.dirty{color:#e67e22}
+    .draft-status.saved{color:#27ae60}
+    .draft-modal-mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center}
+    .draft-modal{background:#fff;border-radius:10px;padding:24px;width:320px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+    .draft-modal-title{font-size:16px;font-weight:bold;margin:0 0 6px}
+    .draft-modal-sub{color:#666;font-size:13px;margin:0 0 18px}
+    .draft-modal-actions{display:flex;flex-direction:column;gap:8px}
+    .draft-modal-btn{border:none;border-radius:6px;padding:9px 0;font-size:14px;cursor:pointer}
+    .draft-modal-btn.save{background:#2ecc71;color:#fff}
+    .draft-modal-btn.leave{background:#fff;color:#666;border:1px solid #e0e0e0}
+    .draft-modal-btn.cancel{background:#f5f5f5;color:#666}
+</style>
+<script>
+(function () {
+    'use strict';
+    if (window.__draftSaverLoaded) return;
+    window.__draftSaverLoaded = true;
+    var SAVE_URL = "{{ draft_save_url }}";
+    var dirty = false;
+    var lastSaved = null;
+    var allowLeave = false;
+    var pendingHref = null;
+    var statusEl = null;
+
+    function getCsrf() {
+        var el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return el ? el.value : '';
+    }
+
+    function serializeAnswers() {
+        var answers = {};
+        document.querySelectorAll('input[type="radio"][name^="question_"]:checked').forEach(function (el) {
+            answers[el.name.replace('question_', '')] = el.value;
+        });
+        document.querySelectorAll('input[type="checkbox"][name^="question_"]:checked').forEach(function (el) {
+            var parts = el.name.split('_');
+            var qid = parts[1];
+            var opt = parts.slice(2).join('_');
+            var cur = answers[qid] || '';
+            if (cur.indexOf(opt) === -1) {
+                answers[qid] = (cur + opt).split('').sort().join('');
+            }
+        });
+        return answers;
+    }
+
+    function updateStatus() {
+        if (!statusEl) return;
+        if (dirty) {
+            statusEl.textContent = '有未保存的更改';
+            statusEl.className = 'draft-status dirty';
+        } else if (lastSaved) {
+            statusEl.textContent = '已保存 ' + lastSaved;
+            statusEl.className = 'draft-status saved';
+        } else {
+            statusEl.textContent = '未保存';
+            statusEl.className = 'draft-status';
+        }
+    }
+
+    function saveDraft(opts) {
+        opts = opts || {};
+        var answers = serializeAnswers();
+        var modeInput = document.querySelector('input[name="test_mode"]:checked');
+        var mode = modeInput ? modeInput.value : 'full';
+        var idx = 0;
+        if (typeof currentQuestionIndex !== 'undefined') idx = currentQuestionIndex;
+        else if (typeof currentIndex !== 'undefined') idx = currentIndex;
+        var fd = new FormData();
+        fd.append('answers_json', JSON.stringify(answers));
+        fd.append('current_index', String(idx));
+        fd.append('mode', mode);
+        fd.append('csrfmiddlewaretoken', getCsrf());
+        return fetch(SAVE_URL, { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.success) {
+                    dirty = false;
+                    var d = new Date();
+                    lastSaved = d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
+                    updateStatus();
+                    if (opts.afterSave) opts.afterSave();
+                } else {
+                    if (opts.onError) opts.onError();
+                }
+            })
+            .catch(function () { if (opts.onError) opts.onError(); });
+    }
+
+    function markDirty() {
+        if (!dirty) {
+            dirty = true;
+            updateStatus();
+        }
+    }
+
+    function markSubmitted() {
+        allowLeave = true;
+    }
+    window.setDraftSubmitted = markSubmitted;
+
+    function restoreAnswers() {
+        var el = document.getElementById('draftAnswers');
+        if (!el) return;
+        var answers = {};
+        try { answers = JSON.parse(el.textContent); } catch (e) { return; }
+        Object.keys(answers).forEach(function (qid) {
+            var ans = String(answers[qid] || '').trim();
+            if (!ans) return;
+            var isJudge = (ans.indexOf('对') === 0 || ans.indexOf('错') === 0);
+            var chars = isJudge ? [ans] : ans.split('');
+            chars.forEach(function (opt) {
+                var radio = document.querySelector('input[name="question_' + qid + '"][value="' + opt + '"]');
+                if (radio && radio.type === 'radio') { radio.checked = true; return; }
+                var cb = document.querySelector('input[type="checkbox"][name="question_' + qid + '_' + opt + '"]');
+                if (cb) cb.checked = true;
+            });
+        });
+        // 同步视觉高亮：已选中的选项 div 加 selected
+        document.querySelectorAll('.question-item').forEach(function (item) {
+            var qid = item.dataset.questionId;
+            if (!qid) return;
+            item.querySelectorAll('.option').forEach(function (od) {
+                var opt = od.dataset.option;
+                var radio = item.querySelector('input[name="question_' + qid + '"][value="' + opt + '"]');
+                var cb = item.querySelector('input[type="checkbox"][name="question_' + qid + '_' + opt + '"]');
+                if ((radio && radio.checked) || (cb && cb.checked)) od.classList.add('selected');
+            });
+        });
+    }
+
+    function showModal(href) {
+        pendingHref = href;
+        document.getElementById('draftModal').style.display = 'flex';
+    }
+    function hideModal() {
+        pendingHref = null;
+        document.getElementById('draftModal').style.display = 'none';
+    }
+    function navigate(href) {
+        allowLeave = true;
+        window.location.href = href;
+    }
+
+    function init() {
+        restoreAnswers();
+        statusEl = document.getElementById('draftStatus');
+        updateStatus();
+
+        var btn = document.getElementById('btnTempSave');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                btn.disabled = true;
+                saveDraft({
+                    afterSave: function () { btn.disabled = false; },
+                    onError: function () { btn.disabled = false; alert('临时保存失败，请检查网络后重试'); }
+                });
+            });
+        }
+
+        // 脏标记：选项点击 + input 变化
+        document.addEventListener('click', function (e) {
+            if (e.target.closest && e.target.closest('.option')) markDirty();
+        });
+        document.addEventListener('change', function (e) {
+            if (e.target.name && e.target.name.indexOf('question_') === 0) markDirty();
+        });
+
+        // 自动保存：30 秒内有改动才触发
+        setInterval(function () {
+            if (dirty) saveDraft({});
+        }, 30000);
+
+        // 提交时放行离开拦截（覆盖 requestSubmit 与直接 form.submit() 两种路径）
+        var form = document.getElementById('test_paper_form');
+        if (form) {
+            form.addEventListener('submit', function () { markSubmitted(); });
+            var origSubmit = form.submit.bind(form);
+            form.submit = function () { markSubmitted(); return origSubmit(); };
+        }
+
+        // 页内链接拦截：有未保存更改时弹窗提示
+        document.addEventListener('click', function (e) {
+            if (allowLeave) return;
+            var link = e.target.closest ? e.target.closest('a[href]') : null;
+            if (!link) return;
+            var href = link.getAttribute('href');
+            if (!href || href.charAt(0) === '#' || /^javascript:/i.test(href)) return;
+            if (!dirty) return;
+            e.preventDefault();
+            e.stopPropagation();
+            showModal(href);
+        });
+
+        document.getElementById('draftModalSave').addEventListener('click', function () {
+            var href = pendingHref;
+            hideModal();
+            saveDraft({ afterSave: function () { navigate(href); } });
+        });
+        document.getElementById('draftModalLeave').addEventListener('click', function () {
+            var href = pendingHref;
+            hideModal();
+            navigate(href);
+        });
+        document.getElementById('draftModalCancel').addEventListener('click', hideModal);
+
+        // beforeunload：未保存时原生提示 + sendBeacon 尽力保存（后台防丢）
+        window.addEventListener('beforeunload', function (e) {
+            if (allowLeave || !dirty) return;
+            e.preventDefault();
+            e.returnValue = '';
+            var answers = serializeAnswers();
+            if (!Object.keys(answers).length) return;
+            var fd = new FormData();
+            fd.append('answers_json', JSON.stringify(answers));
+            fd.append('csrfmiddlewaretoken', getCsrf());
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(SAVE_URL, fd);
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+{% endif %}

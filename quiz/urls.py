@@ -14,6 +14,8 @@ urlpatterns = [
     path('question/<int:question_id>/', views.question_detail, name='question_detail'),
     path('paper/<int:paper_id>/', views.test_paper_detail, name='test_paper_detail'),  # 试卷详情
     path('paper/<int:paper_id>/submit/', views.submit_test_paper, name='submit_test_paper'),  # 试卷提交
+    path('paper/<int:paper_id>/save_draft/', views.save_draft, name='save_draft'),  # 临时保存答题草稿
+    path('draft/<int:draft_id>/discard/', views.discard_draft, name='discard_draft'),  # 放弃答题草稿
     
     path('register/', views.register, name='register'),  # 注册
     path('approval_pending/', views.approval_pending, name='approval_pending'),  # 审核状态
@@ -69,4 +71,5 @@ urlpatterns = [
     path('student/assignments/', views.student_class_assignments, name='student_class_assignments'),  # 学生作业列表
     path('student/assignments/<int:assignment_id>/', views.do_class_assignment, name='do_class_assignment'),  # 完成作业
     path('student/assignments/<int:assignment_id>/submit/', views.submit_class_assignment, name='submit_class_assignment'),  # 提交作业
+    path('student/assignments/<int:assignment_id>/save_draft/', views.save_assignment_draft, name='save_assignment_draft'),  # 临时保存作业草稿
 ]

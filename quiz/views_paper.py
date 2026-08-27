@@ -100,6 +100,15 @@ def test_paper_detail(request, paper_id):
     for q in questions:
         q.options = parse_options(q.options)
 
+    # ===== 答题草稿：继续测试时预填答案（公开试卷，is_wrong_paper=False）=====
+    draft = None
+    draft_answers = {}
+    if user.is_authenticated:
+        draft = TestDraft.objects.filter(
+            user=user, test_paper=test_paper, is_wrong_paper=False).first()
+        if draft:
+            draft_answers = draft.answers or {}
+
     # ===== P2-3 考试控制：时间窗口 + 次数限制 + 倒计时 =====
     exam_block = None
     remaining_seconds = None
@@ -115,21 +124,28 @@ def test_paper_detail(request, paper_id):
         # 次数限制
         if not exam_block and test_paper.max_attempts and attempt_used >= test_paper.max_attempts:
             exam_block = '您已达到该试卷的最大答题次数（' + str(test_paper.max_attempts) + ' 次），无法再次作答'
-        # 倒计时（基于会话记录的开始时间，刷新不重置）
+        # 倒计时（草稿优先：基于数据库开始时间，断线/关闭浏览器回来不重置；无草稿回退 session）
         if not exam_block and test_paper.duration:
-            import time as _time
-            sess_key = 'exam_start_{}'.format(paper_id)
-            start_ts = request.session.get(sess_key)
-            if not start_ts:
-                start_ts = _time.time()
-                request.session[sess_key] = start_ts
-                request.session.modified = True
-            try:
-                elapsed = _time.time() - float(start_ts)
-            except (TypeError, ValueError):
-                elapsed = 0
+            elapsed = None
+            if draft and draft.start_time:
+                elapsed = (now - draft.start_time).total_seconds()
+            else:
+                import time as _time
+                sess_key = 'exam_start_{}'.format(paper_id)
+                start_ts = request.session.get(sess_key)
+                if not start_ts:
+                    start_ts = _time.time()
+                    request.session[sess_key] = start_ts
+                    request.session.modified = True
+                try:
+                    elapsed = _time.time() - float(start_ts)
+                except (TypeError, ValueError):
+                    elapsed = 0
             remaining_seconds = max(0, int(test_paper.duration * 60 - elapsed))
             if remaining_seconds <= 0:
+                if draft and draft.answers:
+                    # 到期且草稿有答案：自动用保存的答案提交，避免中断后回来丢分
+                    return _auto_submit_expired_draft(request, test_paper, draft)
                 exam_block = '答题时间已到，请提交试卷'
     # ===== P2-3 END =====
 
@@ -145,6 +161,28 @@ def test_paper_detail(request, paper_id):
         'ma': test_paper.max_attempts,
         'st': start_time_str,
         'et': end_time_str,
+        'draft': draft,
+        'draft_answers': draft_answers,
+        'draft_save_url': reverse('save_draft', args=[paper_id]),
+    })
+
+
+def _auto_submit_expired_draft(request, test_paper, draft):
+    """限时考试到期且草稿有答案时自动提交（计分），避免异常中断后回来丢分"""
+    questions = list(test_paper.questions.all())
+    user_answers = draft.answers or {}
+    test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
+        request.user, test_paper, questions, user_answers)
+    draft.delete()
+    messages.info(request, '答题时间已到，已自动为您提交临时保存的答案')
+    return render(request, 'quiz/frontend/test_paper_result.html', {
+        'test_paper': test_paper,
+        'score': score,
+        'correct_count': correct_count,
+        'wrong_count': wrong_count,
+        'total_count': len(question_results),
+        'question_results': question_results,
+        'test_record': test_record,
     })
 
 @login_required
@@ -153,6 +191,9 @@ def submit_test_paper(request, paper_id):
     questions = list(test_paper.questions.all())
 
     if request.method == 'POST':
+        # ===== 草稿：有草稿时计时以草稿 start_time 为准 =====
+        draft = TestDraft.objects.filter(
+            user=request.user, test_paper=test_paper, is_wrong_paper=False).first()
         # ===== P2-3 服务端校验：时间窗口 + 次数上限（防绕过）=====
         now = timezone.now()
         if test_paper.start_time and now < test_paper.start_time:
@@ -166,18 +207,23 @@ def submit_test_paper(request, paper_id):
             if taken >= test_paper.max_attempts:
                 messages.error(request, '您已达到该试卷的最大答题次数，无法再次提交')
                 return redirect('test_paper_detail', paper_id=paper_id)
-        # 限时校验：基于会话记录的开始时间判断是否超时（服务端兜底，防绕过倒计时）
+        # 限时校验：草稿计时优先，其次会话开始时间（服务端兜底，防绕过倒计时）。
+        # 有草稿且超时：放行提交（对应"到期自动提交草稿"场景，避免丢分）；无草稿超时：阻断。
         if test_paper.duration:
-            import time as _time
-            start_ts = request.session.get('exam_start_{}'.format(paper_id))
-            if start_ts:
-                try:
-                    elapsed = _time.time() - float(start_ts)
-                except (TypeError, ValueError):
-                    elapsed = 0
-                if elapsed > test_paper.duration * 60:
-                    messages.error(request, '答题时间已到，无法提交')
-                    return redirect('test_paper_detail', paper_id=paper_id)
+            elapsed = None
+            if draft and draft.start_time:
+                elapsed = (now - draft.start_time).total_seconds()
+            else:
+                import time as _time
+                start_ts = request.session.get('exam_start_{}'.format(paper_id))
+                if start_ts:
+                    try:
+                        elapsed = _time.time() - float(start_ts)
+                    except (TypeError, ValueError):
+                        elapsed = 0
+            if elapsed is not None and elapsed > test_paper.duration * 60 and not draft:
+                messages.error(request, '答题时间已到，无法提交')
+                return redirect('test_paper_detail', paper_id=paper_id)
         # 清除倒计时开始时间
         sess_key = 'exam_start_{}'.format(paper_id)
         if sess_key in request.session:
@@ -185,45 +231,21 @@ def submit_test_paper(request, paper_id):
             request.session.modified = True
         # ===== P2-3 END =====
         user_answers = collect_user_answers(questions, request.POST)
-        
-        score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-        
-        # 查找或创建用户档案
-        try:
-            profile = Profile.objects.get(user=request.user)
-        except Profile.DoesNotExist:
-            profile = Profile.objects.create(user=request.user)
-        
-        # 创建答题记录 + 答案记录（P2-2 公共函数，bulk_create 一次性插入）
-        test_record, wrong_questions_list = create_test_and_answer_records(
-            request.user, test_paper, questions, score, question_results)
-        
-        # 自动添加错题到错题本
-        for question in wrong_questions_list:
-            WrongQuestion.objects.get_or_create(
-                user=request.user,
-                question=question,
-                defaults={
-                    'user_answer': user_answers.get(question.id, ''),
-                    'correct_answer': question.correct_answer
-                }
-            )
-        
-        # 更新用户学习统计（用 F 表达式避免并发读-改-写竞态导致更新丢失）
-        # P1-4：移除 accuracy_rate=accuracy 写入——该字段语义错误（仅存本次正确率），
-        # user_center 与 test_paper_list 均改为从 AnswerRecord 实时聚合，避免冗余且语义一致。
-        Profile.objects.filter(pk=profile.pk).update(
-            total_score=F('total_score') + score,
-            tests_taken=F('tests_taken') + 1,
-        )
-        profile.refresh_from_db()
-        
+
+        # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
+        test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
+            request.user, test_paper, questions, user_answers)
+
+        # 提交成功，删除答题草稿
+        if draft:
+            draft.delete()
+
         return render(request, 'quiz/frontend/test_paper_result.html', {
             'test_paper': test_paper,
             'score': score,
             'correct_count': correct_count,
             'wrong_count': wrong_count,
-            'total_count': total_count,
+            'total_count': len(question_results),
             'question_results': question_results,
             'test_record': test_record
         })
@@ -236,6 +258,71 @@ def submit_test_paper(request, paper_id):
         'questions': questions
     })
 
+
+@login_required
+def save_draft(request, paper_id):
+    """AJAX 临时保存答题草稿（公开试卷/错题组卷共用；source=paper/wrong）"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': '无效的请求'})
+    test_paper = get_object_or_404(TestPaper, pk=paper_id)
+    is_wrong_paper = request.POST.get('source') == 'wrong'
+    # 权限：公开试卷所有人可答；私有/错题组卷仅创建者本人（管理员可访问私有公开试卷草稿）
+    if not test_paper.is_public and (test_paper.created_by != request.user.username and not request.user.is_staff):
+        return JsonResponse({'success': False, 'message': '无权访问该试卷'})
+    if is_wrong_paper and test_paper.created_by != request.user.username:
+        return JsonResponse({'success': False, 'message': '无权访问该试卷'})
+    try:
+        answers_raw = json.loads(request.POST.get('answers_json') or '{}')
+    except Exception:
+        answers_raw = {}
+    if not isinstance(answers_raw, dict):
+        answers_raw = {}
+    # 清洗：仅保留当前试卷题目的答案，值为受限长度字符串
+    question_ids = set(test_paper.questions.values_list('id', flat=True))
+    answers = {}
+    for k, v in answers_raw.items():
+        if str(k).isdigit() and int(k) in question_ids and isinstance(v, str) and len(v) <= 10:
+            answers[str(int(k))] = v
+    try:
+        current_index = int(request.POST.get('current_index', '0'))
+    except (TypeError, ValueError):
+        current_index = 0
+    mode = request.POST.get('mode', 'full')
+    if mode not in ('full', 'single'):
+        mode = 'full'
+
+    draft, created = TestDraft.objects.get_or_create(
+        user=request.user, test_paper=test_paper, is_wrong_paper=is_wrong_paper,
+        defaults={'answers': answers, 'current_index': current_index, 'mode': mode})
+    if not created:
+        draft.answers = answers
+        draft.current_index = current_index
+        draft.mode = mode
+    # 限时考试：首次保存时记录计时起点（取 session 已流逝时间换算，保证断线/刷新不重置）
+    if draft.start_time is None and test_paper.duration:
+        import time as _time
+        sess_start = request.session.get('exam_start_{}'.format(paper_id))
+        if sess_start:
+            try:
+                elapsed = _time.time() - float(sess_start)
+                draft.start_time = timezone.now() - timedelta(seconds=max(0, elapsed))
+            except (TypeError, ValueError):
+                draft.start_time = timezone.now()
+        else:
+            draft.start_time = timezone.now()
+    draft.save()
+    return JsonResponse({'success': True, 'draft_id': draft.id, 'answered_count': len(answers)})
+
+
+@login_required
+def discard_draft(request, draft_id):
+    """放弃答题草稿（仅本人可操作）"""
+    draft = get_object_or_404(TestDraft, pk=draft_id, user=request.user)
+    if request.method == 'POST':
+        draft.delete()
+        messages.success(request, '已放弃临时保存的答题进度')
+    return redirect(request.GET.get('next', 'test_history'))
+
 @login_required
 def test_history(request):
     # select_related 避免 record.test_paper 外键 N+1；annotate 一次算出 question_count（原循环 count）
@@ -244,8 +331,43 @@ def test_history(request):
     ).annotate(question_count=Count('test_paper__questions')).order_by('-completed_at')
     paginated_records = paginate_queryset(test_records, request.GET.get('page', 1), items_per_page=10)
 
+    # ===== 进行中的答题草稿（临时保存，支持继续测试）=====
+    drafts = list(TestDraft.objects.filter(user=request.user).select_related(
+        'test_paper', 'assignment', 'assignment__test_paper').order_by('-updated_at'))
+    # 批量取题目总数，避免逐条 count 的 N+1
+    paper_ids = [d.test_paper_id for d in drafts if d.test_paper_id]
+    paper_ids += [d.assignment.test_paper_id for d in drafts if d.assignment and d.assignment.test_paper_id]
+    if paper_ids:
+        qc_map = dict(TestPaper.objects.filter(id__in=paper_ids).annotate(
+            qc=Count('questions')).values_list('id', 'qc'))
+    else:
+        qc_map = {}
+    now = timezone.now()
+    for d in drafts:
+        if d.assignment_id:
+            d.title = d.assignment.title
+            d.question_total = qc_map.get(d.assignment.test_paper_id, 0)
+            d.continue_url = reverse('do_class_assignment', args=[d.assignment_id])
+            d.remaining_seconds = None
+            d.remaining_display = None
+        else:
+            d.title = d.test_paper.title
+            d.question_total = qc_map.get(d.test_paper_id, 0)
+            d.continue_url = reverse(
+                'submit_wrong_question_paper' if d.is_wrong_paper else 'test_paper_detail',
+                args=[d.test_paper_id])
+            # 限时考试剩余时间（连续计时）
+            if d.test_paper.duration and d.start_time:
+                rem = max(0, int(d.test_paper.duration * 60 - (now - d.start_time).total_seconds()))
+                d.remaining_seconds = rem
+                d.remaining_display = '已超时' if rem <= 0 else '剩{}分{:02d}秒'.format(rem // 60, rem % 60)
+            else:
+                d.remaining_seconds = None
+                d.remaining_display = None
+
     return render(request, 'quiz/frontend/test_history.html', {
-        'test_records': paginated_records
+        'test_records': paginated_records,
+        'test_drafts': drafts,
     })
 
 @login_required
@@ -381,7 +503,12 @@ def create_wrong_question_paper(request):
 def submit_wrong_question_paper(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
     questions = list(test_paper.questions.all())
-    
+
+    # ===== 错题组卷草稿：继续测试时预填 =====
+    draft = TestDraft.objects.filter(
+        user=request.user, test_paper=test_paper, is_wrong_paper=True).first()
+    draft_answers = (draft.answers or {}) if draft else {}
+
     if request.method == 'POST':
         user_answers = collect_user_answers(questions, request.POST)
         
@@ -409,6 +536,10 @@ def submit_wrong_question_paper(request, paper_id):
             )
             re_added_count += 1
         
+        # 提交成功，删除错题组卷草稿
+        if draft:
+            draft.delete()
+        
         return render(request, 'quiz/frontend/wrong_question_paper_result.html', {
             'test_paper': test_paper,
             'score': score,
@@ -427,7 +558,10 @@ def submit_wrong_question_paper(request, paper_id):
     return render(request, 'quiz/frontend/wrong_question_paper.html', {
         'test_paper': test_paper,
         'questions': questions,
-        'total_score': test_paper.total_score
+        'total_score': test_paper.total_score,
+        'draft': draft,
+        'draft_answers': draft_answers,
+        'draft_save_url': reverse('save_draft', args=[paper_id]),
     })
 
 @login_required
