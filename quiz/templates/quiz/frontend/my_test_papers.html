@@ -6,7 +6,7 @@
 <style>
     .test-paper-list {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 14px;
         margin-top: 16px;
     }
@@ -18,6 +18,8 @@
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
         border: 2px solid transparent;
         transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
     }
 
     .test-paper-item:hover {
@@ -44,6 +46,7 @@
         justify-content: center;
         font-weight: bold;
         font-size: 14px;
+        flex-shrink: 0;
     }
 
     .paper-info {
@@ -75,8 +78,8 @@
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-bottom: 12px;
-        padding-bottom: 12px;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
         border-bottom: 1px solid #eee;
     }
 
@@ -90,6 +93,37 @@
 
     .meta-item .icon {
         font-size: 14px;
+    }
+
+    /* P2-3 考试控制徽章 */
+    .exam-control-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+
+    .ctrl-badge {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .ctrl-time {
+        background: #e3f2fd;
+        color: #0d47a1;
+    }
+
+    .ctrl-attempt {
+        background: #f3e5f5;
+        color: #6a1b9a;
+    }
+
+    .ctrl-window {
+        background: #fff3e0;
+        color: #e65100;
     }
 
     .view-btn {
@@ -133,12 +167,14 @@
         background: #f5c6cb;
     }
 
+    /* 统计栏 */
     .stats-bar {
         display: flex;
+        flex-wrap: wrap;
         justify-content: center;
-        gap: 30px;
+        gap: 28px;
         margin-top: 16px;
-        padding: 12px 20px;
+        padding: 14px 20px;
         background: white;
         border-radius: 12px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
@@ -157,6 +193,49 @@
         font-size: 18px;
     }
 
+    /* 搜索/筛选/排序工具栏 */
+    .filter-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 16px;
+        padding: 14px 16px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .search-input {
+        flex: 1;
+        min-width: 160px;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 13px;
+        transition: border-color 0.3s;
+    }
+
+    .search-input:focus {
+        border-color: #667eea;
+        outline: none;
+    }
+
+    .filter-select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 13px;
+        background: white;
+        cursor: pointer;
+    }
+
+    .filter-select:focus {
+        border-color: #667eea;
+        outline: none;
+    }
+
+    /* 分页 */
     .pagination {
         display: flex;
         justify-content: center;
@@ -248,6 +327,7 @@
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        margin-top: auto;
     }
 
     .header-actions {
@@ -255,6 +335,13 @@
         justify-content: center;
         gap: 10px;
         margin-bottom: 18px;
+    }
+
+    .result-hint {
+        text-align: center;
+        color: #888;
+        font-size: 13px;
+        margin-top: 12px;
     }
 
     @media (max-width: 600px) {
@@ -280,6 +367,15 @@
         .pagination {
             flex-wrap: wrap;
         }
+
+        .filter-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .filter-toolbar .view-btn {
+            justify-content: center;
+        }
     }
 </style>
 {% endblock %}
@@ -297,20 +393,36 @@
             📥 导入试卷
         </a>
     </div>
-
-    {% if test_papers %}
-    <div class="stats-bar">
-        <div class="stat-item">
-            <span>📚</span>
-            <span>共 <strong>{{ test_papers.paginator.count }}</strong> 份试卷</span>
-        </div>
-        <div class="stat-item">
-            <span>📝</span>
-            <span>第 <strong>{{ test_papers.number }}</strong>/{{ test_papers.paginator.num_pages }} 页</span>
-        </div>
-    </div>
-    {% endif %}
 </div>
+
+{% if stats.total > 0 %}
+<div class="stats-bar">
+    <div class="stat-item"><span>📚</span><span>共 <strong>{{ stats.total }}</strong> 份</span></div>
+    <div class="stat-item"><span>✅</span><span>已发布 <strong>{{ stats.published }}</strong></span></div>
+    <div class="stat-item"><span>⏸</span><span>未发布 <strong>{{ stats.unpublished }}</strong></span></div>
+    <div class="stat-item"><span>⏱</span><span>考试控制 <strong>{{ stats.exam_controlled }}</strong></span></div>
+    <div class="stat-item"><span>📊</span><span>题目总数 <strong>{{ stats.total_questions }}</strong></span></div>
+</div>
+
+<form class="filter-toolbar" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="🔍 搜索试卷标题..." class="search-input">
+    <select name="status" class="filter-select">
+        <option value="">全部状态</option>
+        <option value="published" {% if status == 'published' %}selected{% endif %}>已发布</option>
+        <option value="unpublished" {% if status == 'unpublished' %}selected{% endif %}>未发布</option>
+        <option value="exam" {% if status == 'exam' %}selected{% endif %}>考试控制</option>
+    </select>
+    <select name="sort" class="filter-select">
+        <option value="date" {% if sort == 'date' %}selected{% endif %}>最新创建</option>
+        <option value="score" {% if sort == 'score' %}selected{% endif %}>总分降序</option>
+        <option value="questions" {% if sort == 'questions' %}selected{% endif %}>题数降序</option>
+        <option value="title" {% if sort == 'title' %}selected{% endif %}>标题排序</option>
+    </select>
+    <button type="submit" class="view-btn">🔍 筛选</button>
+    {% if q or status %}
+    <a href="{% url 'my_test_papers' %}" class="view-btn secondary">✕ 清除</a>
+    {% endif %}
+</form>
 
 {% if test_papers %}
 <ul class="test-paper-list">
@@ -336,31 +448,47 @@
                 <span>{{ paper.total_score }}分</span>
             </div>
             <div class="meta-item">
+                <span class="icon">📊</span>
+                <span>{{ paper.question_count }}题</span>
+            </div>
+            <div class="meta-item">
                 <span class="icon">📅</span>
                 <span>{{ paper.created_at|date:"m-d" }}</span>
             </div>
-            <div class="meta-item">
-                <span class="icon">📊</span>
-                <span>{{ paper.questions.count }}题</span>
-            </div>
         </div>
+        {% if paper.is_exam_controlled %}
+        <div class="exam-control-badges">
+            {% if paper.duration %}
+            <span class="ctrl-badge ctrl-time">⏱ {{ paper.duration }}分钟</span>
+            {% endif %}
+            {% if paper.max_attempts %}
+            <span class="ctrl-badge ctrl-attempt">
+                🔁 {{ paper.max_attempts }}次
+            </span>
+            {% endif %}
+            {% if paper.start_time %}
+            <span class="ctrl-badge ctrl-window">
+                🔓 {{ paper.start_time|date:"m-d H:i" }}
+            </span>
+            {% endif %}
+            {% if paper.end_time %}
+            <span class="ctrl-badge ctrl-window">
+                🔒 {{ paper.end_time|date:"m-d H:i" }}
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="action-buttons">
-            {% if paper.is_published %}
+            <a href="{% url 'edit_test_paper' paper.id %}" class="view-btn secondary">
+                ✏️ 编辑
+            </a>
             <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">
                 👁️ 预览
             </a>
-            {% else %}
-            <span class="view-btn secondary" style="cursor: default;">
-                ⏸ 未发布
-            </span>
-            {% endif %}
-
             <a href="{% url 'publish_test_paper' paper.id %}" class="view-btn secondary">
                 {% if paper.is_published %}🔕 取消发布{% else %}📢 发布{% endif %}
             </a>
-
-            <a href="{% url 'delete_test_paper' paper.id %}" class="view-btn danger"
-                onclick="return confirm('确定要删除这份试卷吗？')">
+            <a href="{% url 'delete_test_paper' paper.id %}" class="view-btn danger">
                 🗑️ 删除
             </a>
         </div>
@@ -368,26 +496,45 @@
     {% endfor %}
 </ul>
 
+<div class="result-hint">
+    筛选结果 {{ test_papers.paginator.count }} 份 / 共 {{ stats.total }} 份 ·
+    第 {{ test_papers.number }}/{{ test_papers.paginator.num_pages }} 页
+</div>
+
 <div class="pagination">
     {% if test_papers.has_previous %}
-    <a href="?page={{ test_papers.previous_page_number }}">← 上一页</a>
+    <a href="?{% if base_query %}{{ base_query }}&{% endif %}page={{ test_papers.previous_page_number }}">← 上一页</a>
     {% else %}
     <span class="disabled">← 上一页</span>
     {% endif %}
 
+    {% with cur=test_papers.number %}
     {% for num in test_papers.paginator.page_range %}
-    {% if num == test_papers.number %}
+    {% if num == cur %}
     <span class="current">{{ num }}</span>
-    {% elif num >= test_papers.number|add:'-2' and num <= test_papers.number|add:'2' %} <a href="?page={{ num }}">{{ num }}</a>
+    {% elif num >= cur|add:'-2' and num <= cur|add:'2' %} <a
+        href="?{% if base_query %}{{ base_query }}&{% endif %}page={{ num }}">{{ num }}</a>
         {% endif %}
         {% endfor %}
+        {% endwith %}
 
         {% if test_papers.has_next %}
-        <a href="?page={{ test_papers.next_page_number }}">下一页 →</a>
+        <a href="?{% if base_query %}{{ base_query }}&{% endif %}page={{ test_papers.next_page_number }}">下一页 →</a>
         {% else %}
         <span class="disabled">下一页 →</span>
         {% endif %}
 </div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">🔍</div>
+    <h3>未找到匹配的试卷</h3>
+    <p>尝试调整搜索或筛选条件</p>
+    <div class="header-actions" style="margin-top: 16px;">
+        <a href="{% url 'my_test_papers' %}" class="view-btn secondary">✕ 清除筛选</a>
+    </div>
+</div>
+{% endif %}
+
 {% else %}
 <div class="empty-state">
     <div class="icon">📭</div>

@@ -262,12 +262,14 @@
     <span class="disabled">← 上一页</span>
     {% endif %}
 
+    {% with cur=test_records.number %}
     {% for i in test_records.paginator.page_range %}
-    {% if test_records.number == i %}
+    {% if cur == i %}
     <span class="current">{{ i }}</span>
-    {% elif i >= test_records.number|add:'-2' and i <= test_records.number|add:'2' %} <a href="?page={{ i }}">{{ i }}</a>
+    {% elif i >= cur|add:'-2' and i <= cur|add:'2' %} <a href="?page={{ i }}">{{ i }}</a>
         {% endif %}
         {% endfor %}
+    {% endwith %}
 
         {% if test_records.has_next %}
         <a href="?page={{ test_records.next_page_number }}">下一页 →</a>

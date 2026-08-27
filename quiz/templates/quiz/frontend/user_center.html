@@ -288,6 +288,242 @@
             padding: 18px;
         }
     }
+
+    /* ===== P2-1 学习数据可视化 ===== */
+    .chart-section {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1.1fr;
+        gap: 18px;
+        margin-bottom: 24px;
+    }
+
+    .chart-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 18px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .chart-card h3 {
+        font-size: 16px;
+        color: #2c3e50;
+        margin: 0 0 14px 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .chart-card .empty-hint {
+        color: #95a5a6;
+        font-size: 13px;
+        text-align: center;
+        padding: 30px 0;
+        line-height: 1.8;
+    }
+
+    /* 折线图 */
+    .trend-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    .trend-svg .grid-line {
+        stroke: #ecf0f1;
+        stroke-width: 1;
+    }
+
+    .trend-svg .axis-label {
+        fill: #95a5a6;
+        font-size: 10px;
+    }
+
+    .trend-svg .trend-line {
+        fill: none;
+        stroke: url(#trendGrad);
+        stroke-width: 2.5;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
+
+    .trend-svg .pt {
+        fill: #fff;
+        stroke: #764ba2;
+        stroke-width: 2;
+    }
+
+    .trend-svg .pt-label {
+        fill: #2c3e50;
+        font-size: 9px;
+        font-weight: bold;
+    }
+
+    /* 圆环图 */
+    .donut-wrap {
+        position: relative;
+        width: 130px;
+        height: 130px;
+        margin: 4px auto 0;
+    }
+
+    .donut {
+        width: 130px;
+        height: 130px;
+        border-radius: 50%;
+    }
+
+    .donut-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 78px;
+        height: 78px;
+        background: #fff;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .donut-num {
+        font-size: 22px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    .donut-label {
+        font-size: 11px;
+        color: #95a5a6;
+    }
+
+    .legend {
+        list-style: none;
+        padding: 0;
+        margin: 12px 0 0;
+    }
+
+    .legend li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #555;
+        margin: 4px 0;
+    }
+
+    .legend .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    /* 横条图 */
+    .bar-item {
+        margin-bottom: 12px;
+    }
+
+    .bar-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .bar-item .bar-head {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #555;
+        margin-bottom: 4px;
+    }
+
+    .bar-item .bar-head .kp-name {
+        max-width: 70%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .bar-track {
+        background: #ecf0f1;
+        border-radius: 6px;
+        height: 10px;
+        overflow: hidden;
+    }
+
+    .bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        border-radius: 6px;
+    }
+
+    @media (max-width: 768px) {
+        .chart-section {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ===== P2-2 教师工作台待办 ===== */
+    .teacher-todo-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 18px 22px;
+        margin-bottom: 24px;
+        color: #fff;
+        box-shadow: 0 4px 15px rgba(118, 75, 162, 0.25);
+    }
+
+    .teacher-todo-banner .todo-head {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .todo-stats {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .todo-item {
+        flex: 1;
+        min-width: 120px;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 10px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        text-decoration: none;
+        color: #fff;
+        transition: background 0.2s;
+    }
+
+    .todo-item:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    .todo-item .todo-num {
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .todo-item .todo-label {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-top: 2px;
+    }
+
+    .todo-item.todo-urgent {
+        background: rgba(231, 76, 60, 0.85);
+    }
+
+    .todo-item.todo-urgent .todo-num::after {
+        content: ' ⚠';
+    }
 </style>
 {% endblock %}
 
@@ -296,6 +532,27 @@
     <h1>👋 用户中心</h1>
     <p>欢迎回来，查看您的学习情况</p>
 </div>
+
+{% if teacher_todos %}
+<div class="teacher-todo-banner">
+    <div class="todo-head">👨‍🏫 教师工作台</div>
+    <div class="todo-stats">
+        <a href="{% url 'class_list' %}" class="todo-item">
+            <span class="todo-num">{{ teacher_todos.class_count }}</span>
+            <span class="todo-label">管理班级</span>
+        </a>
+        <a href="{% url 'class_list' %}"
+            class="todo-item {% if teacher_todos.pending_count > 0 %}todo-urgent{% endif %}">
+            <span class="todo-num">{{ teacher_todos.pending_count }}</span>
+            <span class="todo-label">待审核申请</span>
+        </a>
+        <a href="{% url 'class_list' %}" class="todo-item">
+            <span class="todo-num">{{ teacher_todos.assignment_count }}</span>
+            <span class="todo-label">已发布作业</span>
+        </a>
+    </div>
+</div>
+{% endif %}
 
 <div class="dashboard-stats">
     <div class="stat-card">
@@ -328,6 +585,87 @@
     </div>
 </div>
 
+{% if user.is_authenticated %}
+<div class="chart-section">
+    <!-- 成绩趋势折线图 -->
+    <div class="chart-card">
+        <h3>📈 成绩趋势</h3>
+        {% if has_trend %}
+        <svg class="trend-svg" viewBox="0 0 320 140" role="img" aria-label="成绩趋势">
+            <defs>
+                <linearGradient id="trendGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#667eea" />
+                    <stop offset="100%" stop-color="#764ba2" />
+                </linearGradient>
+                <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="rgba(118,75,162,0.25)" />
+                    <stop offset="100%" stop-color="rgba(118,75,162,0)" />
+                </linearGradient>
+            </defs>
+            <line class="grid-line" x1="24" y1="18" x2="296" y2="18" />
+            <line class="grid-line" x1="24" y1="70" x2="296" y2="70" />
+            <line class="grid-line" x1="24" y1="122" x2="296" y2="122" />
+            <text class="axis-label" x="2" y="22">100</text>
+            <text class="axis-label" x="6" y="74">50</text>
+            <text class="axis-label" x="8" y="126">0</text>
+            {% if area_polygon %}
+            <polygon points="{{ area_polygon }}" fill="url(#trendArea)" stroke="none" />{% endif %}
+            <polyline class="trend-line" points="{{ polyline_str }}" />
+            {% for p in trend_points %}
+            <circle class="pt" cx="{{ p.x }}" cy="{{ p.y }}" r="3.5" />
+            <text class="pt-label" x="{{ p.x }}" y="{{ p.y|add:-8 }}" text-anchor="middle">{{ p.rate }}</text>
+            <text class="axis-label" x="{{ p.x }}" y="136" text-anchor="middle">{{ p.date }}</text>
+            {% endfor %}
+        </svg>
+        {% else %}
+        <div class="empty-hint">暂无成绩数据<br>完成试卷后显示成绩趋势</div>
+        {% endif %}
+    </div>
+    <!-- 错题复习状态圆环图 -->
+    <div class="chart-card">
+        <h3>🎯 错题复习状态</h3>
+        {% if review_total > 0 %}
+        <div class="donut-wrap">
+            <div class="donut" style="background: conic-gradient({{ donut_gradient }});"></div>
+            <div class="donut-center">
+                <span class="donut-num">{{ review_total }}</span>
+                <span class="donut-label">错题总数</span>
+            </div>
+        </div>
+        <ul class="legend">
+            {% for seg in review_segments %}
+            <li>
+                <span class="dot" style="background:{{ seg.color }}"></span>
+                {{ seg.label }} {{ seg.count }}（{{ seg.pct }}%）
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty-hint">暂无错题<br>继续保持全对</div>
+        {% endif %}
+    </div>
+    <!-- 薄弱知识点横条图 -->
+    <div class="chart-card">
+        <h3>🔍 薄弱知识点</h3>
+        {% if weak_kp %}
+        {% for kp in weak_kp %}
+        <div class="bar-item">
+            <div class="bar-head">
+                <span class="kp-name" title="{{ kp.name }}">{{ kp.name }}</span>
+                <span>{{ kp.count }}题</span>
+            </div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:{% widthratio kp.count max_weak 100 %}%;"></div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-hint">暂无薄弱知识点数据<br>题目需关联知识点</div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <div class="module-section">
     <h2 class="section-title">学习记录</h2>
     <div class="quick-actions">
@@ -359,21 +697,13 @@
 </div>
 
 <div class="module-section">
-    <h2 class="section-title">试卷管理</h2>
+    <h2 class="section-title">📝 出题与组卷 <span style="font-size:12px;color:#95a5a6;font-weight:normal">前端统一风格</span></h2>
     <div class="quick-actions">
         <a href="{% url 'my_test_papers' %}" class="action-card">
             <span class="action-icon">📝</span>
             <div class="action-text">
                 <h4>我的试卷</h4>
-                <p>管理创建的试卷</p>
-            </div>
-            <span class="arrow">→</span>
-        </a>
-        <a href="{% url 'test_paper_list' %}" class="action-card">
-            <span class="action-icon">📋</span>
-            <div class="action-text">
-                <h4>全站试卷</h4>
-                <p>浏览公开试卷</p>
+                <p>管理已创建的试卷</p>
             </div>
             <span class="arrow">→</span>
         </a>
@@ -381,12 +711,53 @@
             <span class="action-icon">✨</span>
             <div class="action-text">
                 <h4>创建试卷</h4>
-                <p>从题库选题创建</p>
+                <p>从题库选题组卷，可设限时/次数/开放时段</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'import_test_paper' %}" class="action-card">
+            <span class="action-icon">📥</span>
+            <div class="action-text">
+                <h4>导入试卷</h4>
+                <p>Excel 批量导入整份试卷</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'test_paper_list' %}" class="action-card">
+            <span class="action-icon">📋</span>
+            <div class="action-text">
+                <h4>全站试卷</h4>
+                <p>浏览公开试卷并作答</p>
             </div>
             <span class="arrow">→</span>
         </a>
     </div>
 </div>
+
+{% if user.is_staff %}
+<div class="module-section">
+    <h2 class="section-title">⚙️ 系统管理 <span style="font-size:12px;color:#95a5a6;font-weight:normal">仅管理员 ·
+            进入后台风格页面</span></h2>
+    <div class="quick-actions">
+        <a href="{% url 'admin_import_questions' %}" class="action-card">
+            <span class="action-icon">📚</span>
+            <div class="action-text">
+                <h4>导入题库</h4>
+                <p>Excel 批量导入题目到题库</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="/admin/" class="action-card">
+            <span class="action-icon">🔧</span>
+            <div class="action-text">
+                <h4>管理后台</h4>
+                <p>Django 系统后台（用户/数据管理）</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+    </div>
+</div>
+{% endif %}
 
 <div class="module-section">
     <h2 class="section-title">班级管理</h2>
@@ -407,16 +778,6 @@
             </div>
             <span class="arrow">→</span>
         </a>
-        {% if user.is_staff %}
-        <a href="/admin/" class="action-card">
-            <span class="action-icon">⚙️</span>
-            <div class="action-text">
-                <h4>管理后台</h4>
-                <p>系统管理</p>
-            </div>
-            <span class="arrow">→</span>
-        </a>
-        {% endif %}
     </div>
 </div>
 

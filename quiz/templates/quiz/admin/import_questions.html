@@ -255,6 +255,10 @@
             style="background: #6c757d; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 14px;">
             ← 返回试题列表
         </a>
+        <a href="{% url 'user_center' %}"
+            style="background: linear-gradient(135deg,#667eea,#764ba2); color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 14px;">
+            🏠 返回用户中心
+        </a>
         <h2>📥 后台导入试题</h2>
     </div>
 
@@ -329,6 +333,18 @@
     <form method="post" id="importForm">
         {% csrf_token %}
         <input type="hidden" name="questions_json" id="questionsJson" value="{{ questions_json }}">
+        <div class="summary-card" style="background: #fffbe6; padding: 12px 15px; border-radius: 8px; margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: #7a5c00;">
+                <input type="checkbox" name="create_paper" id="createPaper" value="1" onchange="togglePaperInfo()">
+                📄 同时生成试卷（把本次导入的题目直接组装成一张试卷）
+            </label>
+            <div id="paperInfo" style="display: none; margin-top: 10px;">
+                <label>试卷标题</label>
+                <input type="text" name="title" id="paperTitle" value="导入试卷" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;">
+                <label style="margin-top: 8px; display: block;">试卷描述（可选）</label>
+                <textarea name="description" rows="2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;"></textarea>
+            </div>
+        </div>
 
         <table class="questions-table">
             <thead>
@@ -499,6 +515,11 @@
 </script>
 {% elif step == 2 %}
 <script>
+    function togglePaperInfo() {
+        document.getElementById('paperInfo').style.display =
+            document.getElementById('createPaper').checked ? 'block' : 'none';
+    }
+
     let questionsData = [];
     try {
         questionsData = {{ questions_json | safe }};

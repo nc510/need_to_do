@@ -1,43 +1,233 @@
 {% extends 'quiz/frontend/base.html' %}
-{% block title %}试卷列表{% endblock %}
+{% load quiz_extras %}
+{% block title %}在线考试系统{% endblock %}
 
 {% block extra_styles %}
 <style>
-    .page-header {
+    /* ========== Hero 横幅 ========== */
+    .hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 40px 30px;
+        margin-bottom: 24px;
+        color: #fff;
         text-align: center;
-        margin-bottom: 18px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.25);
     }
 
-    .page-header h1 {
-        font-size: 24px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 0 0 6px 0;
+    .hero::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 50%;
+        pointer-events: none;
     }
 
-    .page-header p {
-        color: #7f8c8d;
-        font-size: 13px;
-        margin: 0;
+    .hero h1 {
+        font-size: 30px;
+        font-weight: 800;
+        margin: 0 0 8px 0;
+        position: relative;
     }
 
-    .stats-bar {
+    .hero-subtitle {
+        font-size: 15px;
+        opacity: 0.92;
+        margin: 0 0 20px 0;
+        position: relative;
+    }
+
+    .hero-stats {
         display: flex;
         justify-content: center;
-        gap: 28px;
-        margin-top: 12px;
+        gap: 36px;
+        margin: 18px 0;
+        position: relative;
         flex-wrap: wrap;
     }
 
-    .stat-item {
+    .hero-stat {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .hero-stat strong {
+        font-size: 26px;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .hero-stat span {
+        font-size: 13px;
+        opacity: 0.85;
+        margin-top: 4px;
+    }
+
+    .hero-cta {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 20px;
+        position: relative;
+        flex-wrap: wrap;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        display: inline-flex;
         align-items: center;
         gap: 6px;
+        padding: 11px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+        background: #fff;
+        color: #667eea;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-secondary {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+
+    .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+    }
+
+    /* ========== 登录用户 Dashboard ========== */
+    .dashboard-section {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .dashboard-greeting {
+        font-size: 16px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0 0 14px 0;
+    }
+
+    .dashboard-greeting span {
+        color: #667eea;
+    }
+
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .quick-stat {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+        border-radius: 10px;
+        border-left: 3px solid #667eea;
+    }
+
+    .quick-stat-icon {
+        font-size: 22px;
+    }
+
+    .quick-stat-info strong {
+        display: block;
+        font-size: 18px;
+        font-weight: 700;
+        color: #2c3e50;
+        line-height: 1;
+    }
+
+    .quick-stat-info span {
+        font-size: 12px;
+        color: #7f8c8d;
+    }
+
+    .quick-actions-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 10px;
+    }
+
+    .quick-action-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        text-decoration: none;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .quick-action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .quick-action-card .qa-icon {
+        font-size: 18px;
+    }
+
+    /* ========== 试卷列表区 ========== */
+    .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .section-header h2 {
+        font-size: 20px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin: 0;
+    }
+
+    .section-header .stats-bar {
+        display: flex;
+        gap: 18px;
+        margin: 0;
+    }
+
+    .section-header .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
         color: #7f8c8d;
         font-size: 13px;
     }
 
-    .stat-item strong {
+    .section-header .stat-item strong {
         color: #667eea;
         font-size: 15px;
     }
@@ -79,7 +269,7 @@
 
     .paper-header {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         margin-bottom: 10px;
     }
@@ -95,6 +285,18 @@
         border-radius: 8px;
         font-weight: 700;
         font-size: 14px;
+    }
+
+    .paper-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        background: #f0f2ff;
+        color: #667eea;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
     }
 
     .test-paper-title {
@@ -225,39 +427,213 @@
         font-size: 14px;
     }
 
+    /* ========== 搜索筛选条 ========== */
+    .filter-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+        align-items: center;
+        background: #fff;
+        padding: 14px 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .search-input {
+        flex: 1;
+        min-width: 200px;
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .sort-select {
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        background: #fff;
+        cursor: pointer;
+    }
+
+    .sort-select:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    .filter-btn {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .filter-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(102, 126, 234, 0.4);
+    }
+
+    .reset-btn {
+        padding: 10px 16px;
+        background: #f0f2f5;
+        color: #7f8c8d;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .reset-btn:hover {
+        background: #e4e7ec;
+        color: #2c3e50;
+    }
+
+    .result-count {
+        font-size: 13px;
+        color: #7f8c8d;
+        margin-left: auto;
+    }
+
+    .result-count strong {
+        color: #667eea;
+    }
+
     @media (max-width: 768px) {
-        .page-header h1 {
-            font-size: 20px;
+        .hero h1 {
+            font-size: 22px;
+        }
+
+        .hero {
+            padding: 28px 18px;
+        }
+
+        .hero-stats {
+            gap: 22px;
         }
 
         .test-paper-list {
             grid-template-columns: 1fr;
-        }
-
-        .stats-bar {
-            gap: 16px;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>📋 全站试卷列表</h1>
-    <p>选择一份试卷开始答题，检验您的学习成果</p>
+<!-- Hero 横幅 -->
+<section class="hero">
+    <h1>📚 在线考试系统</h1>
+    <p class="hero-subtitle">海量题库 · 智能组卷 · 检验学习成果</p>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <strong>{{ total_papers|default:"0" }}</strong>
+            <span>公开试卷</span>
+        </div>
+        <div class="hero-stat">
+            <strong>{{ total_questions|default:"0" }}</strong>
+            <span>公开题目</span>
+        </div>
+    </div>
+    {% if not user.is_authenticated %}
+    <div class="hero-cta">
+        <a href="{% url 'login' %}" class="btn-primary">🔐 立即登录</a>
+        <a href="{% url 'register' %}" class="btn-secondary">📝 免费注册</a>
+    </div>
+    {% endif %}
+</section>
+
+<!-- 登录用户：学习数据 + 快捷入口 -->
+{% if user.is_authenticated %}
+{% with role=user.profile.role|default:'student' %}
+<section class="dashboard-section">
+    <p class="dashboard-greeting">👋 你好，<span>{{ user.username }}</span>
+        {% role_greeting role user.is_staff %}</p>
+    <div class="quick-stats">
+        <div class="quick-stat">
+            <span class="quick-stat-icon">📊</span>
+            <div class="quick-stat-info">
+                <strong>{{ profile.tests_taken|default:"0" }}</strong>
+                <span>答题次数</span>
+            </div>
+        </div>
+        <div class="quick-stat">
+            <span class="quick-stat-icon">🎯</span>
+            <div class="quick-stat-info">
+                <strong>{{ accuracy_rate|default:"0" }}%</strong>
+                <span>正确率</span>
+            </div>
+        </div>
+        <div class="quick-stat">
+            <span class="quick-stat-icon">📚</span>
+            <div class="quick-stat-info">
+                <strong>{{ wrong_count|default:"0" }}</strong>
+                <span>错题待复习</span>
+            </div>
+        </div>
+        <div class="quick-stat">
+            <span class="quick-stat-icon">🏆</span>
+            <div class="quick-stat-info">
+                <strong>{{ profile.total_score|default:"0" }}</strong>
+                <span>累计得分</span>
+            </div>
+        </div>
+    </div>
+    <div class="quick-actions-row">
+        {% if role == 'student' and not user.is_staff %}
+        <a href="{% url 'student_class_assignments' %}" class="quick-action-card"><span
+                class="qa-icon">📝</span>我的作业</a>
+        <a href="{% url 'wrong_question_notebook' %}" class="quick-action-card"><span class="qa-icon">❌</span>错题本</a>
+        <a href="{% url 'test_history' %}" class="quick-action-card"><span class="qa-icon">📊</span>答题历史</a>
+        {% else %}
+        <a href="{% url 'class_list' %}" class="quick-action-card"><span class="qa-icon">🏫</span>班级管理</a>
+        <a href="{% url 'my_test_papers' %}" class="quick-action-card"><span class="qa-icon">📑</span>我的试卷</a>
+        {% endif %}
+        <a href="{% url 'user_center' %}" class="quick-action-card"><span class="qa-icon">👤</span>用户中心</a>
+    </div>
+</section>
+{% endwith %}
+{% endif %}
+
+<!-- 试卷列表区 -->
+<div class="section-header">
+    <h2>📋 全站试卷</h2>
     {% if test_papers %}
     <div class="stats-bar">
-        <div class="stat-item">
-            <span>📚</span>
-            <span>共 <strong>{{ test_papers.paginator.count }}</strong> 份试卷</span>
-        </div>
-        <div class="stat-item">
-            <span>📝</span>
-            <span>第 <strong>{{ test_papers.number }}</strong> / {{ test_papers.paginator.num_pages }} 页</span>
-        </div>
+        <div class="stat-item"><span>📚</span><span>共 <strong>{{ test_papers.paginator.count }}</strong> 份</span></div>
+        <div class="stat-item"><span>📝</span><span>第 <strong>{{ test_papers.number }}</strong>
+                / {{ test_papers.paginator.num_pages }} 页</span></div>
     </div>
     {% endif %}
 </div>
+
+<!-- 搜索筛选条 -->
+<form class="filter-bar" method="get">
+    <input type="text" name="search" value="{{ search|default:'' }}" placeholder="🔍 搜索试卷标题或描述..." class="search-input">
+    <select name="sort" class="sort-select">
+        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>最新发布</option>
+        <option value="score" {% if sort == 'score' %}selected{% endif %}>分数最高</option>
+        <option value="questions" {% if sort == 'questions' %}selected{% endif %}>题量最多</option>
+    </select>
+    <button type="submit" class="filter-btn">🔍 筛选</button>
+    {% if search or sort != 'newest' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺ 重置</a>{% endif %}
+    {% if test_papers %}
+    <span class="result-count">匹配 <strong>{{ test_papers.paginator.count }}</strong> 份</span>
+    {% endif %}
+</form>
 
 {% if test_papers %}
 <ul class="test-paper-list">
@@ -265,48 +641,47 @@
     <li class="test-paper-item">
         <div class="paper-header">
             <span class="paper-number">{{ forloop.counter }}</span>
+            {% if paper.question_count %}<span class="paper-tag">📝 {{ paper.question_count }} 题</span>{% endif %}
         </div>
         <h3 class="test-paper-title">{{ paper.title }}</h3>
         {% if paper.description %}
         <div class="test-paper-description">{{ paper.description }}</div>
         {% endif %}
         <div class="test-paper-meta">
-            <div class="meta-item">
-                <span class="icon">⭐</span>
-                <span>{{ paper.total_score }}分</span>
-            </div>
-            <div class="meta-item">
-                <span class="icon">👤</span>
-                <span>{% if paper.created_by %}{{ paper.created_by }}{% else %}系统{% endif %}</span>
-            </div>
-            <div class="meta-item">
-                <span class="icon">📅</span>
-                <span>{{ paper.created_at|date:"Y-m-d" }}</span>
-            </div>
+            <div class="meta-item"><span class="icon">⭐</span><span>{{ paper.total_score }}分</span></div>
+            <div class="meta-item"><span class="icon">👤</span><span>
+                    {{ paper.created_by|default:'系统' }}</span></div>
+            <div class="meta-item"><span class="icon">📅</span><span>{{ paper.created_at|date:"Y-m-d" }}</span></div>
         </div>
-        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">
-            开始答题 →
-        </a>
+        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">开始答题 →</a>
     </li>
     {% endfor %}
 </ul>
 
 <div class="pagination">
     {% if test_papers.has_previous %}
-    <a href="?page={{ test_papers.previous_page_number }}">← 上一页</a>
+    <a
+        href="?page={{ test_papers.previous_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}">←
+        上一页</a>
     {% else %}
     <span class="disabled">← 上一页</span>
     {% endif %}
 
+    {% with cur=test_papers.number %}
     {% for num in test_papers.paginator.page_range %}
-    {% if num == test_papers.number %}
+    {% if num == cur %}
     <span class="current">{{ num }}</span>
-    {% elif num >= test_papers.number|add:'-2' and num <= test_papers.number|add:'2' %} <a href="?page={{ num }}">{{ num }}</a>
+    {% elif num >= cur|add:'-2' and num <= cur|add:'2' %} <a
+        href="?page={{ num }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}">
+        {{ num }}</a>
         {% endif %}
         {% endfor %}
+        {% endwith %}
 
         {% if test_papers.has_next %}
-        <a href="?page={{ test_papers.next_page_number }}">下一页 →</a>
+        <a
+            href="?page={{ test_papers.next_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}">下一页
+            →</a>
         {% else %}
         <span class="disabled">下一页 →</span>
         {% endif %}

@@ -24,15 +24,19 @@ urlpatterns = [
     path('test_history/', views.test_history, name='test_history'),  # 答题历史
     path('test_history/<int:record_id>/', views.test_history_detail, name='test_history_detail'),  # 答题历史详情
     path('user_center/', views.user_center, name='user_center'),  # 用户中心
+    path('notifications/', views.notification_list, name='notification_list'),  # 通知列表
+    path('notifications/read_all/', views.notification_read_all, name='notification_read_all'),  # 全部已读
     path('wrong_question_notebook/', views.wrong_question_notebook, name='wrong_question_notebook'),  # 错题本
     path('create_wrong_question_paper/', views.create_wrong_question_paper, name='create_wrong_question_paper'),  # 错题本组卷
     path('submit_wrong_question_paper/<int:paper_id>/', views.submit_wrong_question_paper, name='submit_wrong_question_paper'),  # 错题本试卷提交
     path('delete_wrong_question/<int:wrong_question_id>/', views.delete_wrong_question, name='delete_wrong_question'),  # 删除错题
+    path('wrong/<int:wrong_question_id>/review/', views.wrong_question_review, name='wrong_question_review'),  # 错题复习标记
     path('my_test_papers/', views.my_test_papers, name='my_test_papers'),  # 我的试卷
     path('my_test_papers/create/', views.create_test_paper, name='create_test_paper'),  # 创建试卷
     path('my_test_papers/import/', views.import_test_paper, name='import_test_paper'),  # 导入试卷
     path('my_test_papers/import/template/', views.download_import_template, name='download_import_template'),  # 下载导入模板
     path('my_test_papers/<int:paper_id>/publish/', views.publish_test_paper, name='publish_test_paper'),  # 发布试卷
+    path('my_test_papers/<int:paper_id>/edit/', views.edit_test_paper, name='edit_test_paper'),  # 编辑试卷
     path('my_test_papers/<int:paper_id>/delete/', views.delete_test_paper, name='delete_test_paper'),  # 删除试卷
     
     # 班级管理

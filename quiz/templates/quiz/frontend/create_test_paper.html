@@ -1,6 +1,6 @@
 {% extends 'quiz/frontend/base.html' %}
 
-{% block title %}手工组卷 - 在线考试系统{% endblock %}
+{% block title %}{% if edit_mode %}编辑试卷{% else %}手工组卷{% endif %} - 在线考试系统{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -398,7 +398,7 @@
 
 {% block content %}
 <div class="form-container">
-    <h1 class="page-title">📝 手工组卷</h1>
+    <h1 class="page-title">{% if edit_mode %}✏️ 编辑试卷{% else %}📝 手工组卷{% endif %}</h1>
 
     {% if messages %}
     {% for message in messages %}
@@ -411,17 +411,22 @@
 
     <form method="post" id="createForm">
         {% csrf_token %}
+        {% if edit_mode %}
+        <div id="pubData" data-pub="{{ ps_pub }}" hidden></div>
+        {% endif %}
 
         <div class="section-title">📋 试卷信息</div>
 
         <div class="form-group">
             <label for="title">试卷标题 <span style="color: #dc3545;">*</span></label>
-            <input type="text" id="title" name="title" placeholder="请输入试卷标题" required>
+            <input type="text" id="title" name="title" placeholder="请输入试卷标题" required
+                value="{% if edit_mode %}{{ test_paper.title }}{% endif %}">
         </div>
 
         <div class="form-group">
             <label for="description">试卷描述</label>
-            <textarea id="description" name="description" placeholder="请输入试卷描述（可选）"></textarea>
+            <textarea id="description" name="description"
+                placeholder="请输入试卷描述（可选）">{% if edit_mode %}{{ test_paper.description }}{% endif %}</textarea>
         </div>
 
         <div class="two-columns">
@@ -432,7 +437,7 @@
                     <div class="filter-row">
                         <div class="filter-item">
                             <label>学科：</label>
-                            <select id="subjectFilter">
+                            <select id="subjectFilter" name="subject">
                                 <option value="all">全部学科</option>
                                 {% for subject in subjects %}
                                 <option value="{{ subject.id }}">{{ subject.icon }} {{ subject.name }}</option>
@@ -441,13 +446,13 @@
                         </div>
                         <div class="filter-item">
                             <label>章节：</label>
-                            <select id="chapterFilter">
+                            <select id="chapterFilter" name="chapter">
                                 <option value="all">全部章节</option>
                             </select>
                         </div>
                         <div class="filter-item">
                             <label>知识点：</label>
-                            <select id="knowledgeFilter">
+                            <select id="knowledgeFilter" name="knowledge_point">
                                 <option value="all">全部知识点</option>
                             </select>
                         </div>
@@ -455,7 +460,7 @@
                     <div class="filter-row">
                         <div class="filter-item">
                             <label>题型：</label>
-                            <select id="typeFilter">
+                            <select id="typeFilter" name="type">
                                 <option value="all">全部</option>
                                 <option value="1">单选题</option>
                                 <option value="2">多选题</option>
@@ -464,17 +469,17 @@
                         </div>
                         <div class="filter-item">
                             <label>分值：</label>
-                            <input type="number" id="minScore" placeholder="最低" min="1" style="width: 60px;">
+                            <input type="number" id="minScore" name="min_score" placeholder="最低" min="1" style="width: 60px;">
                             <span> - </span>
-                            <input type="number" id="maxScore" placeholder="最高" min="1" style="width: 60px;">
+                            <input type="number" id="maxScore" name="max_score" placeholder="最高" min="1" style="width: 60px;">
                         </div>
                     </div>
                 </div>
 
-                <input type="text" id="searchBox" class="search-box" placeholder="🔍 搜索题目内容...">
+                <input type="text" id="searchBox" name="search" class="search-box" placeholder="🔍 搜索题目内容...">
 
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                    <button type="button" class="auto-select-btn" onclick="autoSelectQuestions()">
+                    <button type="button" class="auto-select-btn" onclick="randomSelect()">
                         🎲 随机选题
                     </button>
                     <div class="filter-item">
@@ -485,7 +490,7 @@
                     <span style="font-size: 12px; color: #888;">（从当前筛选结果中随机选）</span>
                 </div>
 
-                <div class="question-counter">共 <span id="questionCount">{{ questions|length }}</span> 道题目</div>
+                <div class="question-counter">共 <span id="questionCount">{{ question_total }}</span> 道题目</div>
 
                 <div class="question-list" id="questionList">
                     {% for q in questions %}
@@ -512,6 +517,23 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% if page_obj.has_other_pages %}
+                <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+                    {% if page_obj.has_previous %}
+                    <a href="#" class="page-link" data-page="{{ page_obj.previous_page_number }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">上一页</a>
+                    {% endif %}
+                    {% for n in page_obj.paginator.page_range %}
+                    {% if n == page_obj.number %}
+                    <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n }}</span>
+                    {% else %}
+                    <a href="#" class="page-link" data-page="{{ n }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{ n }}</a>
+                    {% endif %}
+                    {% endfor %}
+                    {% if page_obj.has_next %}
+                    <a href="#" class="page-link" data-page="{{ page_obj.next_page_number }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">下一页</a>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
 
             <div>
@@ -556,40 +578,111 @@
             </div>
         </div>
 
+        <!-- P2-3 考试控制设置（可选，留空表示不限制） -->
+        <div style="margin-top: 20px; margin-bottom: 15px;">
+            <div class="section-title">⏱ 考试控制
+                <span style="font-size:12px;color:#95a5a6;font-weight:normal">（可选，留空表示不限制）</span>
+            </div>
+            <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:0;">
+                <div>
+                    <label style="font-size:13px;color:#555;">考试时长（分钟）</label>
+                    <input type="number" name="duration" min="1" placeholder="如 60"
+                        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;"
+                        value="{{ test_paper.duration|default_if_none:'' }}">
+                </div>
+                <div>
+                    <label style="font-size:13px;color:#555;">最大答题次数</label>
+                    <input type="number" name="max_attempts" min="1" placeholder="如 3"
+                        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;"
+                        value="{{ test_paper.max_attempts|default_if_none:'' }}">
+                </div>
+                <div>
+                    <label style="font-size:13px;color:#555;">开放开始时间</label>
+                    <input type="datetime-local" name="start_time"
+                        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;"
+                        value="{{ test_paper.start_time|date:'Y-m-d\TH:i' }}">
+                </div>
+                <div>
+                    <label style="font-size:13px;color:#555;">开放截止时间</label>
+                    <input type="datetime-local" name="end_time"
+                        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;"
+                        value="{{ test_paper.end_time|date:'Y-m-d\TH:i' }}">
+                </div>
+            </div>
+        </div>
+
         <div class="form-actions">
             <a href="{% url 'my_test_papers' %}" class="btn btn-secondary">← 返回</a>
-            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>✓ 确认组卷</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>{% if edit_mode %}💾 保存修改{% else %}✓
+                确认组卷{% endif %}</button>
         </div>
 
         <input type="hidden" name="selected_questions" id="selectedQuestions">
     </form>
 </div>
 
+{{ chapters_json|json_script:"chaptersData" }}
+{{ knowledge_points_json|json_script:"kpData" }}
+{{ filter_params|json_script:"fpData" }}
+{{ sel_questions|json_script:"selData" }}
+
 <script>
     let selectedQuestions = [];
     let chaptersData = {};
     let knowledgePointsData = {};
+    let subjectKpsData = {};
 
     document.addEventListener('DOMContentLoaded', function () {
-        // 加载章节和知识点数据（从JSON安全解析，避免模板变量含特殊字符导致JS错误）
-        var chaptersJson = JSON.parse('{{ chapters_json|safe }}');
-        var knowledgePointsJson = JSON.parse('{{ knowledge_points_json|safe }}');
+        var chaptersJson = JSON.parse(document.getElementById('chaptersData').textContent);
+        var knowledgePointsJson = JSON.parse(document.getElementById('kpData').textContent);
+        var fp = JSON.parse(document.getElementById('fpData').textContent);
 
-        chaptersData = {};
         chaptersJson.forEach(function (ch) {
             if (!chaptersData[ch.subject_id]) {
                 chaptersData[ch.subject_id] = [];
             }
             chaptersData[ch.subject_id].push({ id: ch.id, number: ch.number, title: ch.title });
         });
-
-        knowledgePointsData = {};
         knowledgePointsJson.forEach(function (kp) {
             if (!knowledgePointsData[kp.chapter_id]) {
                 knowledgePointsData[kp.chapter_id] = [];
             }
             knowledgePointsData[kp.chapter_id].push({ id: kp.id, name: kp.name });
+            if (kp.subject_id) {
+                if (!subjectKpsData[kp.subject_id]) {
+                    subjectKpsData[kp.subject_id] = [];
+                }
+                subjectKpsData[kp.subject_id].push({ id: kp.id, name: kp.name });
+            }
         });
+
+        // 回显筛选参数（P2-5 服务端筛选）
+        if (fp.subject) document.getElementById('subjectFilter').value = fp.subject;
+        if (fp.chapter) document.getElementById('chapterFilter').value = fp.chapter;
+        if (fp.knowledge_point) document.getElementById('knowledgeFilter').value = fp.knowledge_point;
+        if (fp.type) document.getElementById('typeFilter').value = fp.type;
+        if (fp.min_score) document.getElementById('minScore').value = fp.min_score;
+        if (fp.max_score) document.getElementById('maxScore').value = fp.max_score;
+        if (fp.search) document.getElementById('searchBox').value = fp.search;
+        rebuildChapterOptions();
+        rebuildKnowledgeOptions();
+
+        // 已选题目初始化（编辑模式预选 / 跨页已选 / 随机选题）
+        var selData = JSON.parse(document.getElementById('selData').textContent);
+        selData.forEach(function (q) {
+            if (!selectedQuestions.find(sq => sq.id === q.id)) {
+                selectedQuestions.push(q);
+            }
+        });
+        document.querySelectorAll('.question-item').forEach(item => {
+            const id = parseInt(item.getAttribute('data-id'));
+            if (selectedQuestions.some(sq => sq.id === id)) {
+                const cb = item.querySelector('.question-checkbox');
+                if (cb) cb.checked = true;
+            }
+        });
+
+        // 题目勾选交互
         document.querySelectorAll('.question-item').forEach(item => {
             item.addEventListener('click', function (event) {
                 const checkbox = this.querySelector('.question-checkbox');
@@ -599,21 +692,29 @@
                 }
             });
         });
-
         document.querySelectorAll('.question-checkbox').forEach(cb => {
             cb.addEventListener('change', function () {
                 onCheckboxChange(this);
             });
         });
 
-        document.getElementById('searchBox').addEventListener('input', filterQuestions);
-        document.getElementById('typeFilter').addEventListener('change', filterQuestions);
+        // 筛选（服务端提交）
+        document.getElementById('searchBox').addEventListener('input', debounceFilter);
+        document.getElementById('typeFilter').addEventListener('change', reloadWithParams);
         document.getElementById('subjectFilter').addEventListener('change', onSubjectChange);
         document.getElementById('chapterFilter').addEventListener('change', onChapterChange);
-        document.getElementById('knowledgeFilter').addEventListener('change', filterQuestions);
-        document.getElementById('minScore').addEventListener('input', filterQuestions);
-        document.getElementById('maxScore').addEventListener('input', filterQuestions);
+        document.getElementById('knowledgeFilter').addEventListener('change', reloadWithParams);
+        document.getElementById('minScore').addEventListener('change', reloadWithParams);
+        document.getElementById('maxScore').addEventListener('change', reloadWithParams);
         document.getElementById('title').addEventListener('input', updateSubmitButton);
+
+        // 分页（保留筛选与已选）
+        document.querySelectorAll('.page-link').forEach(a => {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                reloadWithParams({ page: this.getAttribute('data-page') });
+            });
+        });
 
         // 表单提交时填充隐藏域
         document.getElementById('createForm').addEventListener('submit', function () {
@@ -621,56 +722,119 @@
             document.getElementById('selectedQuestions').value = ids;
         });
 
+        // 编辑模式：预填发布状态
+        {% if edit_mode %}
+        var pubEl = document.getElementById('pubData');
+        if (pubEl && pubEl.dataset.pub === 'true') {
+            var pubCb = document.getElementById('is_published');
+            if (pubCb) pubCb.checked = true;
+        }
+        {% endif %}
+
+        updateSelectedList();
         updateSubmitButton();
+        updateQuestionHighlight();
     });
 
-    // loadChapterData 已替换为 JSON 安全加载方式（见 DOMContentLoaded 开头）
+    var filterTimer = null;
+    function debounceFilter() {
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(reloadWithParams, 400);
+    }
 
-    function onSubjectChange() {
+    function currentFilterParams() {
+        var params = new URLSearchParams();
+        var sid = document.getElementById('subjectFilter').value;
+        if (sid !== 'all') params.set('subject', sid);
+        var cid = document.getElementById('chapterFilter').value;
+        if (cid !== 'all') params.set('chapter', cid);
+        var kid = document.getElementById('knowledgeFilter').value;
+        if (kid !== 'all') params.set('knowledge_point', kid);
+        var t = document.getElementById('typeFilter').value;
+        if (t !== 'all') params.set('type', t);
+        var min = document.getElementById('minScore').value;
+        if (min) params.set('min_score', min);
+        var max = document.getElementById('maxScore').value;
+        if (max) params.set('max_score', max);
+        var s = document.getElementById('searchBox').value.trim();
+        if (s) params.set('search', s);
+        params.set('sel', selectedQuestions.map(q => q.id).join(','));
+        return params;
+    }
+
+    function reloadWithParams(extra) {
+        var params = currentFilterParams();
+        if (extra) {
+            Object.keys(extra).forEach(k => params.set(k, extra[k]));
+        }
+        location.href = '?' + params.toString();
+    }
+
+    function randomSelect() {
+        var count = document.getElementById('randomCount').value || 10;
+        reloadWithParams({ random: count });
+    }
+
+    function rebuildChapterOptions() {
         const subjectId = document.getElementById('subjectFilter').value;
         const chapterSelect = document.getElementById('chapterFilter');
         const knowledgeSelect = document.getElementById('knowledgeFilter');
+        const fp = JSON.parse(document.getElementById('fpData').textContent);
 
         chapterSelect.innerHTML = '<option value="all">全部章节</option>';
         knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
 
         if (subjectId !== 'all' && chaptersData[subjectId]) {
             chaptersData[subjectId].forEach(chapter => {
-                chapterSelect.innerHTML += `<option value="${chapter.id}">第${chapter.number}章 ${chapter.title}</option>`;
+                chapterSelect.innerHTML += '<option value="' + chapter.id + '">第' + chapter.number + '章 ' + chapter.title + '</option>';
             });
         }
+        if (fp.chapter && [...chapterSelect.options].some(o => o.value === fp.chapter)) {
+            chapterSelect.value = fp.chapter;
+        }
+        rebuildKnowledgeOptions();
+    }
 
-        filterQuestions();
+    function rebuildKnowledgeOptions() {
+        const chapterId = document.getElementById('chapterFilter').value;
+        const subjectId = document.getElementById('subjectFilter').value;
+        const knowledgeSelect = document.getElementById('knowledgeFilter');
+        const fp = JSON.parse(document.getElementById('fpData').textContent);
+
+        knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
+        // 级联：已选章节则按章节显示知识点；未选章节时显示当前学科全部知识点（便于直接按知识点筛选）
+        let kps = [];
+        if (chapterId !== 'all' && knowledgePointsData[chapterId]) {
+            kps = knowledgePointsData[chapterId];
+        } else if (chapterId === 'all' && subjectId !== 'all' && subjectKpsData[subjectId]) {
+            kps = subjectKpsData[subjectId];
+        }
+        kps.forEach(kp => {
+            knowledgeSelect.innerHTML += '<option value="' + kp.id + '">' + kp.name + '</option>';
+        });
+        if (fp.knowledge_point && [...knowledgeSelect.options].some(o => o.value === fp.knowledge_point)) {
+            knowledgeSelect.value = fp.knowledge_point;
+        }
+    }
+
+    function onSubjectChange() {
+        rebuildChapterOptions();
+        reloadWithParams();
     }
 
     function onChapterChange() {
-        const chapterId = document.getElementById('chapterFilter').value;
-        const knowledgeSelect = document.getElementById('knowledgeFilter');
-
-        knowledgeSelect.innerHTML = '<option value="all">全部知识点</option>';
-
-        if (chapterId !== 'all' && knowledgePointsData[chapterId]) {
-            knowledgePointsData[chapterId].forEach(kp => {
-                knowledgeSelect.innerHTML += `<option value="${kp.id}">${kp.name}</option>`;
-            });
-        }
-
-        filterQuestions();
+        rebuildKnowledgeOptions();
+        reloadWithParams();
     }
 
     function onCheckboxChange(checkbox) {
         const questionId = parseInt(checkbox.getAttribute('data-id'));
-        const item = document.querySelector(`.question-item[data-id="${questionId}"]`);
+        const item = document.querySelector('.question-item[data-id="' + questionId + '"]');
         const content = item.querySelector('.question-content').textContent;
         const score = parseInt(item.getAttribute('data-score'));
         const type = parseInt(item.getAttribute('data-type'));
 
-        const q = {
-            id: questionId,
-            content: content,
-            score: score,
-            type: type
-        };
+        const q = { id: questionId, content: content, score: score, type: type };
 
         if (checkbox.checked) {
             if (!selectedQuestions.find(sq => sq.id === questionId)) {
@@ -702,14 +866,7 @@
 
         selectedQuestions.forEach((q, index) => {
             score += q.score;
-            html += `
-                <div class="selected-item">
-                    <span class="selected-index">${index + 1}</span>
-                    <span class="selected-content" title="${q.content}">${q.content}</span>
-                    <span class="selected-score">${q.score}分</span>
-                    <button type="button" class="remove-btn" onclick="removeQuestion(${q.id})">移除</button>
-                </div>
-            `;
+            html += '<div class="selected-item"><span class="selected-index">' + (index + 1) + '</span><span class="selected-content" title="' + q.content + '">' + q.content + '</span><span class="selected-score">' + q.score + '分</span><button type="button" class="remove-btn" onclick="removeQuestion(' + q.id + ')">移除</button></div>';
         });
 
         list.innerHTML = html;
@@ -719,7 +876,7 @@
 
     function removeQuestion(questionId) {
         selectedQuestions = selectedQuestions.filter(sq => sq.id !== questionId);
-        const checkbox = document.querySelector(`.question-checkbox[data-id="${questionId}"]`);
+        const checkbox = document.querySelector('.question-checkbox[data-id="' + questionId + '"]');
         if (checkbox) checkbox.checked = false;
         updateSelectedList();
         updateSubmitButton();
@@ -743,49 +900,6 @@
         });
     }
 
-    function autoSelectQuestions() {
-        const randomCountInput = document.getElementById('randomCount');
-        let count = parseInt(randomCountInput.value) || 10;
-        if (count < 1) count = 1;
-
-        const alreadySelectedIds = new Set(selectedQuestions.map(q => q.id));
-
-        const availableQuestions = [];
-        document.querySelectorAll('.question-item').forEach(item => {
-            if (item.style.display === 'none') return;
-            const id = parseInt(item.getAttribute('data-id'));
-            if (alreadySelectedIds.has(id)) return;
-            const content = item.querySelector('.question-content').textContent;
-            const score = parseInt(item.getAttribute('data-score'));
-            const type = parseInt(item.getAttribute('data-type'));
-            availableQuestions.push({ id, content, score, type });
-        });
-
-        if (availableQuestions.length === 0) {
-            alert('没有可选的题目');
-            return;
-        }
-
-        const actualCount = Math.min(count, availableQuestions.length);
-        const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
-        const selected = shuffled.slice(0, actualCount);
-
-        selected.forEach(q => {
-            if (!selectedQuestions.find(sq => sq.id === q.id)) {
-                selectedQuestions.push(q);
-            }
-        });
-
-        document.querySelectorAll('.question-checkbox').forEach(cb => {
-            const id = parseInt(cb.getAttribute('data-id'));
-            cb.checked = selectedQuestions.some(sq => sq.id === id);
-        });
-
-        updateSelectedList();
-        updateSubmitButton();
-        updateQuestionHighlight();
-    }
-
     function updateSubmitButton() {
         const submitBtn = document.getElementById('submitBtn');
         const title = document.getElementById('title').value.trim();
@@ -793,7 +907,7 @@
 
         if (count > 0 && title) {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = `✓ 确认组卷 (${count}题/${document.getElementById('totalScore').textContent}分)`;
+            submitBtn.innerHTML = '✓ 确认组卷 (' + count + '题/' + document.getElementById('totalScore').textContent + '分)';
         } else {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '✓ 确认组卷';
@@ -809,48 +923,6 @@
                 item.classList.remove('selected');
             }
         });
-    }
-
-    function filterQuestions() {
-        const searchText = document.getElementById('searchBox').value.toLowerCase();
-        const typeFilter = document.getElementById('typeFilter').value;
-        const subjectFilter = document.getElementById('subjectFilter').value;
-        const chapterFilter = document.getElementById('chapterFilter').value;
-        const knowledgeFilter = document.getElementById('knowledgeFilter').value;
-        const minScore = parseInt(document.getElementById('minScore').value) || 0;
-        const maxScore = parseInt(document.getElementById('maxScore').value) || Infinity;
-
-        let visibleCount = 0;
-
-        document.querySelectorAll('.question-item').forEach(item => {
-            const content = item.querySelector('.question-content').textContent.toLowerCase();
-            const type = item.getAttribute('data-type');
-            const subjectId = item.getAttribute('data-subject');
-            const chapterId = item.getAttribute('data-chapter');
-            const knowledgeIds = item.getAttribute('data-knowledge-points') || '';
-            const score = parseInt(item.getAttribute('data-score'));
-
-            const matchSearch = content.includes(searchText);
-            const matchType = typeFilter === 'all' || type === typeFilter;
-            const matchSubject = subjectFilter === 'all' || subjectId === subjectFilter;
-            const matchChapter = chapterFilter === 'all' || chapterId === chapterFilter;
-
-            let matchKnowledge = true;
-            if (knowledgeFilter !== 'all') {
-                matchKnowledge = knowledgeIds.includes(knowledgeFilter);
-            }
-
-            const matchScore = score >= minScore && score <= maxScore;
-
-            if (matchSearch && matchType && matchSubject && matchChapter && matchKnowledge && matchScore) {
-                item.style.display = 'flex';
-                visibleCount++;
-            } else {
-                item.style.display = 'none';
-            }
-        });
-
-        document.getElementById('questionCount').textContent = visibleCount;
     }
 </script>
 {% endblock %}

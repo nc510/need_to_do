@@ -28,10 +28,18 @@ def generate_captcha_image(text):
     image = Image.new('RGB', (CAPTCHA_WIDTH, CAPTCHA_HEIGHT), (255, 255, 255))
     draw = ImageDraw.Draw(image)
     
-    # 尝试加载字体，如果失败则使用默认字体
-    try:
-        font = ImageFont.truetype('arial.ttf', CAPTCHA_FONT_SIZE)
-    except:
+    # P2-10：字体查找改为多路径尝试，兼容 Windows arial.ttf 与 Linux DejaVu
+    # Linux 服务器无 arial.ttf，原代码总是 fallback 到 load_default()，验证码难看
+    font = None
+    for fp in ('arial.ttf', 'DejaVuSans.ttf',
+               '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+               '/usr/share/fonts/dejavu/DejaVuSans.ttf'):
+        try:
+            font = ImageFont.truetype(fp, CAPTCHA_FONT_SIZE)
+            break
+        except (IOError, OSError):
+            continue
+    if font is None:
         font = ImageFont.load_default()
     
     # 绘制验证码字符

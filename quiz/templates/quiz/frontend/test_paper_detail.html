@@ -22,6 +22,128 @@
     }
 
     /* 试卷基本信息 */
+    /* ===== P2-3 考试控制样式 ===== */
+    .exam-meta-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .exam-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .exam-tag.tag-time {
+        background: rgba(118, 75, 162, 0.12);
+        color: #764ba2;
+    }
+
+    .exam-tag.tag-attempt {
+        background: rgba(41, 128, 185, 0.12);
+        color: #2980b9;
+    }
+
+    .exam-tag.tag-start {
+        background: rgba(39, 174, 96, 0.12);
+        color: #27ae60;
+    }
+
+    .exam-tag.tag-end {
+        background: rgba(231, 76, 60, 0.12);
+        color: #e74c3c;
+    }
+
+    .countdown-bar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+    }
+
+    .countdown-bar .countdown-label {
+        font-size: 13px;
+        opacity: 0.9;
+        white-space: nowrap;
+    }
+
+    .countdown-bar .countdown-time {
+        font-size: 22px;
+        font-weight: bold;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .countdown-progress {
+        flex: 1;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+        overflow: hidden;
+        min-width: 60px;
+    }
+
+    .countdown-progress-fill {
+        height: 100%;
+        background: #fff;
+        border-radius: 3px;
+        width: 100%;
+        transition: width 1s linear;
+    }
+
+    .countdown-bar.urgent {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        animation: examPulse 1s infinite;
+    }
+
+    @keyframes examPulse {
+
+        0%,
+        100% {
+            opacity: 1
+        }
+
+        50% {
+            opacity: 0.75
+        }
+    }
+
+    .exam-block-banner {
+        background: #fff3cd;
+        border: 2px solid #ffeeba;
+        border-radius: 12px;
+        padding: 32px;
+        margin: 24px 0;
+        text-align: center;
+    }
+
+    .exam-block-banner .exam-block-icon {
+        font-size: 44px;
+        margin-bottom: 10px;
+    }
+
+    .exam-block-banner .exam-block-msg {
+        font-size: 16px;
+        color: #856404;
+        font-weight: 500;
+    }
+
+    .exam-block-banner .exam-block-action {
+        margin-top: 18px;
+    }
 </style>
 {% endblock %}
 
@@ -192,9 +314,49 @@
         <div class="paper-description">{{ test_paper.description }}</div>
         {% endif %}
         <div class="paper-meta">
-            总分: {{ test_paper.total_score }}分 | 出题人: {{ test_paper.created_by }} | 创建时间: {{ test_paper.created_at|date:"Y-m-d H:i" }}
+            总分: {{ test_paper.total_score }}分 |
+            出题人: {{ test_paper.created_by }} |
+            创建时间: {{ test_paper.created_at|date:"Y-m-d H:i" }}
         </div>
     </div>
+
+    {% if exam_block %}
+    <div class="exam-block-banner">
+        <div class="exam-block-icon">⛔</div>
+        <div class="exam-block-msg">{{ exam_block }}</div>
+        <div class="exam-block-action">
+            <a href="{% url 'test_paper_list' %}" class="btn btn-secondary">← 返回试卷列表</a>
+            {% if user.is_authenticated %}
+            <a href="{% url 'user_center' %}" class="btn btn-primary">前往用户中心</a>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    {% if test_paper.is_exam_controlled %}
+    <div class="exam-meta-bar">
+        {% if test_paper.duration %}
+        <span class="exam-tag tag-time">⏱ 限时 {{ test_paper.duration }} 分钟</span>
+        {% endif %}
+        {% if test_paper.max_attempts %}
+        <span class="exam-tag tag-attempt">🔁 已答 {{ attempt_used }}/{{ ma }} 次</span>
+        {% endif %}
+        {% if test_paper.start_time %}
+        <span class="exam-tag tag-start">🔓 开放 {{ st }}</span>
+        {% endif %}
+        {% if test_paper.end_time %}
+        <span class="exam-tag tag-end">🔒 截止 {{ et }}</span>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if remaining_seconds %}
+    <div class="countdown-bar" id="countdownBar">
+        <span class="countdown-label">⏳ 剩余时间</span>
+        <span class="countdown-time" id="countdownTime">{{ remaining_seconds }}</span>
+        <div class="countdown-progress">
+            <div class="countdown-progress-fill" id="countdownFill"></div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- 答题模式选择 -->
     <div class="test-mode-selector">
@@ -216,7 +378,7 @@
                 data-question-index="{{ forloop.counter0 }}">
                 <div class="question-header">
                     <span class="question-type">
-                        {% if question.type == 1 %}选择题{% else %}判断题{% endif %}
+                        {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
                     </span>
                     <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
                     {{ question.content }}
@@ -286,6 +448,7 @@
 
         <button type="submit" class="submit-btn">提交答案</button>
     </form>
+    {% endif %}
 </div>
 <script>
     // 答题模式相关变量
@@ -378,6 +541,46 @@
             showSingleQuestion(currentQuestionIndex);
         }
     });
+</script>
+<script>
+    // ===== P2-3 倒计时 + 到时自动交卷 =====
+    (function () {
+        var bar = document.getElementById('countdownBar');
+        if (!bar) return; // 无倒计时不执行
+        var timeEl = document.getElementById('countdownTime');
+        var fillEl = document.getElementById('countdownFill');
+        var form = document.getElementById('test_paper_form');
+        var totalSec = parseInt(timeEl.textContent, 10) || 0;
+        var remaining = totalSec;
+        function fmt(s) {
+            var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+            var str = '';
+            if (h > 0) str += h + ':';
+            str += (m < 10 && h > 0 ? '0' : '') + m + ':';
+            str += (x < 10 ? '0' : '') + x;
+            return str;
+        }
+        function tick() {
+            if (remaining <= 0) {
+                timeEl.textContent = '00:00';
+                if (fillEl) fillEl.style.width = '0%';
+                if (form) {
+                    if (!form.dataset.submitted) {
+                        form.dataset.submitted = '1';
+                        form.requestSubmit ? form.requestSubmit() : form.submit();
+                    }
+                }
+                clearInterval(timer);
+                return;
+            }
+            timeEl.textContent = fmt(remaining);
+            if (fillEl) fillEl.style.width = ((remaining / totalSec) * 100) + '%';
+            if (remaining <= 60) bar.classList.add('urgent');
+            remaining--;
+        }
+        tick();
+        var timer = setInterval(tick, 1000);
+    })();
 </script>
 {% endblock %}
 

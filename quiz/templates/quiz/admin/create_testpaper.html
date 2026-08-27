@@ -366,6 +366,10 @@
         <a href="/admin/quiz/testpaper/" class="btn-secondary" style="padding: 8px 16px; font-size: 14px;">
             ← 返回试卷列表
         </a>
+        <a href="{% url 'user_center' %}"
+            style="background: linear-gradient(135deg,#667eea,#764ba2); color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-size: 14px;">
+            🏠 返回用户中心
+        </a>
         <h2>📝 后台组卷</h2>
     </div>
 
@@ -401,7 +405,7 @@
                     <div class="filter-row">
                         <div class="filter-item">
                             <label>题型：</label>
-                            <select id="typeFilter">
+                            <select id="typeFilter" name="type">
                                 <option value="all">全部</option>
                                 <option value="1">单选题</option>
                                 <option value="2">多选题</option>
@@ -410,17 +414,17 @@
                         </div>
                         <div class="filter-item">
                             <label>分值范围：</label>
-                            <input type="number" id="minScore" placeholder="最低分值" min="1" style="width: 80px;">
+                            <input type="number" id="minScore" name="min_score" placeholder="最低分值" min="1" style="width: 80px;">
                             <span> - </span>
-                            <input type="number" id="maxScore" placeholder="最高分值" min="1" style="width: 80px;">
+                            <input type="number" id="maxScore" name="max_score" placeholder="最高分值" min="1" style="width: 80px;">
                         </div>
                     </div>
                 </div>
 
-                <input type="text" id="searchBox" class="search-box" placeholder="搜索题目内容...">
+                <input type="text" id="searchBox" name="search" class="search-box" placeholder="搜索题目内容...">
 
                 <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                    <button type="button" class="auto-select-btn" onclick="autoSelectQuestions()"
+                    <button type="button" class="auto-select-btn" onclick="randomSelect()"
                         style="margin-bottom: 0;">
                         🎲 随机选题
                     </button>
@@ -432,7 +436,7 @@
                     <span style="font-size: 13px; color: #888;">（从当前筛选结果中随机选题，已选题将自动去重）</span>
                 </div>
 
-                <div class="question-counter">共 <span id="questionCount">{{ all_questions|length }}</span> 道题目</div>
+                <div class="question-counter">共 <span id="questionCount">{{ question_total }}</span> 道题目</div>
 
                 <div class="question-list" id="questionList">
                     {% for q in all_questions %}
@@ -451,6 +455,23 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% if page_obj.has_other_pages %}
+                <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+                    {% if page_obj.has_previous %}
+                    <a href="#" class="page-link" data-page="{{ page_obj.previous_page_number }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;color:#4caf50;text-decoration:none;">上一页</a>
+                    {% endif %}
+                    {% for n in page_obj.paginator.page_range %}
+                    {% if n == page_obj.number %}
+                    <span style="padding:4px 10px;background:#4caf50;color:#fff;border-radius:4px;font-size:13px;">{{ n }}</span>
+                    {% else %}
+                    <a href="#" class="page-link" data-page="{{ n }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;color:#4caf50;text-decoration:none;">{{ n }}</a>
+                    {% endif %}
+                    {% endfor %}
+                    {% if page_obj.has_next %}
+                    <a href="#" class="page-link" data-page="{{ page_obj.next_page_number }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;color:#4caf50;text-decoration:none;">下一页</a>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
 
             <div>
@@ -489,8 +510,92 @@
     </form>
 </div>
 
+{{ filter_params|json_script:"fpData" }}
+{{ sel_questions|json_script:"selData" }}
+
 <script>
     let selectedQuestions = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var fp = JSON.parse(document.getElementById('fpData').textContent);
+
+        // 回显筛选参数（P2-6 服务端筛选）
+        if (fp.type) document.getElementById('typeFilter').value = fp.type;
+        if (fp.min_score) document.getElementById('minScore').value = fp.min_score;
+        if (fp.max_score) document.getElementById('maxScore').value = fp.max_score;
+        if (fp.search) document.getElementById('searchBox').value = fp.search;
+
+        // 已选题目初始化（跨页已选 / 随机选题）
+        var selData = JSON.parse(document.getElementById('selData').textContent);
+        selData.forEach(function (q) {
+            if (!selectedQuestions.find(sq => sq.id === q.id)) {
+                selectedQuestions.push(q);
+            }
+        });
+        document.querySelectorAll('.question-checkbox').forEach(cb => {
+            const id = parseInt(cb.getAttribute('data-id'));
+            if (selectedQuestions.some(sq => sq.id === id)) {
+                cb.checked = true;
+            }
+        });
+
+        // 筛选（服务端提交）
+        document.getElementById('searchBox').addEventListener('input', debounceFilter);
+        document.getElementById('typeFilter').addEventListener('change', reloadWithParams);
+        document.getElementById('minScore').addEventListener('change', reloadWithParams);
+        document.getElementById('maxScore').addEventListener('change', reloadWithParams);
+        document.getElementById('title').addEventListener('input', updateSubmitButton);
+
+        // 分页（保留筛选与已选）
+        document.querySelectorAll('.page-link').forEach(a => {
+            a.addEventListener('click', function (e) {
+                e.preventDefault();
+                reloadWithParams({ page: this.getAttribute('data-page') });
+            });
+        });
+
+        document.getElementById('createForm').addEventListener('submit', function (e) {
+            document.getElementById('selectedQuestions').value = selectedQuestions.map(q => q.id).join(',');
+        });
+
+        updateSelectedList();
+        updateSubmitButton();
+        updateQuestionHighlight();
+        initBoxSelection();
+    });
+
+    var filterTimer = null;
+    function debounceFilter() {
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(reloadWithParams, 400);
+    }
+
+    function currentFilterParams() {
+        var params = new URLSearchParams();
+        var t = document.getElementById('typeFilter').value;
+        if (t !== 'all') params.set('type', t);
+        var min = document.getElementById('minScore').value;
+        if (min) params.set('min_score', min);
+        var max = document.getElementById('maxScore').value;
+        if (max) params.set('max_score', max);
+        var s = document.getElementById('searchBox').value.trim();
+        if (s) params.set('search', s);
+        params.set('sel', selectedQuestions.map(q => q.id).join(','));
+        return params;
+    }
+
+    function reloadWithParams(extra) {
+        var params = currentFilterParams();
+        if (extra) {
+            Object.keys(extra).forEach(k => params.set(k, extra[k]));
+        }
+        location.href = '?' + params.toString();
+    }
+
+    function randomSelect() {
+        var count = document.getElementById('randomCount').value || 10;
+        reloadWithParams({ random: count });
+    }
 
     function toggleQuestionItem(item, event) {
         if (event.target.type === 'checkbox' || event.target.closest('.remove-btn')) {
@@ -507,18 +612,13 @@
     }
 
     function toggleQuestionById(questionId, isSelected) {
-        const item = document.querySelector(`.question-item[data-id="${questionId}"]`);
+        const item = document.querySelector('.question-item[data-id="' + questionId + '"]');
         const content = item.querySelector('.question-content').textContent;
         const scoreText = item.querySelector('.question-meta span').textContent;
         const score = parseInt(scoreText.replace('分值: ', ''));
         const type = parseInt(item.getAttribute('data-type'));
 
-        const q = {
-            id: questionId,
-            content: content,
-            score: score,
-            type: type
-        };
+        const q = { id: questionId, content: content, score: score, type: type };
 
         if (isSelected) {
             if (!selectedQuestions.find(sq => sq.id === questionId)) {
@@ -550,14 +650,7 @@
 
         selectedQuestions.forEach((q, index) => {
             score += q.score;
-            html += `
-                <div class="selected-item">
-                    <span class="selected-index">${index + 1}</span>
-                    <span class="selected-content" title="${q.content}">${q.content}</span>
-                    <span class="selected-score">${q.score}分</span>
-                    <button class="remove-btn" onclick="removeQuestion(${q.id})">移除</button>
-                </div>
-            `;
+            html += '<div class="selected-item"><span class="selected-index">' + (index + 1) + '</span><span class="selected-content" title="' + q.content + '">' + q.content + '</span><span class="selected-score">' + q.score + '分</span><button class="remove-btn" onclick="removeQuestion(' + q.id + ')">移除</button></div>';
         });
 
         list.innerHTML = html;
@@ -567,7 +660,7 @@
 
     function removeQuestion(questionId) {
         selectedQuestions = selectedQuestions.filter(sq => sq.id !== questionId);
-        const checkbox = document.querySelector(`.question-checkbox[data-id="${questionId}"]`);
+        const checkbox = document.querySelector('.question-checkbox[data-id="' + questionId + '"]');
         if (checkbox) checkbox.checked = false;
         updateSelectedList();
         updateSubmitButton();
@@ -582,57 +675,13 @@
         updateQuestionHighlight();
     }
 
-    function autoSelectQuestions() {
-        const randomCountInput = document.getElementById('randomCount');
-        let count = parseInt(randomCountInput.value) || 10;
-        if (count < 1) count = 1;
-
-        const alreadySelectedIds = new Set(selectedQuestions.map(q => q.id));
-
-        const availableQuestions = [];
-        document.querySelectorAll('.question-item').forEach(item => {
-            if (item.style.display === 'none') return;
-            const id = parseInt(item.getAttribute('data-id'));
-            if (alreadySelectedIds.has(id)) return;
-            const content = item.querySelector('.question-content').textContent;
-            const scoreText = item.querySelector('.question-meta span').textContent;
-            const score = parseInt(scoreText.replace('分值: ', ''));
-            const type = parseInt(item.getAttribute('data-type'));
-            availableQuestions.push({ id, content, score, type });
-        });
-
-        if (availableQuestions.length === 0) {
-            alert('没有可选的题目（当前筛选结果中没有新题目可选题）');
-            return;
-        }
-
-        const actualCount = Math.min(count, availableQuestions.length);
-        const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5);
-        const selected = shuffled.slice(0, actualCount);
-
-        selected.forEach(q => {
-            if (!selectedQuestions.find(sq => sq.id === q.id)) {
-                selectedQuestions.push(q);
-            }
-        });
-
-        document.querySelectorAll('.question-checkbox').forEach(cb => {
-            const id = parseInt(cb.getAttribute('data-id'));
-            cb.checked = selectedQuestions.some(sq => sq.id === id);
-        });
-
-        updateSelectedList();
-        updateSubmitButton();
-        updateQuestionHighlight();
-    }
-
     function updateSubmitButton() {
         const submitBtn = document.getElementById('submitBtn');
         const title = document.getElementById('title').value.trim();
 
         if (selectedQuestions.length > 0 && title) {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = `✓ 创建试卷 (${selectedQuestions.length}题/${totalScore.textContent}分)`;
+            submitBtn.innerHTML = '✓ 创建试卷 (' + selectedQuestions.length + '题/' + document.getElementById('totalScore').textContent + '分)';
         } else {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '创建试卷';
@@ -648,28 +697,6 @@
                 item.classList.remove('selected');
             }
         });
-    }
-
-    function filterQuestions() {
-        const searchText = document.getElementById('searchBox').value.toLowerCase();
-        const typeFilter = document.getElementById('typeFilter').value;
-        const minScore = parseInt(document.getElementById('minScore').value) || 0;
-        const maxScore = parseInt(document.getElementById('maxScore').value) || Infinity;
-
-        document.querySelectorAll('.question-item').forEach(item => {
-            const content = item.querySelector('.question-content').textContent.toLowerCase();
-            const type = item.getAttribute('data-type');
-            const score = parseInt(item.querySelector('.question-meta span').textContent.replace('分值: ', ''));
-
-            const matchSearch = content.includes(searchText);
-            const matchType = typeFilter === 'all' || type === typeFilter;
-            const matchScore = score >= minScore && score <= maxScore;
-
-            item.style.display = (matchSearch && matchType && matchScore) ? 'flex' : 'none';
-        });
-
-        const visibleCount = document.querySelectorAll('.question-item[style="display: flex;"]').length;
-        document.getElementById('questionCount').textContent = visibleCount;
     }
 
     let isBoxDragging = false;
@@ -766,17 +793,5 @@
             });
         });
     }
-
-    document.addEventListener('DOMContentLoaded', initBoxSelection);
-
-    document.getElementById('searchBox').addEventListener('input', filterQuestions);
-    document.getElementById('typeFilter').addEventListener('change', filterQuestions);
-    document.getElementById('minScore').addEventListener('input', filterQuestions);
-    document.getElementById('maxScore').addEventListener('input', filterQuestions);
-    document.getElementById('title').addEventListener('input', updateSubmitButton);
-
-    document.getElementById('createForm').addEventListener('submit', function (e) {
-        document.getElementById('selectedQuestions').value = selectedQuestions.map(q => q.id).join(',');
-    });
 </script>
 {% endblock %}

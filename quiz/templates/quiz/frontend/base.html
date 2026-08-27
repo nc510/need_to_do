@@ -675,7 +675,41 @@
                 padding: 10px 12px;
             }
         }
-    </style>
+    
+    /* 通知红点 */
+    .nav-noti {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 18px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: background 0.3s ease;
+    }
+    .nav-noti:hover {
+        background: rgba(255, 255, 255, 0.18);
+    }
+    .noti-badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        background: #ff4757;
+        color: #fff;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.9);
+    }
+</style>
     {% block extra_styles %}{% endblock %}
 </head>
 
@@ -691,14 +725,21 @@
                     <ul>
                         <li><a href="{% url 'test_paper_list' %}">📋 首页</a></li>
                         {% if user.is_authenticated %}
+                        {% with role=user.profile.role|default:'student' %}
+                        {% if role == 'student' and not user.is_staff %}
+                        <li><a href="{% url 'student_class_assignments' %}">📝 我的作业</a></li>
+                        <li><a href="{% url 'class_list' %}">🏫 我的班级</a></li>
+                        <li><a href="{% url 'wrong_question_notebook' %}">❌ 错题本</a></li>
                         <li><a href="{% url 'test_history' %}">📊 答题历史</a></li>
-                        <li><a href="{% url 'user_center' %}">👤 用户中心</a></li>
+                        {% else %}
                         <li><a href="{% url 'class_list' %}">🏫 班级管理</a></li>
+                        <li><a href="{% url 'my_test_papers' %}">📑 我的试卷</a></li>
+                        {% endif %}
+                        {% endwith %}
+                        <li><a href="{% url 'user_center' %}">👤 用户中心</a></li>
                         <li class="nav-divider nav-divider-group"></li>
-                        <li class="welcome">
-                            <span class="welcome-icon">👋</span>
-                            {{ user.username }}
-                        </li>
+                        <li><a href="{% url 'notification_list' %}" class="nav-noti" title="我的通知">🔔{% if unread_notifications %}<span class="noti-badge">{{ unread_notifications }}</span>{% endif %}</a></li>
+                        <li class="welcome"><span class="welcome-icon">👋</span>{{ user.username }}</li>
                         <li><a href="{% url 'logout' %}">🚪 退出</a></li>
                         {% else %}
                         <li class="nav-divider nav-divider-group"></li>

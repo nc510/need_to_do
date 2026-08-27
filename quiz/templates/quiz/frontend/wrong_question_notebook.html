@@ -1,4 +1,5 @@
 {% extends 'quiz/frontend/base.html' %}
+{% load quiz_extras %}
 {% block title %}错题本{% endblock %}
 {% block extra_styles %}
 <style>
@@ -420,12 +421,151 @@
             margin-left: 0;
         }
     }
+
+    /* ========== 复习状态机 ========== */
+    .status-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        background: #fff;
+        padding: 12px 14px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .status-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        background: #f0f2f5;
+        color: #7f8c8d;
+        text-decoration: none;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .status-tab:hover {
+        background: #e4e7ec;
+        color: #2c3e50;
+    }
+
+    .status-tab.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+    }
+
+    .status-tab .tab-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .status-tab:not(.active) .tab-badge {
+        background: #667eea;
+        color: #fff;
+    }
+
+    .review-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .review-badge-new {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .review-badge-reviewing {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+
+    .review-badge-difficult {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .review-badge-mastered {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .review-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 7px 14px;
+        border: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .review-master {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .review-master:hover {
+        background: #4caf50;
+        color: #fff;
+        transform: translateY(-2px);
+    }
+
+    .review-mark {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .review-mark:hover {
+        background: #2196f3;
+        color: #fff;
+        transform: translateY(-2px);
+    }
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>📚 错题本</h1>
     <p>复习和巩固您做错的题目，查漏补缺</p>
+</div>
+
+<!-- 状态筛选 tabs -->
+<div class="status-tabs">
+    <a href="?status=all" class="status-tab {% if status == 'all' %}active{% endif %}">
+        📚 全部 <span class="tab-badge">{{ review_stats.total|default:0 }}</span>
+    </a>
+    <a href="?status=pending" class="status-tab {% if status == 'pending' %}active{% endif %}">
+        ⏰ 待复习 <span class="tab-badge">{{ review_stats.pending|default:0 }}</span>
+    </a>
+    <a href="?status=new" class="status-tab {% if status == 'new' %}active{% endif %}">
+        🆕 未复习 <span class="tab-badge">{{ review_stats.new|default:0 }}</span>
+    </a>
+    <a href="?status=reviewing" class="status-tab {% if status == 'reviewing' %}active{% endif %}">
+        📝 复习中 <span class="tab-badge">{{ review_stats.reviewing|default:0 }}</span>
+    </a>
+    <a href="?status=difficult" class="status-tab {% if status == 'difficult' %}active{% endif %}">
+        🔥 顽固错题 <span class="tab-badge">{{ review_stats.difficult|default:0 }}</span>
+    </a>
+    <a href="?status=mastered" class="status-tab {% if status == 'mastered' %}active{% endif %}">
+        ✅ 已掌握 <span class="tab-badge">{{ review_stats.mastered|default:0 }}</span>
+    </a>
 </div>
 
 {% if wrong_questions %}
@@ -444,6 +584,7 @@
 
     <ul class="question-list">
         {% for wrong_question in wrong_questions %}
+        {% with wq=wrong_question %}
         <li class="question-card">
             <div class="question-header">
                 <div class="question-checkbox">
@@ -452,23 +593,28 @@
                 </div>
                 <span class="question-number">{{ forloop.counter }}</span>
                 <span class="question-content">{{ wrong_question.question.content }}</span>
-                <span class="question-type">{% if wrong_question.question.type == 1 %}单选题{% elif wrong_question.question.type == 2 %}多选题{% else %}判断题{% endif %}</span>
+                <span class="question-type">
+                    {% with qt=wrong_question.question.type %}
+                    {% if qt == 1 %}单选题{% elif qt == 2 %}多选题{% else %}判断题{% endif %}
+                    {% endwith %}
+                </span>
             </div>
 
             {% if wrong_question.question.type == 1 %}
             {% if wrong_question.question.options %}
             <div class="question-options">
                 {% for key, value in wrong_question.question.options.items %}
-                <div
-                    class="option-item {% if key == wrong_question.question.correct_answer %}correct{% endif %} {% if key == wrong_question.user_answer and key != wrong_question.question.correct_answer %}wrong{% endif %}">
+                {% with ca=wq.question.correct_answer ua=wq.user_answer %}
+                <div class="{% option_class key ca ua %}">
                     <span class="option-key">{{ key }}.</span>
                     <span class="option-value">{{ value }}</span>
-                    {% if key == wrong_question.question.correct_answer %}
+                    {% if key == ca %}
                     <span class="option-tag correct-tag">正确答案</span>
-                    {% elif key == wrong_question.user_answer %}
+                    {% elif key == ua %}
                     <span class="option-tag wrong-tag">您的答案</span>
                     {% endif %}
                 </div>
+                {% endwith %}
                 {% endfor %}
             </div>
             {% endif %}
@@ -476,40 +622,41 @@
             {% if wrong_question.question.options %}
             <div class="question-options">
                 {% for key, value in wrong_question.question.options.items %}
-                <div
-                    class="option-item {% if key in wrong_question.question.correct_answer %}correct{% endif %} {% if key in wrong_question.user_answer and key not in wrong_question.question.correct_answer %}wrong{% endif %}">
+                {% with ca=wq.question.correct_answer ua=wq.user_answer %}
+                <div class="{% option_class key ca ua True %}">
                     <span class="option-key">{{ key }}.</span>
                     <span class="option-value">{{ value }}</span>
-                    {% if key in wrong_question.question.correct_answer %}
+                    {% if key in ca %}
                     <span class="option-tag correct-tag">正确答案</span>
-                    {% elif key in wrong_question.user_answer %}
+                    {% elif key in ua %}
                     <span class="option-tag wrong-tag">您的答案</span>
                     {% endif %}
                 </div>
+                {% endwith %}
                 {% endfor %}
             </div>
             {% endif %}
             {% elif wrong_question.question.type == 3 %}
+            {% with ca=wq.question.correct_answer ua=wq.user_answer %}
             <div class="question-options">
-                <div
-                    class="option-item {% if '对' == wrong_question.question.correct_answer %}correct{% endif %} {% if '对' == wrong_question.user_answer and '对' != wrong_question.question.correct_answer %}wrong{% endif %}">
+                <div class="{% option_class '对' ca ua %}">
                     <span class="option-key">对</span>
-                    {% if '对' == wrong_question.question.correct_answer %}
+                    {% if '对' == ca %}
                     <span class="option-tag correct-tag">正确答案</span>
-                    {% elif '对' == wrong_question.user_answer %}
+                    {% elif '对' == ua %}
                     <span class="option-tag wrong-tag">您的答案</span>
                     {% endif %}
                 </div>
-                <div
-                    class="option-item {% if '错' == wrong_question.question.correct_answer %}correct{% endif %} {% if '错' == wrong_question.user_answer and '错' != wrong_question.question.correct_answer %}wrong{% endif %}">
+                <div class="{% option_class '错' ca ua %}">
                     <span class="option-key">错</span>
-                    {% if '错' == wrong_question.question.correct_answer %}
+                    {% if '错' == ca %}
                     <span class="option-tag correct-tag">正确答案</span>
-                    {% elif '错' == wrong_question.user_answer %}
+                    {% elif '错' == ua %}
                     <span class="option-tag wrong-tag">您的答案</span>
                     {% endif %}
                 </div>
             </div>
+            {% endwith %}
             {% endif %}
 
             <div class="answer-section">
@@ -528,6 +675,22 @@
                     <span class="answer-label">添加时间：</span>
                     <span class="answer-value">{{ wrong_question.added_at|date:"Y-m-d" }}</span>
                 </div>
+                <div class="answer-item">
+                    <span class="answer-label">复习状态：</span>
+                    <span class="review-badge review-badge-{{ wrong_question.review_status }}">
+                        {{ wrong_question.get_review_status_display }}
+                    </span>
+                    {% if wrong_question.review_count %}
+                    <span class="answer-value">
+                        已复习 {{ wrong_question.review_count }} 次
+                    </span>
+                    {% endif %}
+                    {% if wrong_question.next_review_at %}
+                    {% with nr=wrong_question.next_review_at|date:"m-d H:i" %}
+                    <span class="answer-value">📅 下次：{{ nr }}</span>
+                    {% endwith %}
+                    {% endif %}
+                </div>
             </div>
 
             {% if wrong_question.question.explanation %}
@@ -538,12 +701,17 @@
             {% endif %}
 
             <div class="card-actions">
+                <button type="button" class="review-btn review-master"
+                    onclick="reviewQuestion({{ wrong_question.id }}, 'mastered')">✅ 已掌握</button>
+                <button type="button" class="review-btn review-mark"
+                    onclick="reviewQuestion({{ wrong_question.id }}, 'reviewing')">📝 记录复习</button>
                 <a href="{% url 'delete_wrong_question' wrong_question.id %}" class="delete-btn"
                     onclick="return confirm('确定要删除这道错题吗？');">
                     🗑️ 删除
                 </a>
             </div>
         </li>
+        {% endwith %}
         {% endfor %}
     </ul>
 
@@ -555,13 +723,15 @@
         <span class="disabled">← 上一页</span>
         {% endif %}
 
+        {% with cur=wrong_questions.number %}
         {% for i in wrong_questions.paginator.page_range %}
-        {% if wrong_questions.number == i %}
+        {% if cur == i %}
         <span class="current">{{ i }}</span>
-        {% elif i >= wrong_questions.number|add:'-2' and i <= wrong_questions.number|add:'2' %} <a href="?page={{ i }}">
+        {% elif i >= cur|add:'-2' and i <= cur|add:'2' %} <a href="?page={{ i }}">
             {{ i }}</a>
             {% endif %}
             {% endfor %}
+            {% endwith %}
 
             {% if wrong_questions.has_next %}
             <a href="?page={{ wrong_questions.next_page_number }}">下一页 →</a>
@@ -573,6 +743,19 @@
 </form>
 
 <script>
+    // 复习标记：创建临时 form POST，避免与组卷 form 嵌套
+    function reviewQuestion(wqId, action) {
+        if (!confirm(action === 'mastered' ? '确认标记为「已掌握」？将不再提醒复习。' : '确认记录一次复习？将按间隔重复算法安排下次复习。')) return;
+        var csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/quiz/wrong/' + wqId + '/review/';
+        form.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken" value="' + csrf + '">' +
+            '<input type="hidden" name="action" value="' + action + '">';
+        document.body.appendChild(form);
+        form.submit();
+    }
+
     document.getElementById('select-all').addEventListener('click', function () {
         var checkboxes = document.querySelectorAll('input[name="selected_questions"]');
         checkboxes.forEach(function (checkbox) {

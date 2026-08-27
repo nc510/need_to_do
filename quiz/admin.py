@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.http import HttpResponseRedirect
 from django import forms
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification
 
 admin.site.site_header = '📚 在线考试系统管理后台'
 admin.site.site_title = '考试系统管理'
@@ -111,8 +111,9 @@ class CustomUserAdmin(UserAdmin):
         super().save_model(request, obj, form, change)
 
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'name', 'approval_status', 'phone_number', 'class_obj', 'created_at', 'updated_at')
-    list_filter = ('approval_status', 'class_obj', 'created_at')
+    list_display = ('user', 'name', 'role', 'approval_status', 'phone_number', 'class_obj', 'created_at', 'updated_at')
+    list_filter = ('role', 'approval_status', 'class_obj', 'created_at')
+    list_editable = ('role', 'approval_status')
     search_fields = ('user__username', 'user__email', 'name', 'phone_number')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at')
@@ -148,13 +149,13 @@ class QuestionAdmin(admin.ModelAdmin):
     make_private.short_description = '设为私有'
 
 class TestPaperAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'is_public', 'created_by', 'created_at', 'action_buttons')
+    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'is_public', 'duration', 'max_attempts', 'created_by', 'created_at', 'action_buttons')
     list_display_links = ('id', 'title')
     list_filter = ('is_published', 'is_public', 'created_by', 'created_at')
     search_fields = ('title', 'description', 'created_by')
     ordering = ('-created_at',)
     filter_horizontal = ('questions',)
-    fields = ('title', 'description', 'questions', 'is_published', 'is_public')
+    fields = ('title', 'description', 'questions', 'is_published', 'is_public', 'duration', 'max_attempts', 'start_time', 'end_time')
     readonly_fields = ('total_score', 'created_at', 'created_by')
     change_list_template = 'admin/quiz/testpaper/change_list.html'
     change_form_template = 'admin/quiz/testpaper/change_form.html'
@@ -239,14 +240,32 @@ class AnswerRecordAdmin(admin.ModelAdmin):
 
 
 class WrongQuestionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'question', 'user_answer', 'correct_answer_display', 'added_at')
-    list_filter = ('added_at',)
+    list_display = ('user', 'question', 'review_status', 'review_count', 'next_review_at', 'user_answer', 'correct_answer_display', 'added_at')
+    list_filter = ('review_status', 'added_at')
     search_fields = ('user__username', 'question__content')
     ordering = ('-added_at',)
+    list_editable = ('review_status',)
 
     def correct_answer_display(self, obj):
         return format_html('<span style="color: #4caf50; font-weight: bold;">{}</span>', obj.question.correct_answer)
     correct_answer_display.short_description = '正确答案'
+
+
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'sender', 'type', 'title', 'is_read', 'created_at')
+    list_filter = ('type', 'is_read', 'created_at')
+    search_fields = ('recipient__username', 'sender__username', 'title')
+    ordering = ('-created_at',)
+    list_editable = ('is_read',)
+    actions = ['mark_read', 'mark_unread']
+
+    def mark_read(self, request, queryset):
+        queryset.update(is_read=True)
+    mark_read.short_description = '标记为已读'
+
+    def mark_unread(self, request, queryset):
+        queryset.update(is_read=False)
+    mark_unread.short_description = '标记为未读'
 
 
 class ClassAdminAdmin(admin.ModelAdmin):
@@ -393,3 +412,4 @@ admin.site.register(Subject, SubjectAdmin)
 admin.site.register(Chapter, ChapterAdmin)
 admin.site.register(Section, SectionAdmin)
 admin.site.register(KnowledgePoint, KnowledgePointAdmin)
+admin.site.register(Notification, NotificationAdmin)

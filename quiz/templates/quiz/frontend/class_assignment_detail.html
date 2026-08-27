@@ -277,25 +277,26 @@
         <div class="header-actions">
             <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回列表</a>
             {% if assignment.status == 0 %}
-            <a href="{% url 'publish_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}"
-                class="btn btn-primary">🚀 发布作业</a>
+            <a href="{% url 'publish_class_assignment' class_obj.id assignment.id %}" class="btn btn-primary">🚀
+                发布作业</a>
             {% endif %}
             {% if assignment.status == 1 %}
             {% if is_admin %}
             {% if assignment.is_allow_exam %}
-            <a href="{% url 'close_exam' class_id=class_obj.id assignment_id=assignment.id %}"
-                class="btn btn-warning">🔒 {% if assignment.type == 1 %}关闭作业{% else %}关闭考试{% endif %}</a>
+            <a href="{% url 'close_exam' class_obj.id assignment.id %}" class="btn btn-warning">🔒
+                {% if assignment.type == 1 %}关闭作业{% else %}关闭考试{% endif %}
+            </a>
             {% else %}
-            <a href="{% url 'allow_exam' class_id=class_obj.id assignment_id=assignment.id %}"
-                class="btn btn-success">🔓 {% if assignment.type == 1 %}允许作业{% else %}允许考试{% endif %}</a>
+            <a href="{% url 'allow_exam' class_obj.id assignment.id %}" class="btn btn-success">🔓
+                {% if assignment.type == 1 %}允许作业{% else %}允许考试{% endif %}
+            </a>
             {% endif %}
-            <a href="{% url 'reset_exam_status' class_id=class_obj.id assignment_id=assignment.id %}"
-                class="btn btn-danger">🗑️ 重置状态</a>
+            <a href="{% url 'reset_exam_status' class_obj.id assignment.id %}" class="btn btn-danger">🗑️ 重置状态</a>
             {% endif %}
             {% endif %}
             {% if is_admin %}
-            <a href="{% url 'delete_class_assignment' class_id=class_obj.id assignment_id=assignment.id %}"
-                class="btn btn-danger" style="background: #dc3545;">🗑️ 删除作业</a>
+            <a href="{% url 'delete_class_assignment' class_obj.id assignment.id %}" class="btn btn-danger"
+                style="background: #dc3545;">🗑️ 删除作业</a>
             {% endif %}
         </div>
     </div>

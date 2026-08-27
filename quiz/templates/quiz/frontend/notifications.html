@@ -1,0 +1,145 @@
+{% extends 'quiz/frontend/base.html' %}
+{% block title %}我的通知{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+    .page-header h1 { font-size: 24px; font-weight: 700; color: #2c3e50; margin: 0; }
+    .read-all-btn {
+        padding: 9px 18px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .read-all-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(102, 126, 234, 0.4); }
+    .read-all-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .notification-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+    .notification-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 16px 20px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .notification-item.unread { border-left: 4px solid #667eea; }
+    .notification-item.unread::before {
+        content: '';
+        position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .notification-item:hover { box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12); transform: translateY(-2px); }
+    .noti-icon {
+        flex-shrink: 0;
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px;
+        background: linear-gradient(135deg, #f0f2ff 0%, #e8ebff 100%);
+    }
+    .noti-body { flex: 1; min-width: 0; }
+    .noti-title { font-size: 15px; font-weight: 600; color: #2c3e50; margin: 0 0 4px 0; }
+    .notification-item.unread .noti-title { font-weight: 700; }
+    .noti-content { font-size: 13px; color: #7f8c8d; margin: 0 0 6px 0; line-height: 1.5; }
+    .noti-meta { font-size: 12px; color: #95a5a6; display: flex; gap: 14px; flex-wrap: wrap; }
+    .noti-meta .sender { color: #667eea; }
+    .noti-unread-dot {
+        flex-shrink: 0;
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        background: #667eea;
+        margin-top: 6px;
+    }
+    .noti-type-badge {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 8px;
+    }
+    .noti-type-assignment { background: #e3f2fd; color: #1976d2; }
+    .noti-type-submit { background: #fff3e0; color: #f57c00; }
+    .noti-type-approval { background: #f3e5f5; color: #7b1fa2; }
+    .noti-type-grade { background: #e8f5e9; color: #2e7d32; }
+    .noti-type-system { background: #f5f5f5; color: #616161; }
+    .noti-link {
+        display: inline-flex; align-items: center; gap: 4px;
+        margin-top: 6px;
+        padding: 6px 14px;
+        background: #f0f2ff;
+        color: #667eea;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .noti-link:hover { background: #667eea; color: #fff; }
+    .empty-state { text-align: center; padding: 60px 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+    .empty-state .icon { font-size: 56px; margin-bottom: 14px; }
+    .empty-state h3 { margin: 0 0 8px 0; color: #2c3e50; font-size: 18px; }
+    .empty-state p { margin: 0; color: #7f8c8d; font-size: 14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🔔 我的通知</h1>
+    <form method="post" action="{% url 'notification_read_all' %}">
+        {% csrf_token %}
+        <button type="submit" class="read-all-btn" {% if unread_count == 0 %}disabled{% endif %}>
+            ✓ 全部已读 {% if unread_count %}({{ unread_count }}){% endif %}
+        </button>
+    </form>
+</div>
+
+{% if notifications %}
+<ul class="notification-list">
+    {% for noti in notifications %}
+    <li class="notification-item {% if not noti.is_read %}unread{% endif %}">
+        <div class="noti-icon">
+            {% if noti.type == 'assignment' %}📝{% elif noti.type == 'submit' %}📤{% elif noti.type == 'approval' %}🏫{% elif noti.type == 'grade' %}🏆{% else %}📢{% endif %}
+        </div>
+        <div class="noti-body">
+            <p class="noti-title">
+                <span class="noti-type-badge noti-type-{{ noti.type }}">{{ noti.get_type_display }}</span>{{ noti.title }}
+            </p>
+            {% if noti.content %}<p class="noti-content">{{ noti.content }}</p>{% endif %}
+            <div class="noti-meta">
+                {% if noti.sender %}<span class="sender">👤 {{ noti.sender.username }}</span>{% endif %}
+                <span>🕐 {{ noti.created_at|date:"Y-m-d H:i" }}</span>
+            </div>
+            {% if noti.link %}
+            <a href="{{ noti.link }}" class="noti-link">查看详情 →</a>
+            {% endif %}
+        </div>
+        {% if not noti.is_read %}<div class="noti-unread-dot" title="未读"></div>{% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state">
+    <div class="icon">📭</div>
+    <h3>暂无通知</h3>
+    <p>有新作业、申请或提交时这里会提醒您</p>
+</div>
+{% endif %}
+{% endblock %}

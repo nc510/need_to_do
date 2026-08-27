@@ -1,5 +1,6 @@
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.http import HttpResponse
+from django.conf import settings
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils.exceptions import InvalidFileException
@@ -90,9 +91,17 @@ def calculate_score(questions, user_answers):
     return score, correct_count, wrong_count, total_count, question_results
 
 def parse_datetime_local(datetime_str):
+    """解析本地时间字符串，返回 aware datetime（带时区）。
+    避免 Django 发出 naive datetime 警告，且与 timezone.now() 比较时类型一致。
+    """
+    from django.utils import timezone
     import datetime
     datetime_clean = datetime_str.replace('T', ' ')
-    return datetime.datetime.strptime(datetime_clean, '%Y-%m-%d %H:%M')
+    naive = datetime.datetime.strptime(datetime_clean, '%Y-%m-%d %H:%M')
+    # USE_TZ=True 时，将 naive 转为 aware；USE_TZ=False 时直接返回 naive
+    if settings.USE_TZ:
+        return timezone.make_aware(naive)
+    return naive
 
 class ExcelImporter:
     HEADER_ALIASES = {

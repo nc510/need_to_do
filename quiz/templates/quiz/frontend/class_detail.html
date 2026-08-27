@@ -190,6 +190,43 @@
             <a href="{% url 'class_list' %}" class="btn btn-secondary">← 返回列表</a>
         </div>
     </div>
+    {% if is_admin and class_stats %}
+    <div class="section">
+        <h2 class="section-title">📊 班级数据看板</h2>
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <div class="stat-icon blue">👥</div>
+                <div class="stat-content"><h3>班级人数</h3><div class="value">{{ class_stats.student_count }}</div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">📝</div>
+                <div class="stat-content"><h3>已发布作业</h3><div class="value">{{ class_stats.published_count }}<span style="font-size:14px;color:#95a5a6">/{{ class_stats.assignment_count }}</span></div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon orange">📈</div>
+                <div class="stat-content"><h3>班级平均得分率</h3><div class="value">{{ class_stats.avg_rate }}%</div></div>
+            </div>
+        </div>
+        {% if assignment_progress %}
+        <div style="margin-top:18px">
+            <h3 style="font-size:15px;color:#2c3e50;margin:0 0 12px">作业完成情况</h3>
+            {% for item in assignment_progress %}
+            <div style="margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#555;margin-bottom:4px;gap:8px">
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ item.assignment.title }}">{{ item.assignment.title }}</span>
+                    <span style="color:#95a5a6;white-space:nowrap">{{ item.submitted }}/{{ item.total }} 已提交（{{ item.rate }}%）</span>
+                </div>
+                <div style="background:#ecf0f1;border-radius:6px;height:10px;overflow:hidden">
+                    <div style="height:100%;width:{{ item.rate }}%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:6px"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:#95a5a6;font-size:13px;margin-top:12px">暂无已发布作业</p>
+        {% endif %}
+    </div>
+    {% endif %}
     <div class="section">
         <h2 class="section-title">📝 班级作业</h2>
         <div class="btn-group" style="margin-bottom:20px">
@@ -213,9 +250,9 @@
                     <div style="font-size:12px;color:#888;margin-top:2px">申请时间：{{ application.created_at|date:"Y-m-d H:i" }}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px">
-                    <a href="{% url 'approve_application' class_id=class_obj.id application_id=application.id %}"
+                    <a href="{% url 'approve_application' class_obj.id application.id %}"
                         class="btn btn-success" style="padding:6px 12px;font-size:12px">通过</a>
-                    <a href="{% url 'reject_application' class_id=class_obj.id application_id=application.id %}"
+                    <a href="{% url 'reject_application' class_obj.id application.id %}"
                         class="btn btn-danger" style="padding:6px 12px;font-size:12px">拒绝</a>
                 </div>
             </li>

@@ -227,14 +227,14 @@
     <div class="questions-container">
         {% for answer_record in answer_records %}
         {% with question=answer_record.question %}
-        {% with q_content=answer_record.original_question_content|default:question.content %}
+        {% with qc=answer_record.original_question_content|default:question.content %}
         {% with q_type=answer_record.original_question_type|default:question.type %}
         {% with q_options=answer_record.original_options %}
-        {% with q_explanation=answer_record.original_explanation|default:question.explanation %}
+        {% with qe=answer_record.original_explanation|default:question.explanation %}
         <div class="question-item">
             <div class="question-header">
                 <div class="question-number">{{ forloop.counter }}</div>
-                <div class="question-content">{{ q_content }}</div>
+                <div class="question-content">{{ qc }}</div>
                 <div class="question-type">
                     {% if q_type == 1 %}单选题{% elif q_type == 2 %}多选题{% else %}判断题{% endif %}
                 </div>
@@ -296,10 +296,10 @@
                         class="incorrect">错误</span>{% endif %}</p>
             </div>
 
-            {% if q_explanation %}
+            {% if qe %}
             <div class="explanation">
                 <strong>解析：</strong>
-                <p>{{ q_explanation }}</p>
+                <p>{{ qe }}</p>
             </div>
             {% endif %}
         </div>

@@ -131,6 +131,11 @@ class TestPaper(models.Model):
     is_published = models.BooleanField(verbose_name='是否发布', default=False)
     is_public = models.BooleanField(verbose_name='是否公开', default=True, help_text='否表示私有试卷，只有创建者和后台能看到')
     source = models.CharField(max_length=20, verbose_name='试卷来源', choices=SOURCE_CHOICES, default='frontend')
+    # ===== P2-3 考试控制字段 =====
+    duration = models.IntegerField(verbose_name='考试时长(分钟)', null=True, blank=True, help_text='为空表示不限时；设置后答题页显示倒计时，到时自动交卷')
+    max_attempts = models.IntegerField(verbose_name='最大答题次数', null=True, blank=True, help_text='为空表示不限次数')
+    start_time = models.DateTimeField(verbose_name='开放开始时间', null=True, blank=True, help_text='为空表示立即开放')
+    end_time = models.DateTimeField(verbose_name='开放结束时间', null=True, blank=True, help_text='为空表示无截止')
 
     class Meta:
         verbose_name = '试卷'
@@ -139,6 +144,11 @@ class TestPaper(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def is_exam_controlled(self):
+        # 是否启用考试控制（限时/限次/时间窗口），供模板用短名替代超长多条件 if
+        return bool(self.duration or self.max_attempts or self.start_time or self.end_time)
 
     def save(self, *args, **kwargs):
         # total_score 由 m2m_changed 信号和显式赋值管理，save 不自动重算
@@ -159,6 +169,14 @@ class Profile(models.Model):
     name = models.CharField(max_length=50, verbose_name='姓名', blank=True, null=True)
     APPROVAL_STATUS = ((0, '未审核'), (1, '审核通过'), (2, '审核拒绝'))
     approval_status = models.IntegerField(choices=APPROVAL_STATUS, default=0, verbose_name='审核状态')
+    # 用户角色：student 学生 / teacher 教师 / admin 管理员
+    # 与 is_staff 组合判断权限：is_staff=True 的用户视为管理员，可访问后台题库管理
+    ROLE_CHOICES = (
+        ('student', '学生'),
+        ('teacher', '教师'),
+        ('admin', '管理员'),
+    )
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student', verbose_name='用户角色')
     phone_number = models.CharField(max_length=11, verbose_name='手机号码', blank=True, null=True, unique=True)
     qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)
     # 关联班级（允许为空，表示未分配班级）
@@ -229,6 +247,17 @@ class WrongQuestion(models.Model):
     user_answer = models.CharField(max_length=10, verbose_name='用户错误答案', null=True, blank=True)
     correct_answer = models.CharField(max_length=10, verbose_name='正确答案', null=True, blank=True)
     added_at = models.DateTimeField(auto_now_add=True, verbose_name='添加时间')
+    # 复习状态机 + 间隔重复（艾宾浩斯遗忘曲线简化版）
+    REVIEW_STATUS_CHOICES = (
+        ('new', '未复习'),
+        ('reviewing', '复习中'),
+        ('mastered', '已掌握'),
+        ('difficult', '顽固错题'),
+    )
+    review_status = models.CharField(max_length=10, choices=REVIEW_STATUS_CHOICES, default='new', verbose_name='复习状态')
+    review_count = models.IntegerField(default=0, verbose_name='复习次数')
+    last_reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='上次复习时间')
+    next_review_at = models.DateTimeField(null=True, blank=True, verbose_name='下次复习时间')
 
     class Meta:
         verbose_name = '错题本'
@@ -319,6 +348,10 @@ class ClassAssignment(models.Model):
     STATUS_CHOICE = ((0, '未发布'), (1, '已发布'))
     status = models.IntegerField(choices=STATUS_CHOICE, default=0, verbose_name='状态')
     is_allow_exam = models.BooleanField(default=True, verbose_name='是否允许考试')
+    # schema 同步：数据库列 is_random/random_config 由历史迁移添加但文件已丢失，
+    # 此处补回模型字段（迁移用 SeparateDatabaseAndState 只更新 state，见 0032）
+    is_random = models.BooleanField(default=False, verbose_name='是否随机出题')
+    random_config = models.JSONField(default=dict, blank=True, verbose_name='随机出题配置')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, verbose_name='创建人', null=True, blank=True, related_name='created_assignments')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     published_at = models.DateTimeField(verbose_name='发布时间', null=True, blank=True)
@@ -331,11 +364,9 @@ class ClassAssignment(models.Model):
     def __str__(self):
         return f'{self.class_obj.name} - {self.title}'
 
-    def get_status_display(self):
-        return dict(self.STATUS_CHOICE).get(self.status, '未知')
-
-    def get_type_display(self):
-        return dict(self.TYPE_CHOICE).get(self.type, '未知')
+    # P2-12：移除手动 get_status_display / get_type_display——
+    # status/type 字段已带 choices= 参数，Django 自动生成 get_FOO_display；
+    # 且全项目（模板/Python）均未调用这两个手动方法，属冗余代码。
 
     def get_completed_count(self):
         """获取已完成人数"""
@@ -369,3 +400,49 @@ class ClassAssignmentRecord(models.Model):
 
     def __str__(self):
         return f'{self.user.username} - {self.assignment.title}'
+
+
+class Notification(models.Model):
+    """站内通知系统：作业布置、申请审核、作业提交等事件触达"""
+    NOTI_TYPES = (
+        ('assignment', '新作业'),
+        ('submit', '作业提交'),
+        ('approval', '申请通知'),
+        ('grade', '成绩反馈'),
+        ('system', '系统通知'),
+    )
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='接收人', related_name='notifications')
+    sender = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='发送人', related_name='sent_notifications')
+    type = models.CharField(max_length=20, choices=NOTI_TYPES, verbose_name='通知类型')
+    title = models.CharField(max_length=200, verbose_name='标题')
+    content = models.TextField(blank=True, default='', verbose_name='内容')
+    link = models.CharField(max_length=200, blank=True, default='', verbose_name='跳转链接')
+    is_read = models.BooleanField(default=False, verbose_name='是否已读')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    class Meta:
+        verbose_name = '通知'
+        verbose_name_plural = '通知'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.recipient.username} - {self.title}'
+
+    @classmethod
+    def notify(cls, recipient, sender, ntype, title, content='', link=''):
+        """快捷创建通知（单条）"""
+        return cls.objects.create(
+            recipient=recipient, sender=sender, type=ntype,
+            title=title, content=content, link=link,
+        )
+
+    @classmethod
+    def notify_many(cls, recipients, sender, ntype, title, content='', link=''):
+        """批量创建通知（给多人），返回创建条数"""
+        objs = [cls(
+            recipient=r, sender=sender, type=ntype,
+            title=title, content=content, link=link,
+        ) for r in recipients if r]
+        if objs:
+            cls.objects.bulk_create(objs)
+        return len(objs)
