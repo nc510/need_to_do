@@ -20,6 +20,13 @@ RATE_LIMITS = {
     ('/quiz/', 60, 100),                # 其他quiz路径：1分钟最多100次
 }
 
+# 不参与限流的路径：验证码图片接口本身无业务副作用，
+# 且机房/校园网共用同一出口 IP，高频刷新会被误伤成 403，
+# 导致图片加载失败而验证码必然校验不通过
+RATE_LIMIT_EXCLUDE = (
+    '/quiz/captcha/',
+)
+
 # 可疑的User-Agent列表
 SUSPICIOUS_USER_AGENTS = [
     'bot', 'spider', 'crawler', 'scrapy', 'curl', 'wget',
@@ -59,6 +66,9 @@ def check_rate_limit(ip, path):
     首次用 cache.add 设置 TTL，后续 cache.incr 不重置 TTL。
     原实现 cache.set 每次重置 TTL，持续请求会无限续期，限流永不过期。
     """
+    if path.startswith(RATE_LIMIT_EXCLUDE):
+        return True, None
+
     for pattern, window, max_requests in RATE_LIMITS:
         if path.startswith(pattern):
             key = f"ratelimit:{ip}:{pattern}"

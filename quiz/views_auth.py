@@ -7,8 +7,10 @@ def login_view(request):
     
     if request.method == 'POST':
         captcha = request.POST.get('captcha', '').strip()
-        expected_captcha = cache.get(f'captcha:{request.session.session_key}', '')
-        
+        # 验证码存在各自的 session 中：匿名访问时 session_key 为 None，
+        # 用 cache + session_key 做 key 会导致所有访客共用一个验证码，并发登录必然误判
+        expected_captcha = request.session.pop('captcha_text', '')
+
         if not captcha or captcha.lower() != expected_captcha.lower():
             messages.error(request, '验证码错误，请重试')
             return render(request, 'quiz/frontend/login.html')
@@ -74,13 +76,8 @@ def login_view(request):
         else:
             messages.error(request, '用户名/手机号码或密码错误')
     
-    captcha_text = generate_captcha_text()
-    captcha_image = generate_captcha_image(captcha_text)
-    cache.set(f'captcha:{request.session.session_key}', captcha_text, 300)
-    
-    return render(request, 'quiz/frontend/login.html', {
-        'captcha_image': captcha_image
-    })
+    # 验证码图片由 /quiz/captcha/ 接口生成并写入 session，此处无需再生成
+    return render(request, 'quiz/frontend/login.html')
 
 def register(request):
     if request.user.is_authenticated:
@@ -88,8 +85,8 @@ def register(request):
     
     if request.method == 'POST':
         captcha = request.POST.get('captcha', '').strip()
-        expected_captcha = cache.get(f'captcha:{request.session.session_key}', '')
-        
+        expected_captcha = request.session.pop('captcha_text', '')
+
         if not captcha or captcha.lower() != expected_captcha.lower():
             messages.error(request, '验证码错误，请重试')
             return redirect('register')
@@ -167,7 +164,7 @@ def approval_pending(request):
 def captcha_image(request):
     captcha_text = generate_captcha_text()
     captcha_buffer = generate_captcha_image(captcha_text)
-    cache.set(f'captcha:{request.session.session_key}', captcha_text, 300)
+    request.session['captcha_text'] = captcha_text
     return HttpResponse(captcha_buffer.getvalue(), content_type='image/png')
 
 def refresh_captcha(request):
