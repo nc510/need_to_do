@@ -8,9 +8,9 @@ from django.http import HttpResponseRedirect
 from django import forms
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification
 
-admin.site.site_header = '📚 在线考试系统管理后台'
-admin.site.site_title = '考试系统管理'
-admin.site.index_title = '欢迎使用在线考试系统管理后台'
+admin.site.site_header = '📚 来斩题 - 在线考试系统管理后台'
+admin.site.site_title = '来斩题 - 在线考试系统'
+admin.site.index_title = '欢迎使用来斩题 - 在线考试系统管理后台'
 
 class CustomUserChangeForm(UserChangeForm):
     class Meta(UserChangeForm.Meta):

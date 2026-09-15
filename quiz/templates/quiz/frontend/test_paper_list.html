@@ -1,6 +1,6 @@
 {% extends 'quiz/frontend/base.html' %}
 {% load quiz_extras %}
-{% block title %}在线考试系统{% endblock %}
+{% block title %}来斩题 - 在线考试系统{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -299,6 +299,125 @@
         font-weight: 600;
     }
 
+    /* ========== 我的作答状态 ========== */
+    .paper-tags {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .status-new {
+        background: #eef1f5;
+        color: #7f8c8d;
+    }
+
+    .status-doing {
+        background: #fff4e5;
+        color: #e67e22;
+    }
+
+    .status-done {
+        background: #e8f8ef;
+        color: #27ae60;
+    }
+
+    .status-upcoming {
+        background: #eef1f5;
+        color: #95a5a6;
+    }
+
+    .status-ended {
+        background: #fdecea;
+        color: #e74c3c;
+    }
+
+    .my-status-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 8px 10px;
+        margin-bottom: 12px;
+        background: #fafbff;
+        border-left: 3px solid #667eea;
+        border-radius: 8px;
+        font-size: 12px;
+        color: #7f8c8d;
+        line-height: 1.5;
+    }
+
+    .my-status-line.status-done {
+        border-left-color: #27ae60;
+    }
+
+    .my-status-line.status-doing {
+        border-left-color: #e67e22;
+    }
+
+    .my-status-line.status-ended {
+        border-left-color: #e74c3c;
+    }
+
+    .my-status-line strong {
+        color: #2c3e50;
+    }
+
+    /* ========== 我的完成进度 ========== */
+    .my-progress {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 14px 20px;
+        margin-bottom: 24px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .my-progress-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #2c3e50;
+        white-space: nowrap;
+    }
+
+    .my-progress-track {
+        flex: 1;
+        min-width: 120px;
+        height: 8px;
+        background: #eef1f5;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .my-progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 999px;
+        transition: width 0.4s ease;
+    }
+
+    .my-progress-value {
+        font-size: 13px;
+        font-weight: 700;
+        color: #667eea;
+        white-space: nowrap;
+    }
+
     .test-paper-title {
         font-size: 16px;
         font-weight: 700;
@@ -536,7 +655,7 @@
 {% block content %}
 <!-- Hero 横幅 -->
 <section class="hero">
-    <h1>📚 在线考试系统</h1>
+    <h1>📚 来斩题 - 在线考试系统</h1>
     <p class="hero-subtitle">海量题库 · 智能组卷 · 检验学习成果</p>
     <div class="hero-stats">
         <div class="hero-stat">
@@ -608,6 +727,17 @@
 {% endwith %}
 {% endif %}
 
+<!-- 登录用户：我的试卷完成进度 -->
+{% if user.is_authenticated and progress_total %}
+<div class="my-progress">
+    <span class="my-progress-label">🎯 我的完成进度</span>
+    <div class="my-progress-track">
+        <div class="my-progress-fill" style="width: {{ progress_rate }}%;"></div>
+    </div>
+    <span class="my-progress-value">已作答 {{ progress_done }} / {{ progress_total }} 份（{{ progress_rate }}%）</span>
+</div>
+{% endif %}
+
 <!-- 试卷列表区 -->
 <div class="section-header">
     <h2>📋 全站试卷</h2>
@@ -624,12 +754,20 @@
 <form class="filter-bar" method="get">
     <input type="text" name="search" value="{{ search|default:'' }}" placeholder="🔍 搜索试卷标题或描述..." class="search-input">
     <select name="sort" class="sort-select">
-        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>最新发布</option>
+        <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>发布时间（早→晚）</option>
+        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>发布时间（晚→早）</option>
         <option value="score" {% if sort == 'score' %}selected{% endif %}>分数最高</option>
         <option value="questions" {% if sort == 'questions' %}selected{% endif %}>题量最多</option>
     </select>
+    {% if user.is_authenticated %}
+    <select name="status" class="sort-select">
+        <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
+        <option value="undone" {% if status == 'undone' %}selected{% endif %}>我未作答</option>
+        <option value="done" {% if status == 'done' %}selected{% endif %}>我已作答</option>
+    </select>
+    {% endif %}
     <button type="submit" class="filter-btn">🔍 筛选</button>
-    {% if search or sort != 'newest' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺ 重置</a>{% endif %}
+    {% if search or sort != 'oldest' or status != 'all' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺ 重置</a>{% endif %}
     {% if test_papers %}
     <span class="result-count">匹配 <strong>{{ test_papers.paginator.count }}</strong> 份</span>
     {% endif %}
@@ -641,7 +779,12 @@
     <li class="test-paper-item">
         <div class="paper-header">
             <span class="paper-number">{{ forloop.counter }}</span>
-            {% if paper.question_count %}<span class="paper-tag">📝 {{ paper.question_count }} 题</span>{% endif %}
+            <span class="paper-tags">
+                {% if paper.question_count %}<span class="paper-tag">📝 {{ paper.question_count }} 题</span>{% endif %}
+                {% if user.is_authenticated %}
+                <span class="status-badge status-{{ paper.my_status }}">{{ paper.my_status_label }}</span>
+                {% endif %}
+            </span>
         </div>
         <h3 class="test-paper-title">{{ paper.title }}</h3>
         {% if paper.description %}
@@ -653,7 +796,23 @@
                     {{ paper.created_by|default:'系统' }}</span></div>
             <div class="meta-item"><span class="icon">📅</span><span>{{ paper.created_at|date:"Y-m-d" }}</span></div>
         </div>
-        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">开始答题 →</a>
+        {% if user.is_authenticated %}
+        <div class="my-status-line status-{{ paper.my_status }}">
+            {% if paper.my_status == 'done' %}
+            <span>✅</span><span>我已作答 <strong>{{ paper.my_attempts }}</strong> 次</span>
+            {% elif paper.my_status == 'doing' %}
+            <span>⏳</span><span>答题中</span>
+            {% elif paper.my_status == 'ended' %}
+            <span>🔒</span><span>已结束</span>
+            {% elif paper.my_status == 'upcoming' %}
+            <span>🕒</span><span>未开放</span>
+            {% else %}
+            <span>🆕</span><span>我还没做过这份试卷</span>
+            {% endif %}
+            <span>· {{ paper.my_hint }}</span>
+        </div>
+        {% endif %}
+        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">{{ paper.my_btn_label|default:'开始答题 →' }}</a>
     </li>
     {% endfor %}
 </ul>
@@ -661,7 +820,7 @@
 <div class="pagination">
     {% if test_papers.has_previous %}
     <a
-        href="?page={{ test_papers.previous_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}">←
+        href="?page={{ test_papers.previous_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'oldest' %}&sort={{ sort }}{% endif %}{% if status != 'all' %}&status={{ status }}{% endif %}">←
         上一页</a>
     {% else %}
     <span class="disabled">← 上一页</span>
@@ -672,7 +831,7 @@
     {% if num == cur %}
     <span class="current">{{ num }}</span>
     {% elif num >= cur|add:'-2' and num <= cur|add:'2' %} <a
-        href="?page={{ num }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}">
+        href="?page={{ num }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'oldest' %}&sort={{ sort }}{% endif %}{% if status != 'all' %}&status={{ status }}{% endif %}">
         {{ num }}</a>
         {% endif %}
         {% endfor %}
@@ -680,7 +839,7 @@
 
         {% if test_papers.has_next %}
         <a
-            href="?page={{ test_papers.next_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'newest' %}&sort={{ sort }}{% endif %}">下一页
+            href="?page={{ test_papers.next_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'oldest' %}&sort={{ sort }}{% endif %}{% if status != 'all' %}&status={{ status }}{% endif %}">下一页
             →</a>
         {% else %}
         <span class="disabled">下一页 →</span>

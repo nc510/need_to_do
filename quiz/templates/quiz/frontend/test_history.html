@@ -51,10 +51,6 @@
         border-top-color: #10b981;
     }
 
-    .history-card.good {
-        border-top-color: #3b82f6;
-    }
-
     .history-card.pass {
         border-top-color: #f59e0b;
     }
@@ -100,11 +96,6 @@
     .score-badge.excellent {
         background: #dcfce7;
         color: #166534;
-    }
-
-    .score-badge.good {
-        background: #dbeafe;
-        color: #1e40af;
     }
 
     .score-badge.pass {
@@ -163,6 +154,7 @@
     .view-btn:hover {
         background: #5a6fd6;
     }
+
     .history-card.draft {
         border-top-color: #f59e0b;
     }
@@ -285,7 +277,8 @@
                 {% endif %}
             </div>
             <div class="score-section">
-                <form method="POST" action="{% url 'discard_draft' draft.id %}" class="discard-form" style="margin:0;display:inline">
+                <form method="POST" action="{% url 'discard_draft' draft.id %}" class="discard-form"
+                    style="margin:0;display:inline">
                     {% csrf_token %}
                     <button type="submit" class="discard-btn">🗑 放弃</button>
                 </form>
@@ -308,18 +301,21 @@
 {% if test_records %}
 <div class="history-list">
     {% for record in test_records %}
-    {% widthratio record.score record.total_score 100 as percentage %}
-    <div
-        class="history-card {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
+    <div class="history-card {{ record.grade_class }}">
         <div class="history-header">
             <h3 class="history-title">
                 <a href="{% url 'test_history_detail' record.id %}">
-                    {% if record.is_wrong_paper %}📝 错题复习{% elif record.test_paper %}{{ record.test_paper.title }}{% else %}无试卷{% endif %}
+                    {% if record.is_wrong_paper %}
+                    📝 错题复习
+                    {% elif record.test_paper %}
+                    {{ record.test_paper.title }}
+                    {% else %}
+                    无试卷
+                    {% endif %}
                 </a>
             </h3>
-            <span
-                class="score-badge {% if percentage >= 90 %}excellent{% elif percentage >= 75 %}good{% elif percentage >= 60 %}pass{% else %}fail{% endif %}">
-                {% if percentage >= 90 %}优秀{% elif percentage >= 75 %}良好{% elif percentage >= 60 %}及格{% else %}不及格{% endif %}
+            <span class="score-badge {{ record.grade_class }}">
+                {{ record.grade }} {{ record.percentage }}%
             </span>
         </div>
         <div class="history-meta">
@@ -333,7 +329,9 @@
             </span>
         </div>
         <div class="score-section">
-            <span class="score-value">{{ record.score }}<span class="score-total">/{{ record.total_score }}</span></span>
+            <span class="score-value">
+                {{ record.score }}<span class="score-total">/{{ record.total_score }}</span>
+            </span>
             <a href="{% url 'test_history_detail' record.id %}" class="view-btn">查看</a>
         </div>
     </div>
@@ -355,7 +353,7 @@
     {% elif i >= cur|add:'-2' and i <= cur|add:'2' %} <a href="?page={{ i }}">{{ i }}</a>
         {% endif %}
         {% endfor %}
-    {% endwith %}
+        {% endwith %}
 
         {% if test_records.has_next %}
         <a href="?page={{ test_records.next_page_number }}">下一页 →</a>

@@ -22,7 +22,8 @@ def test_paper_list(request):
     user = request.user
     # 搜索筛选参数
     search = request.GET.get('search', '').strip()
-    sort = request.GET.get('sort', 'newest')  # newest / score / questions
+    sort = request.GET.get('sort', 'oldest')  # oldest / newest / score / questions
+    status = request.GET.get('status', 'all')  # all / undone / done（我的作答状态，仅登录用户）
 
     if user.is_staff:
         test_papers = TestPaper.objects.filter(is_published=True)
@@ -32,22 +33,39 @@ def test_paper_list(request):
         ).filter(
             models.Q(is_public=True) | models.Q(created_by=user.username)
         )
+    # 我可见的全部试卷，用于「我的完成进度」（不受搜索/状态筛选影响）
+    progress_base = test_papers
     # 关键词搜索（标题或描述模糊匹配）
     if search:
         test_papers = test_papers.filter(
             models.Q(title__icontains=search) | models.Q(description__icontains=search)
         )
+    # 我的作答状态筛选（未登录时忽略）
+    if user.is_authenticated:
+        my_paper_ids = TestRecord.objects.filter(
+            user=user, test_paper__isnull=False).values('test_paper_id')
+        if status == 'done':
+            test_papers = test_papers.filter(pk__in=my_paper_ids)
+        elif status == 'undone':
+            test_papers = test_papers.exclude(pk__in=my_paper_ids)
+        else:
+            status = 'all'
+    else:
+        status = 'all'
     # 注题量用于排序与展示
     test_papers = test_papers.annotate(
         question_count=Count('questions', distinct=True)
     )
-    # 排序
+    # 排序（默认按发布时间升序，先发布的先展示）
     if sort == 'score':
         test_papers = test_papers.order_by('-total_score', '-created_at')
     elif sort == 'questions':
         test_papers = test_papers.order_by('-question_count', '-created_at')
-    else:
+    elif sort == 'newest':
         test_papers = test_papers.order_by('-created_at')
+    else:
+        sort = 'oldest'
+        test_papers = test_papers.order_by('created_at')
 
     paginated_test_papers = paginate_queryset(test_papers, request.GET.get('page', 1))
 
@@ -55,6 +73,7 @@ def test_paper_list(request):
         'test_papers': paginated_test_papers,
         'search': search,
         'sort': sort,
+        'status': status,
     }
 
     # Hero 区全站统计（公开试卷 + 公开题目，不受搜索影响）
@@ -88,6 +107,82 @@ def test_paper_list(request):
             context['accuracy_rate'] = int(ans_stats['correct'] / ans_stats['total'] * 100)
         else:
             context['accuracy_rate'] = 0
+
+        # ===== 我的试卷完成状态：当前页批量聚合，避免逐份试卷查库 =====
+        page_papers = list(paginated_test_papers)
+        paper_ids = [p.pk for p in page_papers]
+        record_stats = {
+            row['test_paper_id']: row
+            for row in TestRecord.objects.filter(
+                user=user, test_paper_id__in=paper_ids
+            ).values('test_paper_id').annotate(
+                cnt=Count('id'),
+                best=models.Max('score'),
+                last=models.Max('completed_at'),
+            )
+        }
+        draft_ids = set(TestDraft.objects.filter(
+            user=user, test_paper_id__in=paper_ids, is_wrong_paper=False
+        ).values_list('test_paper_id', flat=True))
+        now = timezone.now()
+        for paper in page_papers:
+            row = record_stats.get(paper.pk)
+            paper.my_attempts = row['cnt'] if row else 0
+            paper.my_best_score = row['best'] if row else 0
+            paper.my_last_time = row['last'] if row else None
+            paper.my_has_draft = paper.pk in draft_ids
+            paper.my_remaining = None
+            if paper.max_attempts:
+                paper.my_remaining = max(0, paper.max_attempts - paper.my_attempts)
+            paper.my_best_rate = int(
+                paper.my_best_score * 100 / paper.total_score) if paper.total_score else 0
+            # 状态：ended/upcoming（不可答） > done（已答） > doing（有草稿） > new（未作答）
+            if paper.end_time and now > paper.end_time:
+                paper.my_status, paper.my_status_label = 'ended', '已结束'
+            elif paper.start_time and now < paper.start_time:
+                paper.my_status, paper.my_status_label = 'upcoming', '未开放'
+            elif paper.my_attempts:
+                paper.my_status = 'done'
+                paper.my_status_label = '已答 {} 次'.format(paper.my_attempts)
+            elif paper.my_has_draft:
+                paper.my_status, paper.my_status_label = 'doing', '答题中'
+            else:
+                paper.my_status, paper.my_status_label = 'new', '未作答'
+            # 卡片提示语 + 按钮文案（模板内不再做多条件判断）
+            if paper.my_status == 'ended':
+                paper.my_hint = '该试卷已结束答题'
+                paper.my_btn_label = '查看详情 →'
+            elif paper.my_status == 'upcoming':
+                paper.my_hint = '开放时间：' + paper.start_time.strftime('%m-%d %H:%M')
+                paper.my_btn_label = '查看详情 →'
+            elif paper.my_status == 'done':
+                paper.my_hint = '最高 {} 分（得分率 {}%）· 最近 {}'.format(
+                    paper.my_best_score, paper.my_best_rate,
+                    paper.my_last_time.strftime('%m-%d %H:%M'))
+                if paper.my_remaining is not None:
+                    if paper.my_remaining > 0:
+                        paper.my_hint += ' · 剩余 {} 次机会'.format(paper.my_remaining)
+                    else:
+                        paper.my_hint += ' · 已用完答题次数'
+                paper.my_btn_label = '再次答题 →' if paper.my_remaining != 0 else '查看详情 →'
+            elif paper.my_status == 'doing':
+                paper.my_hint = '有未提交的作答记录，可继续答题'
+                paper.my_btn_label = '继续答题 →'
+            else:
+                paper.my_hint = '尚未作答'
+                if paper.max_attempts:
+                    paper.my_hint += ' · 共 {} 次机会'.format(paper.max_attempts)
+                paper.my_btn_label = '开始答题 →'
+
+        # 我的完成进度（可见试卷中已作答的份数）
+        progress_total = progress_base.count()
+        progress_done = TestRecord.objects.filter(
+            user=user, test_paper__in=progress_base
+        ).values('test_paper_id').distinct().count()
+        context['progress_total'] = progress_total
+        context['progress_done'] = progress_done
+        context['progress_rate'] = int(
+            progress_done * 100 / progress_total) if progress_total else 0
 
     return render(request, 'quiz/frontend/test_paper_list.html', context)
 
@@ -330,6 +425,17 @@ def test_history(request):
         'test_paper'
     ).annotate(question_count=Count('test_paper__questions')).order_by('-completed_at')
     paginated_records = paginate_queryset(test_records, request.GET.get('page', 1), items_per_page=10)
+
+    # 成绩等级：及格线 60%、优秀线 80%
+    # 在视图算好数值再比较（模板 {% widthratio ... as x %} 存的是字符串，与数字比较恒为 False，会导致全部落到"不及格"）
+    for record in paginated_records:
+        record.percentage = int(round(record.score * 100 / record.total_score)) if record.total_score else 0
+        if record.percentage >= 80:
+            record.grade, record.grade_class = '优秀', 'excellent'
+        elif record.percentage >= 60:
+            record.grade, record.grade_class = '及格', 'pass'
+        else:
+            record.grade, record.grade_class = '不及格', 'fail'
 
     # ===== 进行中的答题草稿（临时保存，支持继续测试）=====
     drafts = list(TestDraft.objects.filter(user=request.user).select_related(

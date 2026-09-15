@@ -164,7 +164,7 @@ STATICFILES_FINDERS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # SimpleUI 配置 - 现代化后台管理界面
-SIMPLEUI_HOME_TITLE = '📚 在线考试系统管理后台'
+SIMPLEUI_HOME_TITLE = '📚 来斩题 - 在线考试系统管理后台'
 SIMPLEUI_HOME_ICON = 'fa-solid fa-graduation-cap'
 # 移除不存在的logo配置，使用默认logo
 # SIMPLEUI_LOGIN_LOGO = '/static/admin/simpleui-x/logo.png'
