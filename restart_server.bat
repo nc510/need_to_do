@@ -1,9 +1,11 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title Online Exam System - Restart Service
 
 echo ============================================
 echo   Online Exam System - Restart Service
+echo   Usage: restart_server.bat [quick]
+echo   (no arg = full restart, quick = backend only)
 echo ============================================
 echo.
 
@@ -15,6 +17,12 @@ set "BACKEND_PORT=8000"
 set "NGINX_PORT=8090"
 
 cd /d "%PROJECT_DIR%"
+
+:: Quick mode: restart backend only, skip static collection and Nginx reload
+if /i "%~1"=="quick" (
+    call :quick_restart
+    exit /b
+)
 
 :: Get timestamp for log file
 set "LOG_FILE=%PROJECT_DIR%\logs\restart_%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%.log"
@@ -28,6 +36,57 @@ call :start_services >> "%LOG_FILE%" 2>&1
 
 :: Exit immediately
 exit
+
+:quick_restart
+echo ============================================
+echo   Online Exam System - Quick Restart
+echo ============================================
+echo.
+
+:: 1. Stop existing Waitress process (port 8000)
+echo [1/2] Stopping backend on port %BACKEND_PORT%...
+set "FOUND=0"
+for /f "tokens=5" %%i in ('netstat -ano ^| findstr ":%BACKEND_PORT%" ^| findstr "LISTENING"') do (
+    taskkill /f /pid %%i >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        echo   [OK] Terminated PID %%i
+        set "FOUND=1"
+    )
+)
+if "!FOUND!"=="0" echo   [INFO] No process listening on port %BACKEND_PORT%
+
+ping -n 2 127.0.0.1 >nul
+
+:: 2. Start Waitress backend
+echo [2/2] Starting backend...
+start "" python run.py
+echo   [OK] Waitress start command executed
+
+:: Wait for port to listen (up to ~15s)
+set "READY=0"
+for /l %%n in (1,1,15) do (
+    if "!READY!"=="0" (
+        netstat -ano | findstr ":%BACKEND_PORT%" | findstr "LISTENING" >nul 2>&1
+        if !ERRORLEVEL! equ 0 (
+            set "READY=1"
+        ) else (
+            ping -n 2 127.0.0.1 >nul
+        )
+    )
+)
+
+echo.
+if "!READY!"=="1" (
+    echo ============================================
+    echo   Restart Successful - port %BACKEND_PORT% is listening
+    echo ============================================
+) else (
+    echo ============================================
+    echo   [ERROR] Port %BACKEND_PORT% is not listening. Check logs.
+    echo ============================================
+)
+
+exit /b
 
 :start_services
 echo ============================================
