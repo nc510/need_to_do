@@ -167,6 +167,46 @@
         color: #7f8c8d;
         border-radius: 20px;
         font-size: 12px;
+        flex-shrink: 0;
+    }
+
+    .mastery-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex-shrink: 0;
+        padding: 4px 12px;
+        border-radius: 20px;
+        background-color: #f4f6fb;
+        color: #98a2b3;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .mastery-chip.active {
+        background-color: #fff3e0;
+        color: #e67e22;
+    }
+
+    .mastery-chip.mastered {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .mastery-chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #d8dee9;
+    }
+
+    .mastery-chip .dot.filled {
+        background-color: #f39c12;
+    }
+
+    .mastery-chip.mastered .dot.filled {
+        background-color: #4caf50;
     }
 
     .question-options {
@@ -420,6 +460,15 @@
         .explanation-box {
             margin-left: 0;
         }
+
+        /* 窄屏下题干独占一行，连对进度与题型徽标换行显示 */
+        .question-header {
+            flex-wrap: wrap;
+        }
+
+        .question-content {
+            flex: 1 1 100%;
+        }
     }
 
     /* ========== 复习状态机 ========== */
@@ -538,12 +587,24 @@
         color: #fff;
         transform: translateY(-2px);
     }
+
+    .review-restore {
+        background: #fff8e6;
+        color: #c87f0a;
+    }
+
+    .review-restore:hover {
+        background: #f39c12;
+        color: #fff;
+        transform: translateY(-2px);
+    }
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>📚 错题本</h1>
     <p>复习和巩固您做错的题目，查漏补缺</p>
+    <p style="font-size:14px;">消除规则：重做时连续答对 {{ mastery_streak_required }} 次才会移出错题本，答错 1 次连对次数 -1（最低 0）</p>
 </div>
 
 <!-- 状态筛选 tabs -->
@@ -593,6 +654,18 @@
                 </div>
                 <span class="question-number">{{ forloop.counter }}</span>
                 <span class="question-content">{{ wrong_question.question.content }}</span>
+                {% if wq.review_status == 'mastered' %}
+                <span class="mastery-chip mastered" title="已连续答对 {{ mastery_streak_required }} 次，已移出错题本练习池">
+                    ✅ 已掌握
+                </span>
+                {% else %}
+                <span class="mastery-chip{% if wq.correct_streak %} active{% endif %}"
+                    title="连续答对 {{ mastery_streak_required }} 次即移出错题本；答错 1 次连对次数 -1">
+                    {% for i in mastery_streak_range %}<span
+                        class="dot{% if forloop.counter <= wq.correct_streak %} filled{% endif %}"></span>{% endfor %}
+                    已连对 {{ wq.correct_streak }}/{{ mastery_streak_required }}
+                </span>
+                {% endif %}
                 <span class="question-type">
                     {% with qt=wrong_question.question.type %}
                     {% if qt == 1 %}单选题{% elif qt == 2 %}多选题{% else %}判断题{% endif %}
@@ -701,10 +774,15 @@
             {% endif %}
 
             <div class="card-actions">
+                {% if wrong_question.review_status == 'mastered' %}
+                <button type="button" class="review-btn review-restore"
+                    onclick="reviewQuestion({{ wrong_question.id }}, 'restore')">↩️ 恢复复习</button>
+                {% else %}
                 <button type="button" class="review-btn review-master"
                     onclick="reviewQuestion({{ wrong_question.id }}, 'mastered')">✅ 已掌握</button>
                 <button type="button" class="review-btn review-mark"
                     onclick="reviewQuestion({{ wrong_question.id }}, 'reviewing')">📝 记录复习</button>
+                {% endif %}
                 <a href="{% url 'delete_wrong_question' wrong_question.id %}" class="delete-btn"
                     onclick="return confirm('确定要删除这道错题吗？');">
                     🗑️ 删除
@@ -745,7 +823,12 @@
 <script>
     // 复习标记：创建临时 form POST，避免与组卷 form 嵌套
     function reviewQuestion(wqId, action) {
-        if (!confirm(action === 'mastered' ? '确认标记为「已掌握」？将不再提醒复习。' : '确认记录一次复习？将按间隔重复算法安排下次复习。')) return;
+        var confirms = {
+            mastered: '确认标记为「已掌握」？将移出错题本练习池（可在「已掌握」里恢复）。',
+            restore: '确认恢复到错题本？连对次数将清零，需要重新连续答对才消除。',
+            reviewing: '确认记录一次复习？将按间隔重复算法安排下次复习。'
+        };
+        if (!confirm(confirms[action] || '确认执行该操作？')) return;
         var csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
         var form = document.createElement('form');
         form.method = 'POST';

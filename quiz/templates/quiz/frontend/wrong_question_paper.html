@@ -202,6 +202,134 @@
         font-weight: 500;
     }
 
+    .question-footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .streak-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 20px;
+        background: #fff3e0;
+        color: #e67e22;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .keep-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border: 1px solid #d5dbe8;
+        border-radius: 20px;
+        font-size: 13px;
+        color: #55617a;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s ease;
+    }
+
+    .keep-toggle:hover {
+        border-color: #667eea;
+        color: #667eea;
+    }
+
+    .keep-toggle input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #667eea;
+        cursor: pointer;
+    }
+
+    .keep-toggle.checked {
+        border-color: #f39c12;
+        background: #fff8e6;
+        color: #c87f0a;
+        font-weight: 600;
+    }
+
+    .submit-modal-mask {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .submit-modal {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        width: 100%;
+        max-width: 520px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .submit-modal h3 {
+        margin: 0 0 12px 0;
+        font-size: 18px;
+        color: #2c3e50;
+    }
+
+    .submit-modal p {
+        margin: 8px 0;
+        font-size: 14px;
+        color: #55617a;
+        line-height: 1.7;
+    }
+
+    .submit-modal .risk-list {
+        margin: 6px 0 12px 0;
+        padding-left: 20px;
+        font-size: 14px;
+        color: #e67e22;
+    }
+
+    .submit-modal .unanswered-list {
+        margin: 6px 0 12px 0;
+        padding-left: 20px;
+        font-size: 14px;
+        color: #e74c3c;
+    }
+
+    .submit-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .submit-modal-actions button {
+        padding: 9px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .submit-modal-actions .cancel {
+        background: #f2f4f8;
+        color: #55617a;
+    }
+
+    .submit-modal-actions .confirm {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+    }
+
     .question-navigation {
         margin: 25px 0;
         text-align: center;
@@ -287,7 +415,7 @@
 {% block content %}
 <div class="page-header">
     <h1>📝 错题复习试卷</h1>
-    <p>本试卷包含了您错题本中的题目，答对的题目将从错题本中移除</p>
+    <p>连续答对 {{ mastery_streak_required }} 次才会移出错题本；还不牢固的题请勾选「🔒 保留本题」</p>
 </div>
 
 <div class="paper-info">
@@ -304,7 +432,8 @@
     {% csrf_token %}
     <div class="question-list">
         {% for question in questions %}
-        <div class="question-item" data-question-id="{{ question.id }}" data-question-index="{{ forloop.counter0 }}">
+        <div class="question-item" data-question-id="{{ question.id }}" data-question-index="{{ forloop.counter0 }}"
+            data-streak="{{ question.correct_streak|default:0 }}">
             <input type="hidden" name="question_id" value="{{ question.id }}">
             <div class="question-header">
                 <span class="question-number-badge">{{ forloop.counter }}</span>
@@ -384,6 +513,20 @@
             </div>
 
             <div class="question-score">分值: {{ question.score }}分</div>
+
+            <div class="question-footer">
+                {% if question.correct_streak %}
+                <span class="streak-badge">
+                    🔥 已连续答对 {{ question.correct_streak }} 次，本次答对即消除
+                </span>
+                {% else %}
+                <span></span>
+                {% endif %}
+                <label class="keep-toggle">
+                    <input type="checkbox" name="keep_question_{{ question.id }}" value="1" class="keep-checkbox">
+                    <span>🔒 保留本题（不牢固，本次不消除）</span>
+                </label>
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -398,6 +541,28 @@
         <button type="submit" class="submit-btn">📤 提交答案</button>
     </div>
 </form>
+
+<div class="submit-modal-mask" id="submitModal" style="display:none;">
+    <div class="submit-modal">
+        <h3>确认交卷</h3>
+        <p id="submitModalSummary"></p>
+        <div id="submitModalUnanswered" style="display:none;">
+            <p>以下题目<strong>尚未作答</strong>，交卷后按答错处理（错题连对次数 -1）：</p>
+            <ul class="unanswered-list" id="submitModalUnansweredList"></ul>
+        </div>
+        <div id="submitModalRisk" style="display:none;">
+            <p>以下题目已连续答对 1 次，<strong>本次答对就会被移出错题本</strong>（标记为「已掌握」）。若还不够牢固，请先勾选「🔒 保留本题」：</p>
+            <ul class="risk-list" id="submitModalRiskList"></ul>
+        </div>
+        <p style="color:#95a5a6;font-size:13px;">
+            消除规则：连续答对 {{ mastery_streak_required }} 次才移出错题本；答错 1 次连对次数 -1（最低 0）；勾选保留的题目本次不消除、连对次数清零。
+        </p>
+        <div class="submit-modal-actions">
+            <button type="button" class="cancel" id="submitModalCancel">返回检查</button>
+            <button type="button" class="confirm" id="submitModalConfirm">确认交卷</button>
+        </div>
+    </div>
+</div>
 
 {% include "quiz/frontend/_draft_save_script.html" %}
 
@@ -513,12 +678,87 @@
             });
         });
 
-        const form = document.getElementById('test_paper_form');
+        // 保留开关：勾选后高亮
+        document.querySelectorAll('.keep-toggle').forEach(function (label) {
+            var cb = label.querySelector('.keep-checkbox');
+            var sync = function () { label.classList.toggle('checked', cb.checked); };
+            cb.addEventListener('change', sync);
+            sync();
+        });
+
+        var form = document.getElementById('test_paper_form');
+        var submitModal = document.getElementById('submitModal');
+        var summaryEl = document.getElementById('submitModalSummary');
+        var riskBox = document.getElementById('submitModalRisk');
+        var riskList = document.getElementById('submitModalRiskList');
+        var unansweredBox = document.getElementById('submitModalUnanswered');
+        var unansweredList = document.getElementById('submitModalUnansweredList');
+
+        // items 中的题号（与页面显示一致，按顺序从 1 开始）
+        function questionNo(items, item) {
+            return items.indexOf(item) + 1;
+        }
+
+        function renderNumberList(listEl, items) {
+            var MAX_SHOW = 20;
+            listEl.innerHTML = '';
+            items.slice(0, MAX_SHOW).forEach(function (item) {
+                var li = document.createElement('li');
+                li.textContent = '第 ' + questionNo(items, item) + ' 题';
+                listEl.appendChild(li);
+            });
+            if (items.length > MAX_SHOW) {
+                var more = document.createElement('li');
+                more.textContent = '……共 ' + items.length + ' 题';
+                listEl.appendChild(more);
+            }
+        }
+
+        function openSubmitModal() {
+            var items = Array.prototype.slice.call(document.querySelectorAll('.question-item'));
+            // 已达「连对1次」且本次未勾选保留的题：本次答对即被消除，交卷前重点提示
+            var risk = items.filter(function (item) {
+                var streak = parseInt(item.dataset.streak || '0', 10);
+                return streak > 0 && !item.querySelector('.keep-checkbox').checked;
+            });
+            var keptCount = document.querySelectorAll('.keep-checkbox:checked').length;
+            // 未作答题：交卷后按答错处理，交卷前把题号列出来避免漏题
+            var unansweredItems = items.filter(function (item) {
+                return !item.querySelector('input[name^="question_"]:checked');
+            });
+
+            summaryEl.textContent = '本次共 ' + items.length + ' 道题'
+                + (unansweredItems.length ? '，还有 ' + unansweredItems.length + ' 题未作答' : '')
+                + (keptCount ? '，已勾选保留 ' + keptCount + ' 题' : '') + '。';
+
+            if (unansweredItems.length) {
+                renderNumberList(unansweredList, unansweredItems);
+                unansweredBox.style.display = 'block';
+            } else {
+                unansweredBox.style.display = 'none';
+            }
+
+            if (risk.length) {
+                renderNumberList(riskList, risk);
+                riskBox.style.display = 'block';
+            } else {
+                riskBox.style.display = 'none';
+            }
+            submitModal.style.display = 'flex';
+        }
+
         form.addEventListener('submit', function (e) {
             e.preventDefault();
-            if (confirm('确定要提交试卷吗？')) {
-                form.submit();
-            }
+            openSubmitModal();
+        });
+
+        document.getElementById('submitModalCancel').addEventListener('click', function () {
+            submitModal.style.display = 'none';
+        });
+
+        document.getElementById('submitModalConfirm').addEventListener('click', function () {
+            submitModal.style.display = 'none';
+            form.submit();
         });
     });
 </script>

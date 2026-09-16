@@ -96,7 +96,8 @@ def test_paper_list(request):
             profile = user.profile
         except Profile.DoesNotExist:
             profile = Profile.objects.create(user=user)
-        context['wrong_count'] = WrongQuestion.objects.filter(user=user).count()
+        # 错题数只统计当前错题本（已消除/已掌握的题不计入）
+        context['wrong_count'] = WrongQuestion.objects.filter(user=user).exclude(review_status='mastered').count()
         context['profile'] = profile
         # P1-4：accuracy_rate 改为从 AnswerRecord 实时聚合，不依赖 Profile.accuracy_rate 字段
         ans_stats = AnswerRecord.objects.filter(test_record__user=user).aggregate(
@@ -522,8 +523,11 @@ def wrong_question_notebook(request):
     now = timezone.now()
 
     qs = WrongQuestion.objects.filter(user=request.user).select_related('question')
+    # 「全部」= 当前错题本（已消除的题归入「已掌握」Tab，不再参与练习）
+    if status == 'all':
+        qs = qs.exclude(review_status='mastered')
     # 状态筛选：待复习 = 未复习 或 已到下次复习时间
-    if status == 'pending':
+    elif status == 'pending':
         qs = qs.filter(Q(review_status='new') | Q(next_review_at__lte=now))
     elif status in ('new', 'reviewing', 'mastered', 'difficult'):
         qs = qs.filter(review_status=status)
@@ -539,7 +543,8 @@ def wrong_question_notebook(request):
     # P2-8：6 次独立查询合并为 1 次 aggregate with conditional Count
     base = WrongQuestion.objects.filter(user=request.user)
     review_stats = base.aggregate(
-        total=models.Count('id'),
+        # total = 当前错题本数量（不含已消除的「已掌握」）
+        total=models.Count('id', filter=~Q(review_status='mastered')),
         new=models.Count('id', filter=Q(review_status='new')),
         reviewing=models.Count('id', filter=Q(review_status='reviewing')),
         difficult=models.Count('id', filter=Q(review_status='difficult')),
@@ -552,21 +557,36 @@ def wrong_question_notebook(request):
         'wrong_questions': paginated_wrong_questions,
         'status': status,
         'review_stats': review_stats,
+        'mastery_streak_required': MASTERY_STREAK_REQUIRED,
+        # 列表里的连对进度圆点：range(2) -> [0, 1]
+        'mastery_streak_range': range(MASTERY_STREAK_REQUIRED),
     })
 
 @login_required
 def wrong_question_review(request, wrong_question_id):
-    """标记错题复习状态：mastered 已掌握 / reviewing 记录一次复习（间隔重复算法）"""
+    """错题状态操作：
+    - mastered：手动标记已掌握（移出错题本练习池）
+    - restore：从「已掌握」恢复到错题本复习池（连对次数清零）
+    - reviewing：记录一次复习（间隔重复算法）
+    """
     if request.method != 'POST':
         return redirect('wrong_question_notebook')
     wq = get_object_or_404(WrongQuestion, id=wrong_question_id, user=request.user)
     action = request.POST.get('action', 'reviewing')
     if action == 'mastered':
         wq.review_status = 'mastered'
+        wq.correct_streak = MASTERY_STREAK_REQUIRED
         wq.next_review_at = None
         wq.last_reviewed_at = timezone.now()
         wq.save()
-        messages.success(request, '已标记为「已掌握」🎯')
+        messages.success(request, '已标记为「已掌握」，已移出错题本 🎯')
+    elif action == 'restore':
+        wq.review_status = 'reviewing'
+        wq.correct_streak = 0
+        wq.next_review_at = None
+        wq.last_reviewed_at = timezone.now()
+        wq.save()
+        messages.success(request, '已恢复到错题本，连续答对次数已清零 ↩️')
     else:
         wq.review_count += 1
         wq.last_reviewed_at = timezone.now()
@@ -617,35 +637,25 @@ def submit_wrong_question_paper(request, paper_id):
 
     if request.method == 'POST':
         user_answers = collect_user_answers(questions, request.POST)
-        
+
+        # 本次答题中手动勾选「保留」的题目：本次不消除，连对次数清零（仅本次有效）
+        kept_question_ids = {
+            q.id for q in questions if request.POST.get(f'keep_question_{q.id}')
+        }
+
         score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-        
+
         # 创建答题记录 + 答案记录（P2-2 公共函数）
-        test_record, wrong_questions_list = create_test_and_answer_records(
+        test_record, _wrong_questions_list = create_test_and_answer_records(
             request.user, test_paper, questions, score, question_results, is_wrong_paper=True)
-        
-        # 删除旧错题，然后重新添加答错的题目
-        wrong_question_ids = set(WrongQuestion.objects.filter(
-            user=request.user, question__in=questions).values_list('question_id', flat=True))
-        WrongQuestion.objects.filter(user=request.user, question__in=questions).delete()
-        
-        # 重新添加这次答错的题
-        re_added_count = 0
-        for question in wrong_questions_list:
-            WrongQuestion.objects.get_or_create(
-                user=request.user,
-                question=question,
-                defaults={
-                    'user_answer': user_answers.get(question.id, ''),
-                    'correct_answer': question.correct_answer
-                }
-            )
-            re_added_count += 1
-        
+
+        # 错题本消除机制：连对 2 次才消除（答错 -1），手动保留的题本次不消除
+        summary = update_wrong_question_notebook(request.user, question_results, kept_question_ids)
+
         # 提交成功，删除错题组卷草稿
         if draft:
             draft.delete()
-        
+
         return render(request, 'quiz/frontend/wrong_question_paper_result.html', {
             'test_paper': test_paper,
             'score': score,
@@ -654,13 +664,19 @@ def submit_wrong_question_paper(request, paper_id):
             'total_count': total_count,
             'question_results': question_results,
             'test_record': test_record,
-            'deleted_wrong_questions': len(wrong_question_ids),
-            're_added_count': re_added_count
+            'mastered_questions': summary['mastered'],
+            'kept_questions': summary['kept'],
+            'streak_up_questions': summary['streak_up'],
+            'mastery_streak_required': MASTERY_STREAK_REQUIRED,
         })
-    
+
+    # 复习进度（连对次数）用于答题页提示：再答对即消除
+    streaks = dict(WrongQuestion.objects.filter(
+        user=request.user, question__in=questions).values_list('question_id', 'correct_streak'))
     for q in questions:
         q.options = parse_options(q.options)
-    
+        q.correct_streak = streaks.get(q.id, 0)
+
     return render(request, 'quiz/frontend/wrong_question_paper.html', {
         'test_paper': test_paper,
         'questions': questions,
@@ -668,6 +684,7 @@ def submit_wrong_question_paper(request, paper_id):
         'draft': draft,
         'draft_answers': draft_answers,
         'draft_save_url': reverse('save_draft', args=[paper_id]),
+        'mastery_streak_required': MASTERY_STREAK_REQUIRED,
     })
 
 @login_required

@@ -200,7 +200,7 @@ class AdminTestPaperImporter(BaseTestPaperImporter):
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, MASTERY_STREAK_REQUIRED
 from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
@@ -413,27 +413,92 @@ def create_test_and_answer_records(user, test_paper, questions, score, question_
     return test_record, wrong_questions
 
 
+def update_wrong_question_notebook(user, question_results, kept_question_ids=frozenset()):
+    """按本次答题结果维护错题本（消除机制）：
+    - 答错：连续答对次数 -1（最低 0），题目留在错题本；已掌握的题答错则退回错题本；
+    - 答对且本次勾选「保留」：连对次数归零（视为还没掌握），题目保留；
+    - 答对：连对次数 +1，累计到 MASTERY_STREAK_REQUIRED 次才标记「已掌握」移出错题本，防止蒙对假掌握。
+    kept_question_ids 为本次答题页手动勾选「保留」的题目 id 集合（仅本次有效）。
+    返回 summary：{'mastered': [...], 'kept': [...], 'streak_up': [...], 're_added': [...]}，
+    mastered 供结果页弹框展示并提供一键恢复。
+    """
+    kept_question_ids = set(kept_question_ids or ())
+    question_ids = [r['question'].id for r in question_results]
+    existing = {
+        wq.question_id: wq
+        for wq in WrongQuestion.objects.filter(user=user, question_id__in=question_ids)
+    }
+    now = timezone.now()
+    summary = {'mastered': [], 'kept': [], 'streak_up': [], 're_added': []}
+
+    for result in question_results:
+        question = result['question']
+        wq = existing.get(question.id)
+
+        if not result['is_correct']:
+            # 答错：新增错题，或把已有错题的连对进度扣 1
+            if wq is None:
+                wq = WrongQuestion.objects.create(
+                    user=user,
+                    question=question,
+                    user_answer=result.get('user_answer') or '',
+                    correct_answer=result['correct_answer'],
+                )
+                summary['re_added'].append(wq)
+            else:
+                wq.user_answer = result.get('user_answer') or ''
+                wq.correct_answer = result['correct_answer']
+                wq.correct_streak = max(0, wq.correct_streak - 1)
+                fields = ['user_answer', 'correct_answer', 'correct_streak']
+                if wq.review_status == 'mastered':
+                    # 已消除的题又答错，说明没真正掌握，退回错题本
+                    wq.review_status = 'reviewing'
+                    wq.next_review_at = None
+                    fields += ['review_status', 'next_review_at']
+                wq.save(update_fields=fields)
+            continue
+
+        # 答对：只有已在错题本中的题才需要更新掌握进度
+        if wq is None:
+            continue
+
+        if question.id in kept_question_ids:
+            # 手动保留：本次不消除，连对进度清零
+            wq.correct_streak = 0
+            fields = ['correct_streak']
+            if wq.review_status == 'mastered':
+                wq.review_status = 'reviewing'
+                wq.next_review_at = None
+                fields += ['review_status', 'next_review_at']
+            wq.save(update_fields=fields)
+            summary['kept'].append(wq)
+            continue
+
+        wq.correct_streak += 1
+        fields = ['correct_streak', 'last_reviewed_at']
+        wq.last_reviewed_at = now
+        if wq.correct_streak >= MASTERY_STREAK_REQUIRED:
+            wq.review_status = 'mastered'
+            wq.next_review_at = None
+            fields += ['review_status', 'next_review_at']
+            summary['mastered'].append(wq)
+        else:
+            summary['streak_up'].append(wq)
+        wq.save(update_fields=fields)
+
+    return summary
+
+
 def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False):
     """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
     公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
     返回 (test_record, score, correct_count, wrong_count, question_results)。
     """
     score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-    test_record, wrong_questions_list = create_test_and_answer_records(
+    test_record, _wrong_questions_list = create_test_and_answer_records(
         user, test_paper, questions, score, question_results, is_wrong_paper=is_wrong_paper)
-    # 自动添加错题到错题本（key 兼容 int/str，草稿 answers 使用 str key）
-    for question in wrong_questions_list:
-        ans = user_answers.get(question.id)
-        if ans is None:
-            ans = user_answers.get(str(question.id))
-        WrongQuestion.objects.get_or_create(
-            user=user,
-            question=question,
-            defaults={
-                'user_answer': ans or '',
-                'correct_answer': question.correct_answer
-            }
-        )
+    # 错题本消除机制：答错入库/扣连对次数，答对累计连对次数（达 2 次消除）
+    update_wrong_question_notebook(user, question_results)
     try:
         profile = Profile.objects.get(user=user)
     except Profile.DoesNotExist:

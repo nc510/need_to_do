@@ -15,7 +15,8 @@ def user_center(request):
     )
     test_count = test_stats['total']
     completed_count = test_stats['completed']
-    wrong_count = WrongQuestion.objects.filter(user=request.user).count()
+    # 错题数量只统计当前错题本（已消除/已掌握的题归入历史，不计入）
+    wrong_count = WrongQuestion.objects.filter(user=request.user).exclude(review_status='mastered').count()
 
     # 计算正确率（合并为 1 次聚合）
     answer_stats = AnswerRecord.objects.filter(test_record__user=request.user).aggregate(
@@ -27,7 +28,8 @@ def user_center(request):
     accuracy_rate = int((correct_answered / total_answered) * 100) if total_answered > 0 else 0
     
     recent_tests = TestRecord.objects.filter(user=request.user).order_by('-completed_at')[:5]
-    recent_wrong_questions = WrongQuestion.objects.filter(user=request.user).order_by('-added_at')[:5]
+    recent_wrong_questions = WrongQuestion.objects.filter(
+        user=request.user).exclude(review_status='mastered').order_by('-added_at')[:5]
 
     # ===== P2-1 学习数据可视化 =====
     # 成绩趋势（最近10次，按时间正序）
@@ -76,8 +78,9 @@ def user_center(request):
         })
     donut_gradient = ', '.join("{} {:.1f}% {:.1f}%".format(s['color'], s['start'], s['end']) for s in review_segments) if review_segments else '#ecf0f1 0% 100%'
 
-    # 薄弱知识点（错题最多的知识点 top5）
+    # 薄弱知识点（当前错题本中错题最多的知识点 top5，已消除的不再计入）
     weak_kp = list(WrongQuestion.objects.filter(user=request.user)
+        .exclude(review_status='mastered')
         .exclude(question__knowledge_points__isnull=True)
         .values('question__knowledge_points__name')
         .annotate(cnt=Count('id', distinct=True))

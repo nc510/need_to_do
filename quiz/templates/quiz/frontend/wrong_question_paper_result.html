@@ -200,6 +200,122 @@
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
+
+    .eliminate-modal-mask {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .eliminate-modal {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        width: 100%;
+        max-width: 560px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .eliminate-modal h3 {
+        margin: 0 0 12px 0;
+        font-size: 18px;
+        color: #2c3e50;
+    }
+
+    .eliminate-tip {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: #55617a;
+        line-height: 1.7;
+    }
+
+    .eliminate-list {
+        list-style: none;
+        margin: 0 0 12px 0;
+        padding: 0;
+    }
+
+    .eliminate-list li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        background: #f8f9fc;
+        border-left: 4px solid #4caf50;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #2c3e50;
+    }
+
+    .eliminate-list li.restored {
+        border-left-color: #95a5a6;
+        color: #95a5a6;
+    }
+
+    .eliminate-content {
+        flex: 1;
+        line-height: 1.6;
+    }
+
+    .restore-btn {
+        flex-shrink: 0;
+        padding: 6px 12px;
+        border: 1px solid #f39c12;
+        border-radius: 8px;
+        background: #fff8e6;
+        color: #c87f0a;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .restore-btn:hover:not(:disabled) {
+        background: #f39c12;
+        color: #fff;
+    }
+
+    .restored-tag {
+        flex-shrink: 0;
+        font-size: 13px;
+        color: #27ae60;
+        font-weight: 600;
+    }
+
+    .eliminate-note,
+    .eliminate-hint {
+        margin: 6px 0;
+        font-size: 13px;
+        color: #7f8c8d;
+        line-height: 1.7;
+    }
+
+    .eliminate-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        margin-top: 18px;
+    }
+
+    .eliminate-actions button {
+        padding: 9px 20px;
+        border: none;
+        border-radius: 8px;
+        background: #f2f4f8;
+        color: #55617a;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -221,7 +337,8 @@
             <div class="question-header">
                 <div class="question-number">{{ forloop.counter }}</div>
                 <div class="question-content">{{ result.question.content }}</div>
-                <div class="question-type">{% if result.question.type == 1 %}单选题{% elif result.question.type == 2 %}多选题{% else %}判断题{% endif %}</div>
+                <div class="question-type">{% if result.question.type == 1 %}单选题{% elif result.question.type == 2
+                    %}多选题{% else %}判断题{% endif %}</div>
             </div>
 
             {% if result.question.type == 1 or result.question.type == 2 %}
@@ -260,4 +377,79 @@
         </a>
     </div>
 </div>
+
+<div class="eliminate-modal-mask" id="eliminateModal" style="display:none;">
+    <div class="eliminate-modal">
+        {% csrf_token %}
+        <h3>🎯 错题本更新</h3>
+        {% if mastered_questions %}
+        <p class="eliminate-tip">
+            本次有 <strong>{{ mastered_questions|length }}</strong> 题达到「连续答对 {{ mastery_streak_required }}
+            次」，已从错题本消除（移入「已掌握」）：
+        </p>
+        <ul class="eliminate-list">
+            {% for wq in mastered_questions %}
+            <li data-wq-id="{{ wq.id }}">
+                <span class="eliminate-content">{{ wq.question.content }}</span>
+                <button type="button" class="restore-btn" data-url="{% url 'wrong_question_review' wq.id %}">↩️
+                    其实没掌握，保留</button>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="eliminate-hint">如果是蒙对的，点「其实没掌握，保留」会把它放回错题本，连对次数清零。</p>
+        {% else %}
+        <p class="eliminate-tip">本次没有题目达到消除条件，错题本内容保持不变。</p>
+        {% endif %}
+        {% if kept_questions %}
+        <p class="eliminate-note">🔒 手动保留 {{ kept_questions|length }} 题：本次不消除，连对次数已清零。</p>
+        {% endif %}
+        {% if streak_up_questions %}
+        <p class="eliminate-note">📈 {{ streak_up_questions|length }} 题本次答对，连对进度 +1，再答对 1 次即消除。</p>
+        {% endif %}
+        <div class="eliminate-actions">
+            <button type="button" id="closeEliminateModal">知道了</button>
+            <a href="{% url 'wrong_question_notebook' %}" class="btn">去错题本</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var modal = document.getElementById('eliminateModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+
+        var csrfEl = modal.querySelector('[name="csrfmiddlewaretoken"]');
+        var csrf = csrfEl ? csrfEl.value : '';
+
+        document.getElementById('closeEliminateModal').addEventListener('click', function () {
+            modal.style.display = 'none';
+        });
+
+        modal.querySelectorAll('.restore-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                btn.disabled = true;
+                btn.textContent = '恢复中…';
+                var fd = new FormData();
+                fd.append('action', 'restore');
+                fd.append('csrfmiddlewaretoken', csrf);
+                fetch(btn.dataset.url, { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function (resp) {
+                        if (!resp.ok) throw new Error('restore failed');
+                        var li = btn.closest('li');
+                        btn.remove();
+                        li.classList.add('restored');
+                        var tag = document.createElement('span');
+                        tag.className = 'restored-tag';
+                        tag.textContent = '已恢复到错题本';
+                        li.appendChild(tag);
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.textContent = '恢复失败，重试';
+                    });
+            });
+        });
+    });
+</script>
 {% endblock %}

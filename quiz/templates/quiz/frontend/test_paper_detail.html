@@ -626,9 +626,33 @@
         // 表单提交验证
         const form = document.getElementById('test_paper_form');
         form.addEventListener('submit', function (e) {
+            // 倒计时到点自动交卷：直接放行，避免确认框把人挡在外面导致交不上卷
+            if (form.dataset.submitted === '1') {
+                return;
+            }
             e.preventDefault();
+
+            // 未作答题号：交卷前逐一提示，避免漏题被按答错判分
+            const unanswered = [];
+            document.querySelectorAll('.question-item').forEach(function (item) {
+                if (!item.querySelector('input:checked')) {
+                    unanswered.push(parseInt(item.dataset.questionIndex, 10) + 1);
+                }
+            });
+
+            let message = '确定要提交试卷吗？';
+            if (unanswered.length) {
+                const MAX_SHOW = 20;
+                const shown = unanswered.slice(0, MAX_SHOW).map(function (n) {
+                    return '第' + n + '题';
+                }).join('、');
+                message = '您还有 ' + unanswered.length + ' 题未作答：' + shown
+                    + (unanswered.length > MAX_SHOW ? ' 等' : '')
+                    + '。\n未作答的题将按答错处理，确定要提交试卷吗？';
+            }
+
             // 显示提交确认
-            if (confirm('确定要提交试卷吗？')) {
+            if (confirm(message)) {
                 form.submit();
             }
         });

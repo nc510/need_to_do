@@ -252,6 +252,10 @@ class AnswerRecord(models.Model):
         verbose_name_plural = '每题答题记录'
         ordering = ['-answered_at']
 
+# 错题消除阈值：题目连续答对达到该次数才移出错题本（防蒙对假掌握）
+MASTERY_STREAK_REQUIRED = 2
+
+
 class WrongQuestion(models.Model):
     # 错题本
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
@@ -268,6 +272,8 @@ class WrongQuestion(models.Model):
     )
     review_status = models.CharField(max_length=10, choices=REVIEW_STATUS_CHOICES, default='new', verbose_name='复习状态')
     review_count = models.IntegerField(default=0, verbose_name='复习次数')
+    # 消除机制：连续答对次数（答错一次减 1，最低 0；答对一次加 1）
+    correct_streak = models.PositiveIntegerField(default=0, verbose_name='连续答对次数')
     last_reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name='上次复习时间')
     next_review_at = models.DateTimeField(null=True, blank=True, verbose_name='下次复习时间')
 
