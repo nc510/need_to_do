@@ -831,18 +831,15 @@ def do_class_assignment(request, assignment_id):
             # 获取用户答案（P2-2 公共函数）
             user_answers = collect_user_answers(questions, request.POST)
             
-            # 计算分数
-            score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+            # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
+            test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
+                request.user, test_paper, questions, user_answers)
             
             # 更新作业记录
             record.score = score
             record.is_submitted = True
             record.submitted_at = timezone.now()
             record.save()
-            
-            # 创建测试记录 + 答案记录（P2-2 公共函数）
-            test_record, _ = create_test_and_answer_records(
-                request.user, test_paper, questions, score, question_results)
             
             # 关联测试记录
             record.test_record = test_record
@@ -888,9 +885,9 @@ def do_class_assignment(request, assignment_id):
                     test_paper2 = assignment.test_paper
                     questions2 = list(test_paper2.questions.all())
                     if draft and draft.answers:
-                        score2, _cc, _wc, _tc, question_results = calculate_score(questions2, draft.answers)
-                        test_record, _ = create_test_and_answer_records(
-                            request.user, test_paper2, questions2, score2, question_results)
+                        # 有草稿：计分落库（含错题本与 Profile 统计，P2-2 公共函数）
+                        test_record, score2, _cc, _wc, _qr = submit_paper_records(
+                            request.user, test_paper2, questions2, draft.answers)
                     else:
                         test_record = TestRecord.objects.create(
                             user=request.user,
@@ -996,18 +993,15 @@ def submit_class_assignment(request, assignment_id):
             # 获取用户答案（P2-2 公共函数）
             user_answers = collect_user_answers(questions, request.POST)
             
-            # 计算分数
-            score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+            # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
+            test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
+                request.user, test_paper, questions, user_answers)
             
             # 更新记录
             record.score = score
             record.is_submitted = True
             record.submitted_at = timezone.now()
             record.save()
-            
-            # 创建测试记录 + 答案记录（P2-2 公共函数）
-            test_record, _ = create_test_and_answer_records(
-                request.user, test_paper, questions, score, question_results)
             
             record.test_record = test_record
             record.save()
