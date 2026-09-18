@@ -163,6 +163,149 @@
         flex-wrap: wrap
     }
 
+    /* ===== 班内个人榜 ===== */
+    .mlb-tabs {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 14px
+    }
+
+    .mlb-tab {
+        flex: 1 1 120px;
+        padding: 10px 14px;
+        background: #fff;
+        border: 2px solid #eef0f6;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #555;
+        font-family: inherit;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.25s ease
+    }
+
+    .mlb-tab:hover {
+        border-color: #c9d0f5
+    }
+
+    .mlb-tab.active {
+        border-color: #667eea;
+        color: #667eea;
+        background: #f7f8ff;
+        box-shadow: 0 4px 14px rgba(102, 126, 234, 0.18)
+    }
+
+    .mlb-panel {
+        display: none
+    }
+
+    .mlb-panel.active {
+        display: block
+    }
+
+    .mlb-card {
+        border: 1px solid #f0f2f8;
+        border-radius: 10px;
+        overflow: hidden
+    }
+
+    .mlb-head,
+    .mlb-row {
+        display: grid;
+        grid-template-columns: 56px 1fr 96px 150px;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px
+    }
+
+    .mlb-head {
+        background: #f8f9fc;
+        color: #8a94a6;
+        font-size: 12px;
+        font-weight: 600
+    }
+
+    .mlb-row {
+        border-top: 1px solid #f2f4f8
+    }
+
+    .mlb-row:hover {
+        background: #fafbff
+    }
+
+    .mlb-row.is-mine {
+        background: #f5f7ff;
+        box-shadow: inset 3px 0 0 #667eea
+    }
+
+    .mlb-rank {
+        font-size: 15px;
+        font-weight: 700;
+        color: #8a94a6;
+        text-align: center
+    }
+
+    .mlb-name {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 14px;
+        font-weight: 600;
+        color: #2c3e50;
+        min-width: 0;
+        word-break: break-all
+    }
+
+    .mlb-name .me-tag {
+        font-size: 11px;
+        font-weight: 600;
+        color: #667eea;
+        background: #eef0ff;
+        border-radius: 20px;
+        padding: 2px 8px
+    }
+
+    .mlb-value {
+        font-size: 15px;
+        font-weight: 700;
+        color: #667eea;
+        text-align: right
+    }
+
+    .mlb-detail {
+        font-size: 12px;
+        color: #98a2b3;
+        text-align: right
+    }
+
+    .mlb-empty {
+        padding: 30px 20px;
+        text-align: center;
+        color: #98a2b3;
+        font-size: 14px
+    }
+
+    .mlb-tip {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #98a2b3
+    }
+
+    @media(max-width:600px) {
+
+        .mlb-head,
+        .mlb-row {
+            grid-template-columns: 42px 1fr 80px
+        }
+
+        .mlb-detail {
+            display: none
+        }
+    }
+
     @media(max-width:768px) {
         .member-item {
             flex-direction: column;
@@ -227,6 +370,49 @@
         {% endif %}
     </div>
     {% endif %}
+    <div class="section">
+        <h2 class="section-title">🏆 班级榜单
+            <a href="{% url 'class_leaderboard' %}" class="btn btn-secondary"
+                style="margin-left:auto;padding:6px 12px;font-size:12px;font-weight:500">查看全校班级排名 →</a>
+        </h2>
+        <div class="mlb-tabs">
+            {% for board in member_boards %}
+            <button type="button" class="mlb-tab{% if forloop.first %} active{% endif %}"
+                data-board="{{ board.key }}">{{ board.icon }} {{ board.name }}</button>
+            {% endfor %}
+        </div>
+        {% for board in member_boards %}
+        <div class="mlb-panel{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+            {% if board.entries %}
+            <div class="mlb-card">
+                <div class="mlb-head">
+                    <span style="text-align:center">名次</span>
+                    <span>同学</span>
+                    <span style="text-align:right">{% if board.key == 'accuracy' %}正确率{% else %}分数{% endif %}</span>
+                    <span style="text-align:right">明细</span>
+                </div>
+                {% for row in board.entries %}
+                <div class="mlb-row{% if row.is_me %} is-mine{% endif %}">
+                    <div class="mlb-rank">
+                        {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}{% endif %}
+                    </div>
+                    <div class="mlb-name">{{ row.name }}{% if row.is_me %}<span class="me-tag">我</span>{% endif %}</div>
+                    <div class="mlb-value">{{ row.value }}</div>
+                    <div class="mlb-detail">{{ row.sub }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="mlb-empty">本班还没有人上榜，快去刷题为班级打头阵吧！</div>
+            {% endif %}
+            {% if board.key == 'accuracy' %}
+            <div class="mlb-tip">🎯 累计作答满 {{ min_answers }} 题才参与正确率榜排名</div>
+            {% elif not board.me and user.profile.role == 'student' %}
+            <div class="mlb-tip">💪 你还没有上榜：答题后即可出现在榜单上</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
     <div class="section">
         <h2 class="section-title">📝 班级作业</h2>
         <div class="btn-group" style="margin-bottom:20px">
@@ -318,4 +504,21 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+    (function () {
+        var tabs = document.querySelectorAll('.mlb-tab');
+        var panels = document.querySelectorAll('.mlb-panel');
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                tabs.forEach(function (t) { t.classList.remove('active'); });
+                panels.forEach(function (p) { p.classList.remove('active'); });
+                tab.classList.add('active');
+                var target = document.querySelector('.mlb-panel[data-board="' + tab.dataset.board + '"]');
+                if (target) { target.classList.add('active'); }
+            });
+        });
+    })();
+</script>
 {% endblock %}

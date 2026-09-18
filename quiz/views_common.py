@@ -1,6 +1,6 @@
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import models
-from django.db.models import Count, F, Max, Q, Sum  # P2-1 拆分后各子模块经 common 复用
+from django.db.models import Count, ExpressionWrapper, F, FloatField, Max, Q, Sum  # P2-1 拆分后各子模块经 common 复用
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
@@ -200,7 +200,7 @@ class AdminTestPaperImporter(BaseTestPaperImporter):
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, MASTERY_STREAK_REQUIRED, strip_sequence_prefix
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, ConqueredQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, MASTERY_STREAK_REQUIRED, MIN_ANSWERS_FOR_ACCURACY_RANK, strip_sequence_prefix
 from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
@@ -583,10 +583,213 @@ def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_pap
         profile = Profile.objects.get(user=user)
     except Profile.DoesNotExist:
         profile = Profile.objects.create(user=user)
+    # 斩题榜：本次答对的题登记为「已斩获」（去重，同一道题重复答对只算 1 分）
+    correct_question_ids = [r['question'].id for r in question_results if r['is_correct']]
+    if correct_question_ids:
+        ConqueredQuestion.objects.bulk_create(
+            [ConqueredQuestion(user=user, question_id=qid) for qid in correct_question_ids],
+            ignore_conflicts=True,
+        )
+    # 作答题次只统计实际作答的题，未作答的题不计入正确率分母
+    attempted_count = sum(1 for r in question_results if r.get('user_answer'))
     # 用 F 表达式避免并发读-改-写竞态；不写 accuracy_rate（语义错误，改由 AnswerRecord 聚合）
     Profile.objects.filter(pk=profile.pk).update(
         total_score=F('total_score') + score,
         tests_taken=F('tests_taken') + 1,
+        answered_total=F('answered_total') + attempted_count,
+        answered_correct=F('answered_correct') + correct_count,
+        # 斩题数直接取去重表条数，保证与 ConqueredQuestion 始终一致
+        conquered_count=ConqueredQuestion.objects.filter(user=user).count(),
     )
     return test_record, score, correct_count, wrong_count, question_results
+
+
+# ===== P3 榜单查询公共函数 =====
+# 三榜口径（首页全站个人榜 与 班级模块班级榜 共用同一套口径）：
+#   斩题榜   → 答对且去重的题目数（Profile.conquered_count）
+#   得分榜   → 按题目分值累加的累计得分（Profile.total_score）
+#   正确率榜 → 答对题次 / 累计作答题次，需累计作答 >= MIN_ANSWERS_FOR_ACCURACY_RANK 才上榜
+# 参与榜单排名的会员角色：仅「学生」上榜，教师 / 管理员角色不参与。
+# 这里刻意不看 is_staff——班级管理员常由学生担任，他们需要后台权限但仍应参与排名。
+RANKABLE_ROLES = ('student',)
+
+LEADERBOARD_TOP_N = 10
+
+BOARD_CONQUERED = 'conquered'
+BOARD_SCORE = 'score'
+BOARD_ACCURACY = 'accuracy'
+
+# (key, 名称, 图标)
+LEADERBOARD_BOARDS = (
+    (BOARD_CONQUERED, '斩题榜', '🗡️'),
+    (BOARD_SCORE, '得分榜', '🏆'),
+    (BOARD_ACCURACY, '正确率榜', '🎯'),
+)
+
+
+def accuracy_percent(correct, total):
+    """正确率（百分数，保留 1 位小数）；分母为 0 时返回 0.0"""
+    return round(correct * 100.0 / total, 1) if total else 0.0
+
+
+def _display_name(profile):
+    """榜单展示名：优先 Profile.name，其次用户名"""
+    return (profile.name or profile.user.username or '').strip()
+
+
+def _personal_cells(board_key, profile):
+    """个人榜单元格文案：(主数值, 副信息)"""
+    if board_key == BOARD_ACCURACY:
+        rate = accuracy_percent(profile.answered_correct, profile.answered_total)
+        return f'{rate}%', f'答对 {profile.answered_correct} / 作答 {profile.answered_total}'
+    if board_key == BOARD_SCORE:
+        return f'{profile.total_score} 分', f'斩题 {profile.conquered_count} 题'
+    return f'{profile.conquered_count} 题', f'累计得分 {profile.total_score}'
+
+
+def _build_personal_leaderboards(rankable, user=None, top_n=LEADERBOARD_TOP_N):
+    """按给定 Profile 查询集生成三张个人榜（全站榜与班内榜共用同一套口径）。
+
+    rankable 为参与排名的 Profile 查询集，调用方负责名额过滤（教师/审核状态等）。
+    top_n 为 None 表示不限条数（班内榜展示全部成员）。
+    user 为登录用户时追加 me（自己在各榜的名次与数值）；未上榜或未达门槛时 me 为 None。
+    返回 [{'key', 'name', 'icon', 'entries', 'me'}]。
+    """
+    accuracy_qs = rankable.filter(
+        answered_total__gte=MIN_ANSWERS_FOR_ACCURACY_RANK).annotate(
+        rate=ExpressionWrapper(
+            F('answered_correct') * 100.0 / F('answered_total'), output_field=FloatField()))
+
+    querysets = {
+        BOARD_CONQUERED: rankable.filter(conquered_count__gt=0).order_by(
+            '-conquered_count', '-answered_total', 'user_id'),
+        BOARD_SCORE: rankable.filter(total_score__gt=0).order_by(
+            '-total_score', '-answered_total', 'user_id'),
+        BOARD_ACCURACY: accuracy_qs.order_by('-rate', '-answered_total', 'user_id'),
+    }
+
+    # 当前用户的 Profile（rankable 已按角色过滤，教师/管理员自然取不到，无需再判断身份）
+    me_profile = None
+    if user is not None and user.is_authenticated:
+        me_profile = rankable.filter(user=user).first()
+    my_user_id = me_profile.user_id if me_profile else None
+
+    boards = []
+    for key, name, icon in LEADERBOARD_BOARDS:
+        full_qs = querysets[key]
+        entry_qs = full_qs if top_n is None else full_qs[:top_n]
+        entries = []
+        for index, profile in enumerate(entry_qs, start=1):
+            value, sub = _personal_cells(key, profile)
+            entries.append({'rank': index, 'name': _display_name(profile),
+                            'value': value, 'sub': sub, 'is_me': profile.user_id == my_user_id})
+        # 名次取「自己在完整榜单中的位次」，与榜单行的显示顺序严格一致。
+        # 不能用「胜过多人数 + 1」：并列时它忽略次级排序（作答题次），
+        # 会让卡片名次与行内名次差 1 位。
+        me = None
+        if my_user_id is not None:
+            ordered_ids = list(full_qs.values_list('user_id', flat=True))
+            if my_user_id in ordered_ids:
+                value, sub = _personal_cells(key, me_profile)
+                me = {'rank': ordered_ids.index(my_user_id) + 1, 'value': value, 'sub': sub}
+        boards.append({'key': key, 'name': name, 'icon': icon, 'entries': entries, 'me': me})
+    return boards
+
+
+def get_site_leaderboards(user=None, top_n=LEADERBOARD_TOP_N):
+    """全站个人榜：三个榜单各取 Top N，并附带当前用户自己的排名。"""
+    # 有作答记录的学生才参与排名（班级管理员若是学生角色同样参与）
+    rankable = Profile.objects.filter(
+        role__in=RANKABLE_ROLES, answered_total__gt=0).select_related('user')
+    return _build_personal_leaderboards(rankable, user, top_n)
+
+
+def get_class_member_leaderboards(class_obj, user=None):
+    """班内个人榜：本班审核通过的学生之间排名，展示全部成员（不截断）。
+
+    口径与全站个人榜一致，便于学生对照自己在班级与全站的位置。
+    """
+    rankable = Profile.objects.filter(
+        class_obj=class_obj, approval_status=1, role__in=RANKABLE_ROLES,
+        answered_total__gt=0).select_related('user')
+    return _build_personal_leaderboards(rankable, user, top_n=None)
+
+
+def get_class_leaderboards(my_class_id=None):
+    """班级榜：把班级成员的数据聚合成班级分数，班级之间排名。
+
+    仅统计审核通过的学生（教师与未审核用户不计入）。
+    班级榜排序按累计总量，同时给出人均值，避免只看班级人数。
+    正确率榜沿用个人榜门槛：班级累计作答题次达标才参与排名，未达标的班级单独列出。
+    返回 [{'key', 'name', 'icon', 'entries', 'unranked', 'me'}]。
+    """
+    rows = (Profile.objects.filter(
+                class_obj__isnull=False, approval_status=1, role__in=RANKABLE_ROLES)
+            .values('class_obj_id')
+            .annotate(
+                members=Count('id'),
+                conquered=Sum('conquered_count'),
+                score=Sum('total_score'),
+                answered=Sum('answered_total'),
+                correct=Sum('answered_correct'),
+            ))
+    class_names = dict(Class.objects.filter(
+        id__in=[row['class_obj_id'] for row in rows]).values_list('id', 'name'))
+
+    items = []
+    for row in rows:
+        members = row['members'] or 0
+        answered = row['answered'] or 0
+        correct = row['correct'] or 0
+        conquered = row['conquered'] or 0
+        score = row['score'] or 0
+        items.append({
+            'class_id': row['class_obj_id'],
+            'class_name': class_names.get(row['class_obj_id'], ''),
+            'members': members,
+            'conquered': conquered,
+            'score': score,
+            'answered': answered,
+            'correct': correct,
+            'rate': accuracy_percent(correct, answered),
+            'conquered_avg': round(conquered / members, 1) if members else 0,
+            'score_avg': round(score / members, 1) if members else 0,
+        })
+
+    def make_entry(rank, item, value, detail):
+        return {
+            'rank': rank, 'class_id': item['class_id'], 'class_name': item['class_name'],
+            'value': value, 'detail': detail, 'members': item['members'],
+            'is_mine': item['class_id'] == my_class_id,
+        }
+
+    def build(key, sort_key, cells, rankable_items):
+        ranked = sorted(rankable_items, key=lambda item: (sort_key(item), -item['answered'], item['class_id']))
+        entries = [make_entry(i, item, *cells(item)) for i, item in enumerate(ranked, start=1)]
+        unranked = []
+        if key == BOARD_ACCURACY:
+            rest = [item for item in items if item['answered'] < MIN_ANSWERS_FOR_ACCURACY_RANK]
+            unranked = [make_entry(None, item, *cells(item)) for item in sorted(
+                rest, key=lambda item: (-item['answered'], item['class_id']))]
+        me = next((e for e in entries if e['is_mine']), None)
+        return {'key': key, 'name': '', 'icon': '', 'entries': entries,
+                'unranked': unranked, 'me': me}
+
+    boards = []
+    for key, name, icon in LEADERBOARD_BOARDS:
+        if key == BOARD_CONQUERED:
+            board = build(key, lambda item: -item['conquered'],
+                          lambda item: (f"{item['conquered']} 题", f"人均 {item['conquered_avg']} 题"), items)
+        elif key == BOARD_SCORE:
+            board = build(key, lambda item: -item['score'],
+                          lambda item: (f"{item['score']} 分", f"人均 {item['score_avg']} 分"), items)
+        else:
+            qualified = [item for item in items if item['answered'] >= MIN_ANSWERS_FOR_ACCURACY_RANK]
+            board = build(key, lambda item: -item['rate'],
+                          lambda item: (f"{item['rate']}%", f"答对 {item['correct']} / 作答 {item['answered']}"),
+                          qualified)
+        board['name'] = name
+        board['icon'] = icon
+        boards.append(board)
+    return boards
 

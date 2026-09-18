@@ -124,6 +124,57 @@
         gap: 12px;
     }
 
+    /* 榜单入口摘要：我的班级当前名次 */
+    .my-rank-card {
+        background: #f7f8ff;
+        border: 1px solid #e2e7ff;
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .my-rank-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .my-rank-items {
+        display: flex;
+        gap: 8px 14px;
+        flex-wrap: wrap;
+    }
+
+    .my-rank-item {
+        font-size: 13px;
+        color: #667eea;
+        background: #fff;
+        border-radius: 20px;
+        padding: 4px 12px;
+    }
+
+    .my-rank-empty {
+        margin: 0;
+        font-size: 13px;
+        color: #8a94a6;
+    }
+
+    .my-rank-link {
+        font-size: 13px;
+        font-weight: 600;
+        color: #667eea;
+        text-decoration: none;
+    }
+
+    .my-rank-link:hover {
+        text-decoration: underline;
+    }
+
     .empty-state {
         text-align: center;
         padding: 40px 20px;
@@ -168,13 +219,30 @@
         <h1 class="page-title">🏫 班级管理</h1>
         <p style="color: #888; text-align: center; margin-top: -12px; font-size: 14px;">管理班级信息和成员</p>
     </div>
-    <div style="display: flex; gap: 8px;">
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <a href="{% url 'class_leaderboard' %}" class="btn btn-primary">🏆 班级风云榜</a>
         <a href="{% url 'apply_to_class' %}" class="btn btn-success">📝 申请加入</a>
         {% if user.is_superuser %}
         <a href="{% url 'create_class' %}" class="btn btn-primary">➕ 创建班级</a>
         {% endif %}
     </div>
 </div>
+
+{% if my_class %}
+<div class="my-rank-card">
+    <div class="my-rank-title">🏆 我的班级「{{ my_class.name }}」当前排名</div>
+    {% if my_class_ranks %}
+    <div class="my-rank-items">
+        {% for item in my_class_ranks %}
+        <span class="my-rank-item">{{ item.icon }} {{ item.name }} 第 <strong>{{ item.rank }}</strong> 名（{{ item.value }}）</span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="my-rank-empty">本班还没有上榜数据，完成作业或刷题就能为班级累积分数</p>
+    {% endif %}
+    <a href="{% url 'class_leaderboard' %}" class="my-rank-link">查看完整班级榜单 →</a>
+</div>
+{% endif %}
 
 {% if classes %}
 <div class="class-grid">

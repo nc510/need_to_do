@@ -1,0 +1,307 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}班级风云榜 - 来斩题{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .lb-hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border-radius: 12px;
+        padding: 26px 30px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .lb-hero h1 {
+        margin: 0 0 8px 0;
+        font-size: 24px;
+    }
+
+    .lb-hero p {
+        margin: 0;
+        font-size: 14px;
+        opacity: 0.92;
+    }
+
+    .lb-rules {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin-top: 14px;
+        font-size: 12px;
+        opacity: 0.9;
+    }
+
+    /* ========== 榜单 Tab ========== */
+    .lb-tabs {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+
+    .lb-tab {
+        flex: 1 1 150px;
+        padding: 12px 16px;
+        background: #fff;
+        border: 2px solid #eef0f6;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        text-align: center;
+    }
+
+    .lb-tab:hover {
+        border-color: #c9d0f5;
+    }
+
+    .lb-tab.active {
+        border-color: #667eea;
+        color: #667eea;
+        background: #f7f8ff;
+        box-shadow: 0 4px 14px rgba(102, 126, 234, 0.18);
+    }
+
+    /* ========== 榜单面板 ========== */
+    .lb-panel {
+        display: none;
+    }
+
+    .lb-panel.active {
+        display: block;
+    }
+
+    .lb-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .lb-head,
+    .lb-row {
+        display: grid;
+        grid-template-columns: 64px 1fr 110px 96px;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 18px;
+    }
+
+    .lb-head {
+        background: #f8f9fc;
+        color: #8a94a6;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .lb-row {
+        border-top: 1px solid #f2f4f8;
+        transition: background 0.2s ease;
+    }
+
+    .lb-row:hover {
+        background: #fafbff;
+    }
+
+    .lb-row.is-mine {
+        background: #f5f7ff;
+        box-shadow: inset 3px 0 0 #667eea;
+    }
+
+    .lb-rank {
+        font-size: 16px;
+        font-weight: 700;
+        color: #8a94a6;
+        text-align: center;
+    }
+
+    .lb-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 15px;
+        font-weight: 600;
+        color: #2c3e50;
+        min-width: 0;
+        word-break: break-all;
+    }
+
+    .lb-name .me-tag {
+        font-size: 11px;
+        font-weight: 600;
+        color: #667eea;
+        background: #eef0ff;
+        border-radius: 20px;
+        padding: 2px 8px;
+    }
+
+    .lb-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: #667eea;
+        text-align: right;
+    }
+
+    .lb-detail {
+        font-size: 12px;
+        color: #98a2b3;
+        text-align: right;
+    }
+
+    .lb-empty {
+        padding: 36px 20px;
+        text-align: center;
+        color: #98a2b3;
+        font-size: 14px;
+    }
+
+    .lb-unranked {
+        margin-top: 14px;
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+    }
+
+    .lb-unranked h3 {
+        margin: 0 0 6px 0;
+        font-size: 14px;
+        color: #8a94a6;
+    }
+
+    .lb-unranked p {
+        margin: 0;
+        font-size: 13px;
+        color: #98a2b3;
+        line-height: 1.8;
+    }
+
+    .lb-actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-secondary {
+        background: #f5f7fa;
+        color: #666;
+    }
+
+    .btn-secondary:hover {
+        background: #eee;
+    }
+
+    @media (max-width: 600px) {
+        .lb-head,
+        .lb-row {
+            grid-template-columns: 46px 1fr 84px;
+            padding: 10px 12px;
+        }
+
+        .lb-detail {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lb-hero">
+    <h1>🏆 班级风云榜</h1>
+    <p>班级之间同台竞技，每一位同学的努力都会算进班级总分</p>
+    <div class="lb-rules">
+        <span>🗡️ 斩题榜：答对 1 道新题 = 1 分（同题去重）</span>
+        <span>🏆 得分榜：按题目分值累加</span>
+        <span>🎯 正确率榜：作答满 {{ min_answers }} 题才上榜</span>
+    </div>
+</div>
+
+<div class="lb-tabs">
+    {% for board in class_boards %}
+    <button type="button" class="lb-tab{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+        {{ board.icon }} {{ board.name }}
+    </button>
+    {% endfor %}
+</div>
+
+{% for board in class_boards %}
+<div class="lb-panel{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+    <div class="lb-card">
+        {% if board.entries %}
+        <div class="lb-head">
+            <span style="text-align:center">名次</span>
+            <span>班级</span>
+            <span style="text-align:right">{% if board.key == 'accuracy' %}正确率{% else %}总分{% endif %}</span>
+            <span style="text-align:right">人数 / 明细</span>
+        </div>
+        {% for row in board.entries %}
+        <div class="lb-row{% if row.is_mine %} is-mine{% endif %}">
+            <div class="lb-rank">
+                {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}{% endif %}
+            </div>
+            <div class="lb-name">
+                {{ row.class_name }}
+                {% if row.is_mine %}<span class="me-tag">我的班级</span>{% endif %}
+            </div>
+            <div class="lb-value">{{ row.value }}</div>
+            <div class="lb-detail">{{ row.members }} 人 · {{ row.detail }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="lb-empty">暂无班级上榜，快去答题为班级争光吧！</div>
+        {% endif %}
+    </div>
+
+    {% if board.unranked %}
+    <div class="lb-unranked">
+        <h3>⏳ 未达上榜门槛的班级（作答满 {{ min_answers }} 题后参与排名）</h3>
+        <p>
+            {% for row in board.unranked %}{{ row.class_name }}（已作答 {{ row.detail }}）{% if not forloop.last %} · {% endif %}{% endfor %}
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<div class="lb-actions">
+    <a href="{% url 'class_list' %}" class="btn btn-secondary">← 返回我的班级</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        var tabs = document.querySelectorAll('.lb-tab');
+        var panels = document.querySelectorAll('.lb-panel');
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                tabs.forEach(function (t) { t.classList.remove('active'); });
+                panels.forEach(function (p) { p.classList.remove('active'); });
+                tab.classList.add('active');
+                var target = document.querySelector('.lb-panel[data-board="' + tab.dataset.board + '"]');
+                if (target) { target.classList.add('active'); }
+            });
+        });
+    })();
+</script>
+{% endblock %}

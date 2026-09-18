@@ -208,6 +208,12 @@ class Profile(models.Model):
     total_score = models.IntegerField(default=0, verbose_name='总得分')
     tests_taken = models.IntegerField(default=0, verbose_name='答题次数')
     accuracy_rate = models.FloatField(default=0.0, verbose_name='正确率')
+    # ===== 榜单统计（冗余计数，随答题提交累加，避免榜单每次扫 AnswerRecord 大表）=====
+    # 斩题数：答对且去重的题目数（由 ConqueredQuestion 派生，此处冗余用于排名）
+    conquered_count = models.PositiveIntegerField(default=0, verbose_name='斩题数')
+    # 累计作答题次（未作答的题不计入）与其中答对题次，用于正确率榜
+    answered_total = models.PositiveIntegerField(default=0, verbose_name='累计作答题次')
+    answered_correct = models.PositiveIntegerField(default=0, verbose_name='累计答对题次')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 
@@ -276,6 +282,9 @@ class AnswerRecord(models.Model):
 # 错题消除阈值：题目连续答对达到该次数才移出错题本（防蒙对假掌握）
 MASTERY_STREAK_REQUIRED = 2
 
+# 正确率榜门槛：累计作答题次低于该值不上榜（否则答 1 题即 100% 霸榜）
+MIN_ANSWERS_FOR_ACCURACY_RANK = 100
+
 
 class WrongQuestion(models.Model):
     # 错题本
@@ -306,6 +315,25 @@ class WrongQuestion(models.Model):
 
     def __str__(self):
         return f'{self.user.username} - {self.question.content}'
+
+
+class ConqueredQuestion(models.Model):
+    """已斩获题目：用户首次答对的题目。
+    斩题榜按「答对且去重」计分，同一道题重复答对只算 1 分，
+    因此用本表记录去重事实，Profile.conquered_count 为它的冗余计数。
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name='题目')
+    first_correct_at = models.DateTimeField(auto_now_add=True, verbose_name='首次答对时间')
+
+    class Meta:
+        verbose_name = '已斩获题目'
+        verbose_name_plural = '已斩获题目'
+        unique_together = ('user', 'question')
+        ordering = ['-first_correct_at']
+
+    def __str__(self):
+        return f'{self.user.username} - 题#{self.question_id}'
 
 
 class Class(models.Model):

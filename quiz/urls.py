@@ -43,6 +43,7 @@ urlpatterns = [
     
     # 班级管理
     path('class_list/', views.class_list, name='class_list'),  # 班级列表
+    path('class_leaderboard/', views.class_leaderboard, name='class_leaderboard'),  # 班级榜单（班级之间排名）
     path('class/<int:class_id>/', views.class_detail, name='class_detail'),  # 班级详情
     path('class/create/', views.create_class, name='create_class'),  # 创建班级
     path('class/<int:class_id>/edit/', views.edit_class, name='edit_class'),  # 编辑班级

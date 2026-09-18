@@ -433,6 +433,174 @@
         white-space: nowrap;
     }
 
+    /* ========== 全站排行榜（个人榜） ========== */
+    .lb-tabs {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .lb-tab {
+        flex: 1 1 120px;
+        padding: 10px 14px;
+        background: #fff;
+        border: 2px solid #eef0f6;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #555;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        text-align: center;
+    }
+
+    .lb-tab:hover {
+        border-color: #c9d0f5;
+    }
+
+    .lb-tab.active {
+        border-color: #667eea;
+        color: #667eea;
+        background: #f7f8ff;
+    }
+
+    .lb-panel {
+        display: none;
+    }
+
+    .lb-panel.active {
+        display: block;
+    }
+
+    .lb-wrap {
+        display: grid;
+        grid-template-columns: 1fr 240px;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .lb-list {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .lb-row {
+        display: grid;
+        grid-template-columns: 48px 1fr 120px;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 18px;
+        border-top: 1px solid #f2f4f8;
+    }
+
+    .lb-row:first-child {
+        border-top: none;
+    }
+
+    .lb-row.is-me {
+        background: #f5f7ff;
+        box-shadow: inset 3px 0 0 #667eea;
+    }
+
+    .lb-rank {
+        text-align: center;
+        font-size: 15px;
+        font-weight: 700;
+        color: #8a94a6;
+    }
+
+    .lb-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
+        word-break: break-all;
+    }
+
+    .lb-detail {
+        font-size: 12px;
+        color: #98a2b3;
+        font-weight: 400;
+    }
+
+    .lb-value {
+        text-align: right;
+        font-size: 15px;
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    .lb-empty {
+        padding: 34px 20px;
+        text-align: center;
+        color: #98a2b3;
+        font-size: 14px;
+    }
+
+    .lb-me-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .lb-me-label {
+        font-size: 12px;
+        opacity: 0.85;
+        margin-bottom: 8px;
+    }
+
+    .lb-me-rank {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1.1;
+    }
+
+    .lb-me-value {
+        font-size: 15px;
+        font-weight: 600;
+        margin-top: 8px;
+    }
+
+    .lb-me-sub {
+        font-size: 12px;
+        opacity: 0.85;
+        margin-top: 4px;
+    }
+
+    .lb-me-tip {
+        font-size: 13px;
+        line-height: 1.7;
+        margin: 0;
+        opacity: 0.92;
+    }
+
+    .lb-me-login {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 8px 18px;
+        background: #fff;
+        color: #667eea;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    @media (max-width: 768px) {
+        .lb-wrap {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .test-paper-title {
         font-size: 16px;
         font-weight: 700;
@@ -698,7 +866,7 @@
 {% with role=user.profile.role|default:'student' %}
 <section class="dashboard-section">
     <p class="dashboard-greeting">👋 你好，<span>{{ user.username }}</span>
-        {% role_greeting role user.is_staff %}</p>
+        {% role_greeting role %}</p>
     <div class="quick-stats">
         <div class="quick-stat">
             <span class="quick-stat-icon">📊</span>
@@ -754,6 +922,65 @@
     </div>
     <span class="my-progress-value">已作答 {{ progress_done }} / {{ progress_total }} 份（{{ progress_rate }}%）</span>
 </div>
+{% endif %}
+
+<!-- 全站排行榜（个人榜）：斩题榜 / 得分榜 / 正确率榜 -->
+{% if site_boards %}
+<section style="margin-bottom: 26px;">
+    <div class="section-header">
+        <h2>🏆 全站排行榜</h2>
+        <div class="stats-bar">
+            <div class="stat-item"><span>🗡️</span><span>答对 1 道新题 = 1 分（同题去重）</span></div>
+            <div class="stat-item"><span>🎯</span><span>正确率榜需作答满 {{ min_answers }} 题</span></div>
+        </div>
+    </div>
+    <div class="lb-tabs">
+        {% for board in site_boards %}
+        <button type="button" class="lb-tab{% if forloop.first %} active{% endif %}"
+            data-board="{{ board.key }}">{{ board.icon }} {{ board.name }}</button>
+        {% endfor %}
+    </div>
+    {% for board in site_boards %}
+    <div class="lb-panel{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+        <div class="lb-wrap">
+            <div class="lb-list">
+                {% if board.entries %}
+                {% for row in board.entries %}
+                <div class="lb-row{% if row.is_me %} is-me{% endif %}">
+                    <div class="lb-rank">
+                        {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}{% endif %}
+                    </div>
+                    <div class="lb-name">{{ row.name }}<span class="lb-detail">{{ row.sub }}</span></div>
+                    <div class="lb-value">{{ row.value }}</div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="lb-empty">还没有人上榜，快来抢占榜首吧！</div>
+                {% endif %}
+            </div>
+            <div class="lb-me-card">
+                {% if user.is_authenticated %}
+                {% if user.profile.role != 'student' %}
+                <p class="lb-me-tip">教师 / 管理员不参与榜单排名</p>
+                {% elif board.me %}
+                <div class="lb-me-label">我的排名</div>
+                <div class="lb-me-rank">第 {{ board.me.rank }} 名</div>
+                <div class="lb-me-value">{{ board.me.value }}</div>
+                <div class="lb-me-sub">{{ board.me.sub }}</div>
+                {% elif board.key == 'accuracy' %}
+                <p class="lb-me-tip">作答满 {{ min_answers }} 题即可参与正确率榜，继续加油！</p>
+                {% else %}
+                <p class="lb-me-tip">你还没有上榜数据，完成作业或刷题就能登上榜单</p>
+                {% endif %}
+                {% else %}
+                <p class="lb-me-tip">登录后可查看自己的排名</p>
+                <a href="{% url 'login' %}" class="lb-me-login">🔐 立即登录</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</section>
 {% endif %}
 
 <!-- 试卷列表区 -->
@@ -872,4 +1099,23 @@
     <p>敬请期待，稍后再来看看吧</p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 排行榜三榜 Tab 切换（纯前端切换，不重新请求）
+    (function () {
+        var tabs = document.querySelectorAll('.lb-tab');
+        var panels = document.querySelectorAll('.lb-panel');
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                tabs.forEach(function (t) { t.classList.remove('active'); });
+                panels.forEach(function (p) { p.classList.remove('active'); });
+                tab.classList.add('active');
+                var target = document.querySelector('.lb-panel[data-board="' + tab.dataset.board + '"]');
+                if (target) { target.classList.add('active'); }
+            });
+        });
+    })();
+</script>
 {% endblock %}

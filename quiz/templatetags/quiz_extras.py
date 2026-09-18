@@ -38,13 +38,16 @@ def option_class(key, correct_answer, user_answer, multi=False):
 
 
 @register.simple_tag
-def role_greeting(role, is_staff):
+def role_greeting(role):
     """根据用户角色返回问候语后缀，替代模板里超长跨行 if/elif/else。
 
+    判定只看角色，不看 is_staff：班级管理员常由学生担任，
+    他们拥有后台权限但仍是学生，与榜单排名口径保持一致。
+
     用法：
-        <span>{{ user.username }}</span>{% role_greeting role user.is_staff %}
+        <span>{{ user.username }}</span>{% role_greeting role %}
     """
-    if role == 'student' and not is_staff:
+    if role == 'student':
         return '，继续加油学习吧！'
     if role == 'teacher':
         return '，欢迎管理您的班级！'

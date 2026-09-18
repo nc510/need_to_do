@@ -185,6 +185,10 @@ def test_paper_list(request):
         context['progress_rate'] = int(
             progress_done * 100 / progress_total) if progress_total else 0
 
+    # 全站排行榜（个人榜）：三个榜单各取 Top N，登录用户额外带自己的名次
+    context['site_boards'] = get_site_leaderboards(user)
+    context['min_answers'] = MIN_ANSWERS_FOR_ACCURACY_RANK
+
     return render(request, 'quiz/frontend/test_paper_list.html', context)
 
 def test_paper_detail(request, paper_id):

@@ -2,6 +2,15 @@
 from .views_common import *  # noqa: F401,F403
 import traceback
 
+
+def _get_my_class(user):
+    """取当前用户所属班级（无 Profile 或未分配班级时返回 None）"""
+    try:
+        return user.profile.class_obj
+    except Profile.DoesNotExist:
+        return None
+
+
 @login_required
 def class_list(request):
     user_classes = Class.objects.filter(
@@ -21,9 +30,32 @@ def class_list(request):
         if cls.id not in seen_ids:
             unique_classes.append(cls)
             seen_ids.add(cls.id)
-    
+
+    # 榜单入口摘要：我的班级当前在各榜的名次（榜单"总量排序 + 人均展示"口径）
+    my_class = _get_my_class(request.user)
+    my_class_ranks = []
+    if my_class:
+        my_class_ranks = [
+            {'icon': board['icon'], 'name': board['name'],
+             'rank': board['me']['rank'], 'value': board['me']['value']}
+            for board in get_class_leaderboards(my_class.id) if board['me']
+        ]
+
     return render(request, 'quiz/frontend/class_list.html', {
-        'classes': unique_classes
+        'classes': unique_classes,
+        'my_class': my_class,
+        'my_class_ranks': my_class_ranks,
+    })
+
+
+@login_required
+def class_leaderboard(request):
+    """班级风云榜：班级之间按斩题榜 / 得分榜 / 正确率榜排名"""
+    my_class = _get_my_class(request.user)
+    return render(request, 'quiz/frontend/class_leaderboard.html', {
+        'class_boards': get_class_leaderboards(my_class.id if my_class else None),
+        'my_class': my_class,
+        'min_answers': MIN_ANSWERS_FOR_ACCURACY_RANK,
     })
 
 @login_required
@@ -84,6 +116,9 @@ def class_detail(request, class_id):
         'is_admin': is_admin,
         'class_stats': class_stats,
         'assignment_progress': assignment_progress,
+        # 班内个人榜：本班同学之间的斩题榜 / 得分榜 / 正确率榜（全班成员可见）
+        'member_boards': get_class_member_leaderboards(class_obj, request.user),
+        'min_answers': MIN_ANSWERS_FOR_ACCURACY_RANK,
     })
 
 @login_required
