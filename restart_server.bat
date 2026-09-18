@@ -145,11 +145,16 @@ timeout /t 1 /nobreak >nul
 :: 3. Collect static files (refresh staticfiles)
 :: =============================================
 echo [3/5] Collecting static files...
-python manage.py collectstatic --noinput >nul 2>&1
+:: 不要吞掉 collectstatic 的输出：这里出错会导致静态资源缺失（logo 等），
+:: 必须让报错完整写进日志，并中止本次部署，避免带着坏静态文件对外服务。
+python manage.py collectstatic --noinput
 if !ERRORLEVEL! equ 0 (
     echo   [OK] Static files updated
 ) else (
-    echo   [WARN] Static files collection may have issues
+    echo   [ERROR] Static files collection FAILED - restart aborted
+    echo   [ERROR] Details are above in this log: %LOG_FILE%
+    echo   [ERROR] Backend was NOT started, fix the error and run again.
+    exit /b 1
 )
 timeout /t 1 /nobreak >nul
 

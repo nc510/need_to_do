@@ -769,7 +769,7 @@
                         <li><a href="{% url 'test_paper_list' %}">📋 首页</a></li>
                         {% if user.is_authenticated %}
                         {% with role=user.profile.role|default:'student' %}
-                        {% if role == 'student' and not user.is_staff %}
+                        {% if role == 'student' %}
                         <li><a href="{% url 'student_class_assignments' %}">📝 我的作业</a></li>
                         <li><a href="{% url 'class_list' %}">🏫 我的班级</a></li>
                         <li><a href="{% url 'wrong_question_notebook' %}">❌ 错题本</a></li>

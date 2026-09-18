@@ -313,12 +313,15 @@ if DEBUG:
     WATCHFILES_CHANGED_DELAY = 1000  # 毫秒
 
 # 静态文件缓存（使用 WhiteNoise 压缩和缓存支持）
-# DEBUG=True 时 Manifest 版本会找不到静态文件（需 collectstatic），开发用非 Manifest 版本
-STATICFILES_STORAGE = (
-    'whitenoise.storage.CompressedStaticFilesStorage'
-    if DEBUG
-    else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-)
+# 统一使用压缩存储（自动生成 .br / .gz），不启用 Manifest 变体：
+#   ManifestStaticFilesStorage 会把 {% static %} 改写成「内容哈希」文件名，
+#   并且必须依赖 collectstatic 生成的 staticfiles/staticfiles.json 清单。
+#   线上同步代码后一旦漏跑 collectstatic（或清单与文件不一致），
+#   {% static %} 会直接报 Missing staticfiles manifest entry，
+#   表现为 logo 等静态资源 404 / 无法显示。
+#   本项目静态资源少、变更不频繁，用不带哈希的压缩存储更稳：
+#   只要文件在 STATIC_ROOT 里就能访问，不依赖任何清单文件。
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # 反爬虫中间件配置（IP 白名单，可通过 .env 覆盖）
 ANTISPIDER_IP_WHITELIST = os.getenv(
