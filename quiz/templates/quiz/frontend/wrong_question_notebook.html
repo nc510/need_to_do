@@ -89,6 +89,64 @@
         box-shadow: none;
     }
 
+    /* 每页显示题数控件 */
+    .page-size-bar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 15px;
+        font-size: 14px;
+        color: #2c3e50;
+    }
+
+    .page-size-bar label {
+        font-weight: 500;
+    }
+
+    .page-size-bar input[type="number"] {
+        width: 80px;
+        padding: 7px 10px;
+        border: 1px solid #dcdfe6;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #2c3e50;
+    }
+
+    .page-size-bar .apply-btn {
+        padding: 7px 16px;
+        border: none;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .page-size-bar .quick-links {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .page-size-bar .quick-links a {
+        padding: 5px 12px;
+        border-radius: 20px;
+        background: #f0f2f5;
+        color: #667eea;
+        font-size: 13px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .page-size-bar .quick-links a:hover,
+    .page-size-bar .quick-links a.active {
+        background: #667eea;
+        color: #fff;
+    }
+
     .question-list {
         list-style-type: none;
         padding: 0;
@@ -609,27 +667,46 @@
 
 <!-- 状态筛选 tabs -->
 <div class="status-tabs">
-    <a href="?status=all" class="status-tab {% if status == 'all' %}active{% endif %}">
+    <a href="?status=all&page_size={{ page_size }}" class="status-tab {% if status == 'all' %}active{% endif %}">
         📚 全部 <span class="tab-badge">{{ review_stats.total|default:0 }}</span>
     </a>
-    <a href="?status=pending" class="status-tab {% if status == 'pending' %}active{% endif %}">
+    <a href="?status=pending&page_size={{ page_size }}"
+        class="status-tab {% if status == 'pending' %}active{% endif %}">
         ⏰ 待复习 <span class="tab-badge">{{ review_stats.pending|default:0 }}</span>
     </a>
-    <a href="?status=new" class="status-tab {% if status == 'new' %}active{% endif %}">
+    <a href="?status=new&page_size={{ page_size }}" class="status-tab {% if status == 'new' %}active{% endif %}">
         🆕 未复习 <span class="tab-badge">{{ review_stats.new|default:0 }}</span>
     </a>
-    <a href="?status=reviewing" class="status-tab {% if status == 'reviewing' %}active{% endif %}">
+    <a href="?status=reviewing&page_size={{ page_size }}"
+        class="status-tab {% if status == 'reviewing' %}active{% endif %}">
         📝 复习中 <span class="tab-badge">{{ review_stats.reviewing|default:0 }}</span>
     </a>
-    <a href="?status=difficult" class="status-tab {% if status == 'difficult' %}active{% endif %}">
+    <a href="?status=difficult&page_size={{ page_size }}"
+        class="status-tab {% if status == 'difficult' %}active{% endif %}">
         🔥 顽固错题 <span class="tab-badge">{{ review_stats.difficult|default:0 }}</span>
     </a>
-    <a href="?status=mastered" class="status-tab {% if status == 'mastered' %}active{% endif %}">
+    <a href="?status=mastered&page_size={{ page_size }}"
+        class="status-tab {% if status == 'mastered' %}active{% endif %}">
         ✅ 已掌握 <span class="tab-badge">{{ review_stats.mastered|default:0 }}</span>
     </a>
 </div>
 
+<!-- 每页显示题数：独立 GET 表单（不能放进组卷 POST 表单内，避免回车误提交组卷） -->
 {% if wrong_questions %}
+<form method="get" class="page-size-bar">
+    <input type="hidden" name="status" value="{{ status }}">
+    <label for="page-size-input">每页显示</label>
+    <input type="number" id="page-size-input" name="page_size" min="1" max="100" step="1" value="{{ page_size }}"
+        required>
+    <span>题（1~100）</span>
+    <button type="submit" class="apply-btn">应用</button>
+    <span class="quick-links">
+        <a href="?status={{ status }}&page_size=20" class="{% if page_size == 20 %}active{% endif %}">20</a>
+        <a href="?status={{ status }}&page_size=50" class="{% if page_size == 50 %}active{% endif %}">50</a>
+        <a href="?status={{ status }}&page_size=100" class="{% if page_size == 100 %}active{% endif %}">100</a>
+    </span>
+</form>
+
 <form method="post" action="{% url 'create_wrong_question_paper' %}">
     {% csrf_token %}
     <div class="action-bar">
@@ -796,7 +873,8 @@
     {% if wrong_questions.has_other_pages %}
     <div class="pagination">
         {% if wrong_questions.has_previous %}
-        <a href="?page={{ wrong_questions.previous_page_number }}">← 上一页</a>
+        <a href="?status={{ status }}&page_size={{ page_size }}&page={{ wrong_questions.previous_page_number }}">←
+            上一页</a>
         {% else %}
         <span class="disabled">← 上一页</span>
         {% endif %}
@@ -805,14 +883,16 @@
         {% for i in wrong_questions.paginator.page_range %}
         {% if cur == i %}
         <span class="current">{{ i }}</span>
-        {% elif i >= cur|add:'-2' and i <= cur|add:'2' %} <a href="?page={{ i }}">
+        {% elif i >= cur|add:'-2' and i <= cur|add:'2' %} <a
+            href="?status={{ status }}&page_size={{ page_size }}&page={{ i }}">
             {{ i }}</a>
             {% endif %}
             {% endfor %}
             {% endwith %}
 
             {% if wrong_questions.has_next %}
-            <a href="?page={{ wrong_questions.next_page_number }}">下一页 →</a>
+            <a href="?status={{ status }}&page_size={{ page_size }}&page={{ wrong_questions.next_page_number }}">下一页
+                →</a>
             {% else %}
             <span class="disabled">下一页 →</span>
             {% endif %}

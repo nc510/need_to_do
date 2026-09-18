@@ -206,6 +206,7 @@ from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
 import json
 import re
+import time
 import hashlib
 from django.core.cache import cache
 
@@ -392,10 +393,11 @@ def collect_user_answers(questions, post_data):
     return user_answers
 
 
-def create_test_and_answer_records(user, test_paper, questions, score, question_results, is_wrong_paper=False):
+def create_test_and_answer_records(user, test_paper, questions, score, question_results, is_wrong_paper=False, duration_seconds=None):
     """创建 TestRecord + 全部 AnswerRecord（bulk_create 一次插入），
     返回 (test_record, wrong_questions)。
     wrong_questions 为本次答错的 question 列表，供调用方处理错题本。
+    duration_seconds 为本次答题用时（秒），无法确定时传 None。
     """
     test_record = TestRecord.objects.create(
         user=user,
@@ -404,6 +406,7 @@ def create_test_and_answer_records(user, test_paper, questions, score, question_
         total_score=test_paper.total_score,
         completed_at=timezone.now(),
         is_wrong_paper=is_wrong_paper,
+        duration_seconds=duration_seconds,
     )
     answer_records = []
     wrong_questions = []
@@ -503,14 +506,77 @@ def update_wrong_question_notebook(user, question_results, kept_question_ids=fro
     return summary
 
 
-def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False):
+# ===== 答题用时统计公共函数 =====
+# 设计：进入答题页时无条件写入 session 开始时间戳（取最早值，重复进入不重置），
+# 提交时以「提交时间 - 起点」得到本次总用时（含中途中断/切页时间），写入 TestRecord.duration_seconds。
+# 有草稿/作业记录时可用其 start_time 作为跨会话的兜底起点。
+
+# 超过该时长的用时视为无效（如跨天挂机），不记录，避免污染统计
+MAX_REASONABLE_DURATION_SECONDS = 24 * 3600
+_ANSWER_START_PREFIX = 'answer_start_'
+
+
+def mark_answer_start(request, key):
+    """记录答题开始时间戳到 session（取最早值，同一场答题重复进入不重置）。
+    key 建议用 'paper_{id}' / 'assign_{id}' 区分不同答题入口。
+    """
+    sess_key = _ANSWER_START_PREFIX + key
+    if not request.session.get(sess_key):
+        request.session[sess_key] = time.time()
+        request.session.modified = True
+
+
+def resolve_duration_seconds(request, key, fallback_start=None):
+    """计算本次答题用时（秒）。
+    起点优先取 fallback_start（草稿/作业记录的 start_time，可跨会话恢复），
+    否则取 session 中 mark_answer_start 记录的时间戳。
+    计算后清除 session 起点，避免多次答题（max_attempts）串用同一起点。
+    无有效起点或超出合理上限时返回 None。
+    """
+    sess_key = _ANSWER_START_PREFIX + key
+    session_start = request.session.pop(sess_key, None)
+
+    if fallback_start:
+        elapsed = (timezone.now() - fallback_start).total_seconds()
+    elif session_start:
+        try:
+            elapsed = time.time() - float(session_start)
+        except (TypeError, ValueError):
+            elapsed = None
+    else:
+        elapsed = None
+
+    if elapsed is None or elapsed < 0 or elapsed > MAX_REASONABLE_DURATION_SECONDS:
+        return None
+    return int(elapsed)
+
+
+def format_duration(seconds):
+    """秒 → 可读用时文案（如 95 → '1分35秒'，120 → '2分'）；无效值返回 None。"""
+    if seconds is None:
+        return None
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        return None
+    if seconds < 0 or seconds > MAX_REASONABLE_DURATION_SECONDS:
+        return None
+    if seconds < 60:
+        return f'{seconds}秒'
+    minutes, sec = divmod(seconds, 60)
+    return f'{minutes}分{sec}秒' if sec else f'{minutes}分'
+
+
+def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False, duration_seconds=None):
     """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
     公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
+    duration_seconds 为本次答题用时（秒），透传给 TestRecord。
     返回 (test_record, score, correct_count, wrong_count, question_results)。
     """
     score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
     test_record, _wrong_questions_list = create_test_and_answer_records(
-        user, test_paper, questions, score, question_results, is_wrong_paper=is_wrong_paper)
+        user, test_paper, questions, score, question_results,
+        is_wrong_paper=is_wrong_paper, duration_seconds=duration_seconds)
     # 错题本消除机制：答错入库/扣连对次数，答对累计连对次数（达 2 次消除）
     update_wrong_question_notebook(user, question_results)
     try:

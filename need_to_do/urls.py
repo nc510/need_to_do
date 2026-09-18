@@ -18,11 +18,11 @@ from django.urls import path, include, re_path
 from django.views.generic import RedirectView
 from django.conf import settings
 from django.views.static import serve as static_serve
-from django.http import HttpResponse
+from django.shortcuts import redirect
 
 def favicon_view(request):
-    """返回空的favicon响应，避免404错误"""
-    return HttpResponse(status=204)
+    """返回站点图标（指向静态目录中的 LOGO）"""
+    return redirect(settings.STATIC_URL + 'quiz/images/logo-icon.png')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -1,4 +1,5 @@
 {% extends 'quiz/frontend/base.html' %}
+{% load static %}
 {% load quiz_extras %}
 {% block title %}来斩题 - 在线考试系统{% endblock %}
 
@@ -34,6 +35,20 @@
         font-weight: 800;
         margin: 0 0 8px 0;
         position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .hero-logo {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        background: #fff;
+        object-fit: contain;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
     }
 
     .hero-subtitle {
@@ -655,7 +670,10 @@
 {% block content %}
 <!-- Hero 横幅 -->
 <section class="hero">
-    <h1>📚 来斩题 - 在线考试系统</h1>
+    <h1>
+        <img class="hero-logo" src="{% static 'quiz/images/logo-icon.png' %}" alt="来斩题">
+        <span>来斩题 - 在线考试系统</span>
+    </h1>
     <p class="hero-subtitle">海量题库 · 智能组卷 · 检验学习成果</p>
     <div class="hero-stats">
         <div class="hero-stat">
@@ -767,7 +785,8 @@
     </select>
     {% endif %}
     <button type="submit" class="filter-btn">🔍 筛选</button>
-    {% if search or sort != 'oldest' or status != 'all' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺ 重置</a>{% endif %}
+    {% if search or sort != 'oldest' or status != 'all' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺
+        重置</a>{% endif %}
     {% if test_papers %}
     <span class="result-count">匹配 <strong>{{ test_papers.paginator.count }}</strong> 份</span>
     {% endif %}

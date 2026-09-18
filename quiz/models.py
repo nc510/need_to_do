@@ -241,6 +241,8 @@ class TestRecord(models.Model):
     total_score = models.IntegerField(verbose_name='总分')
     completed_at = models.DateTimeField(auto_now_add=True, verbose_name='完成时间')
     is_wrong_paper = models.BooleanField(default=False, verbose_name='是否错题组卷')
+    # 本次答题用时（秒）：首次进入答题页 → 提交，含中途中断时间；无法确定起点时为 NULL
+    duration_seconds = models.PositiveIntegerField(null=True, blank=True, verbose_name='答题用时(秒)')
 
     class Meta:
         verbose_name = '答题记录'

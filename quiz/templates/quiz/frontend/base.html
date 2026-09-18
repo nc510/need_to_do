@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="zh-CN">
 
@@ -5,6 +6,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}来斩题 - 在线考试系统{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'quiz/images/logo-icon.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'quiz/images/logo-icon.png' %}">
     <style>
         * {
             box-sizing: border-box;
@@ -61,7 +64,13 @@
         }
 
         .nav-brand-icon {
-            font-size: 28px;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: #fff;
+            object-fit: contain;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
         }
 
         .nav-brand-sub {
@@ -269,7 +278,8 @@
             }
 
             .nav-brand-icon {
-                font-size: 24px;
+                width: 34px;
+                height: 34px;
             }
 
             .nav-menu {
@@ -288,7 +298,7 @@
                 font-size: 13px;
             }
 
-            .nav a span {
+            .nav-menu a span {
                 display: none;
             }
 
@@ -329,7 +339,8 @@
 
         @media (max-width: 480px) {
             .nav-brand-icon {
-                font-size: 20px;
+                width: 30px;
+                height: 30px;
             }
 
             .nav-brand {
@@ -749,7 +760,7 @@
         <div class="container">
             <div class="nav-content">
                 <a href="{% url 'test_paper_list' %}" class="nav-brand">
-                    <span class="nav-brand-icon">📝</span>
+                    <img class="nav-brand-icon" src="{% static 'quiz/images/logo-icon.png' %}" alt="来斩题">
                     <span>来斩题 <span class="nav-brand-sub">- 在线考试系统</span></span>
                 </a>
                 <span class="nav-slogan">我又来斩题啦！</span>

@@ -223,6 +223,7 @@
         <h2>{{ test_record.test_paper.title }}</h2>
         <p>得分：{{ test_record.score }}/{{ test_record.total_score }}</p>
         <p>完成时间：{{ test_record.completed_at }}</p>
+        <p>答题用时：{{ duration_display|default:'--' }}</p>
     </div>
     <div class="questions-container">
         {% for answer_record in answer_records %}

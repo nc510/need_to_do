@@ -245,6 +245,11 @@ def test_paper_detail(request, paper_id):
                 exam_block = '答题时间已到，请提交试卷'
     # ===== P2-3 END =====
 
+    # 记录本次答题起点：仅在实际可作答时记录（未开放/已结束/次数用尽不记录），
+    # 提交时据此统计答题用时（限时/不限时统一）
+    if user.is_authenticated and not exam_block:
+        mark_answer_start(request, 'paper_{}'.format(paper_id))
+
     # 预格式化短变量，避免模板里 {{ test_paper.start_time|date:"m-d H:i" }} 跨行/超长
     start_time_str = test_paper.start_time.strftime('%m-%d %H:%M') if test_paper.start_time else ''
     end_time_str = test_paper.end_time.strftime('%m-%d %H:%M') if test_paper.end_time else ''
@@ -267,8 +272,11 @@ def _auto_submit_expired_draft(request, test_paper, draft):
     """限时考试到期且草稿有答案时自动提交（计分），避免异常中断后回来丢分"""
     questions = list(test_paper.questions.all())
     user_answers = draft.answers or {}
+    # 用时：草稿 start_time 优先（跨会话可靠），否则取 session 起点
+    duration_seconds = resolve_duration_seconds(
+        request, 'paper_{}'.format(test_paper.id), fallback_start=draft.start_time)
     test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-        request.user, test_paper, questions, user_answers)
+        request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds)
     draft.delete()
     messages.info(request, '答题时间已到，已自动为您提交临时保存的答案')
     return render(request, 'quiz/frontend/test_paper_result.html', {
@@ -279,6 +287,7 @@ def _auto_submit_expired_draft(request, test_paper, draft):
         'total_count': len(question_results),
         'question_results': question_results,
         'test_record': test_record,
+        'duration_display': format_duration(duration_seconds),
     })
 
 @login_required
@@ -328,9 +337,15 @@ def submit_test_paper(request, paper_id):
         # ===== P2-3 END =====
         user_answers = collect_user_answers(questions, request.POST)
 
+        # 本次答题用时：草稿 start_time 优先（跨会话可靠），否则取 session 记录的起点
+        duration_seconds = resolve_duration_seconds(
+            request, 'paper_{}'.format(paper_id),
+            fallback_start=(draft.start_time if draft else None))
+
         # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
         test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-            request.user, test_paper, questions, user_answers)
+            request.user, test_paper, questions, user_answers,
+            duration_seconds=duration_seconds)
 
         # 提交成功，删除答题草稿
         if draft:
@@ -343,7 +358,8 @@ def submit_test_paper(request, paper_id):
             'wrong_count': wrong_count,
             'total_count': len(question_results),
             'question_results': question_results,
-            'test_record': test_record
+            'test_record': test_record,
+            'duration_display': format_duration(duration_seconds),
         })
     
     for q in questions:
@@ -437,6 +453,8 @@ def test_history(request):
             record.grade, record.grade_class = '及格', 'pass'
         else:
             record.grade, record.grade_class = '不及格', 'fail'
+        # 答题用时展示文案（无记录显示 --）
+        record.duration_display = format_duration(record.duration_seconds)
 
     # ===== 进行中的答题草稿（临时保存，支持继续测试）=====
     drafts = list(TestDraft.objects.filter(user=request.user).select_related(
@@ -511,7 +529,8 @@ def test_history_detail(request, record_id):
     return render(request, 'quiz/frontend/test_history_detail.html', {
         'test_record': test_record,
         'answer_records': sorted_answer_records,
-        'is_assignment': is_assignment
+        'is_assignment': is_assignment,
+        'duration_display': format_duration(test_record.duration_seconds)
     })
 
 
@@ -537,7 +556,15 @@ def wrong_question_notebook(request):
     for wq in qs:
         wq.question.options = parse_options(wq.question.options)
 
-    paginated_wrong_questions = paginate_queryset(qs, request.GET.get('page', 1), items_per_page=10)
+    # 每页显示题数：默认 20，用户可通过 ?page_size= 自由设置（1~100），便于控制组卷题量
+    try:
+        page_size = int(request.GET.get('page_size', ''))
+    except (TypeError, ValueError):
+        page_size = 0
+    if page_size < 1 or page_size > 100:
+        page_size = 20
+
+    paginated_wrong_questions = paginate_queryset(qs, request.GET.get('page', 1), items_per_page=page_size)
 
     # 各复习状态统计
     # P2-8：6 次独立查询合并为 1 次 aggregate with conditional Count
@@ -556,6 +583,7 @@ def wrong_question_notebook(request):
     return render(request, 'quiz/frontend/wrong_question_notebook.html', {
         'wrong_questions': paginated_wrong_questions,
         'status': status,
+        'page_size': page_size,
         'review_stats': review_stats,
         'mastery_streak_required': MASTERY_STREAK_REQUIRED,
         # 列表里的连对进度圆点：range(2) -> [0, 1]
@@ -635,8 +663,17 @@ def submit_wrong_question_paper(request, paper_id):
         user=request.user, test_paper=test_paper, is_wrong_paper=True).first()
     draft_answers = (draft.answers or {}) if draft else {}
 
+    if request.method != 'POST':
+        # 记录本次答题起点：提交时据此统计答题用时
+        mark_answer_start(request, 'paper_{}'.format(paper_id))
+
     if request.method == 'POST':
         user_answers = collect_user_answers(questions, request.POST)
+
+        # 本次答题用时：草稿 start_time 优先（跨会话可靠），否则取 session 记录的起点
+        duration_seconds = resolve_duration_seconds(
+            request, 'paper_{}'.format(paper_id),
+            fallback_start=(draft.start_time if draft else None))
 
         # 本次答题中手动勾选「保留」的题目：本次不消除，连对次数清零（仅本次有效）
         kept_question_ids = {
@@ -647,7 +684,8 @@ def submit_wrong_question_paper(request, paper_id):
 
         # 创建答题记录 + 答案记录（P2-2 公共函数）
         test_record, _wrong_questions_list = create_test_and_answer_records(
-            request.user, test_paper, questions, score, question_results, is_wrong_paper=True)
+            request.user, test_paper, questions, score, question_results,
+            is_wrong_paper=True, duration_seconds=duration_seconds)
 
         # 错题本消除机制：连对 2 次才消除（答错 -1），手动保留的题本次不消除
         summary = update_wrong_question_notebook(request.user, question_results, kept_question_ids)
@@ -664,6 +702,7 @@ def submit_wrong_question_paper(request, paper_id):
             'total_count': total_count,
             'question_results': question_results,
             'test_record': test_record,
+            'duration_display': format_duration(duration_seconds),
             'mastered_questions': summary['mastered'],
             'kept_questions': summary['kept'],
             'streak_up_questions': summary['streak_up'],

@@ -745,12 +745,12 @@ def student_class_assignments(request):
         user=request.user, assignment__in=assignments).values_list('assignment_id', flat=True))
     assignment_list = []
     for assignment in assignments:
-        # 直接查询每个作业的最新提交记录（按attempt降序）
+        # 直接查询每个作业的最新提交记录（按attempt降序）；select_related 取答题记录以展示用时
         record = ClassAssignmentRecord.objects.filter(
             assignment=assignment,
             user=request.user,
             is_submitted=True
-        ).order_by('-attempt').first()
+        ).select_related('test_record').order_by('-attempt').first()
         is_submitted = record is not None
         is_overdue = assignment.deadline < now
         
@@ -759,7 +759,10 @@ def student_class_assignments(request):
             'record': record,
             'is_submitted': is_submitted,
             'is_overdue': is_overdue,
-            'has_draft': assignment.id in draft_ids
+            'has_draft': assignment.id in draft_ids,
+            # 答题用时展示文案（无记录显示 --）
+            'duration_display': format_duration(
+                record.test_record.duration_seconds if record and record.test_record else None),
         })
     
     response = render(request, 'quiz/frontend/student_class_assignments.html', {
@@ -800,11 +803,15 @@ def do_class_assignment(request, assignment_id):
     # 答题草稿（临时保存，继续测试时预填）
     draft = TestDraft.objects.filter(user=request.user, assignment=assignment).first()
     draft_answers = (draft.answers or {}) if draft else {}
-    
+
     # 考试模式：只能有一次提交
     if assignment.type == 2 and latest_record and latest_record.is_submitted:
         messages.error(request, '您已经提交过该考试')
         return redirect('student_class_assignments')
+
+    # 记录本次答题起点（仅在可作答时进入答题页；提交时据此统计答题用时）
+    if request.method == 'GET':
+        mark_answer_start(request, 'assign_{}'.format(assignment_id))
     
     # POST 请求处理提交
     if request.method == 'POST':
@@ -812,6 +819,12 @@ def do_class_assignment(request, assignment_id):
         if assignment.deadline and timezone.now() > assignment.deadline:
             messages.error(request, '该作业/考试已过截止时间，无法提交')
             return redirect('student_class_assignments')
+        # 本次答题用时：考试模式可用答题记录 start_time 兜底（跨会话可靠），作业模式取 session 起点
+        fallback_start = None
+        if assignment.type == 2 and latest_record and not latest_record.is_submitted:
+            fallback_start = latest_record.start_time
+        duration_seconds = resolve_duration_seconds(
+            request, 'assign_{}'.format(assignment_id), fallback_start=fallback_start)
         # 创建新记录（作业模式始终创建新记录，考试模式重用未提交的记录）
         if assignment.type == 2 and latest_record and not latest_record.is_submitted:
             record = latest_record
@@ -833,7 +846,7 @@ def do_class_assignment(request, assignment_id):
             
             # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
             test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-                request.user, test_paper, questions, user_answers)
+                request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds)
             
             # 更新作业记录
             record.score = score
@@ -881,20 +894,26 @@ def do_class_assignment(request, assignment_id):
                 # 超时自动提交：有草稿按草稿答案计分，无草稿得0分（避免已答内容丢失）
                 test_record = None
                 score2 = 0
+                # 本次答题用时：以答题记录 start_time 为起点
+                duration_seconds = resolve_duration_seconds(
+                    request, 'assign_{}'.format(assignment_id),
+                    fallback_start=record_for_timer.start_time)
                 if assignment.test_paper:
                     test_paper2 = assignment.test_paper
                     questions2 = list(test_paper2.questions.all())
                     if draft and draft.answers:
                         # 有草稿：计分落库（含错题本与 Profile 统计，P2-2 公共函数）
                         test_record, score2, _cc, _wc, _qr = submit_paper_records(
-                            request.user, test_paper2, questions2, draft.answers)
+                            request.user, test_paper2, questions2, draft.answers,
+                            duration_seconds=duration_seconds)
                     else:
                         test_record = TestRecord.objects.create(
                             user=request.user,
                             test_paper=test_paper2,
                             score=0,
                             total_score=test_paper2.total_score,
-                            completed_at=timezone.now()
+                            completed_at=timezone.now(),
+                            duration_seconds=duration_seconds,
                         )
                         # 创建空白答案记录（bulk_create 一次插入，替代原逐条 create 的 N+1）
                         answer_records = []
@@ -968,6 +987,13 @@ def submit_class_assignment(request, assignment_id):
         if assignment.type == 2 and latest_record and latest_record.is_submitted:
             return JsonResponse({'success': False, 'message': '已经提交过该考试'})
 
+        # 本次答题用时：考试模式可用答题记录 start_time 兜底（跨会话可靠），作业模式取 session 起点
+        fallback_start = None
+        if assignment.type == 2 and latest_record and not latest_record.is_submitted:
+            fallback_start = latest_record.start_time
+        duration_seconds = resolve_duration_seconds(
+            request, 'assign_{}'.format(assignment_id), fallback_start=fallback_start)
+
         # 创建/获取答题记录
         if assignment.type == 2 and latest_record and not latest_record.is_submitted:
             record = latest_record
@@ -995,7 +1021,7 @@ def submit_class_assignment(request, assignment_id):
             
             # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
             test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-                request.user, test_paper, questions, user_answers)
+                request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds)
             
             # 更新记录
             record.score = score

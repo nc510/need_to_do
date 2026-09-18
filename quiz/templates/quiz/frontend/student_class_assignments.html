@@ -301,6 +301,7 @@
         <div class="score-display">
             <span class="score-value">{{ record.score }}/{{ assignment.test_paper.total_score }}</span>
             <span class="score-label">得分</span>
+            <span class="score-label">⏱️ 用时 {{ item.duration_display|default:'--' }}</span>
         </div>
         {% endif %}
 
