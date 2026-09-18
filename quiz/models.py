@@ -1,8 +1,20 @@
+import re
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save, post_delete, m2m_changed
 from django.dispatch import receiver
 from django.core.cache import cache
+
+# 标题自带的序号前缀，如「第一章」「第 2 章」「第1.1节」（导入时章节名可能已含序号）
+SEQUENCE_PREFIX_RE = re.compile(
+    r'^\s*第\s*[0-9零一二三四五六七八九十百千两][0-9.零一二三四五六七八九十百千两]*\s*[章节课]\s*'
+)
+
+
+def strip_sequence_prefix(text):
+    """去掉标题开头的「第X章/第X节」序号前缀，供章节查重与展示去重复用。"""
+    return SEQUENCE_PREFIX_RE.sub('', (text or '').replace('\u3000', ' ').strip()).strip()
 
 # 学科模型
 class Subject(models.Model):
@@ -35,11 +47,18 @@ class Chapter(models.Model):
         ordering = ['subject', 'number']
     
     def __str__(self):
-        return f'{self.subject.name} - 第{self.number}章 {self.title}'
+        return f'{self.subject.name} - {self.display_title}'
     
     @property
     def full_number(self):
         return str(self.number)
+
+    @property
+    def display_title(self):
+        """展示用章节名：标题已自带「第X章」序号时不再重复拼编号。"""
+        if SEQUENCE_PREFIX_RE.match((self.title or '').replace('\u3000', ' ').strip()):
+            return self.title
+        return f'第{self.number}章 {self.title}'
 
 # 小节模型
 class Section(models.Model):

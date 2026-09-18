@@ -835,6 +835,7 @@ def _paper_editor_context(request, test_paper=None):
     # 直接传 Python 对象，由模板 json_script 序列化（避免双重序列化导致 JSON.parse 得到字符串）
     chapters_json = [{
         'id': ch.id, 'number': ch.number, 'title': ch.title,
+        'display_title': ch.display_title,
         'subject_id': ch.subject.id if ch.subject else None
     } for ch in chapters]
     knowledge_points_json = [{

@@ -1,6 +1,6 @@
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.db import models
-from django.db.models import Count, F, Q, Sum  # P2-1 拆分后各子模块经 common 复用
+from django.db.models import Count, F, Max, Q, Sum  # P2-1 拆分后各子模块经 common 复用
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
@@ -200,7 +200,7 @@ class AdminTestPaperImporter(BaseTestPaperImporter):
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, MASTERY_STREAK_REQUIRED
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, MASTERY_STREAK_REQUIRED, strip_sequence_prefix
 from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
@@ -313,17 +313,31 @@ def create_question_from_data(q_data, is_public, created_by):
             defaults={'code': subject_name[:10].upper(), 'icon': '📚'}
         )
     if subject_obj and chapter_title:
-        chapter_obj, _ = Chapter.objects.get_or_create(
-            subject=subject_obj,
-            title=chapter_title,
-            defaults={'number': Chapter.objects.filter(subject=subject_obj).count() + 1}
+        # 章节按「去掉第X章前缀」后的名字查重，避免同一章因导入时带/不带序号前缀被重复创建
+        chapter_key = strip_sequence_prefix(chapter_title)
+        chapter_obj = next(
+            (c for c in Chapter.objects.filter(subject=subject_obj) if strip_sequence_prefix(c.title) == chapter_key),
+            None
         )
+        if chapter_obj is None:
+            chapter_obj = Chapter.objects.create(
+                subject=subject_obj,
+                title=chapter_title,
+                number=(Chapter.objects.filter(subject=subject_obj).aggregate(Max('number'))['number__max'] or 0) + 1
+            )
     if chapter_obj and section_title:
-        section_obj, _ = Section.objects.get_or_create(
-            chapter=chapter_obj,
-            title=section_title,
-            defaults={'number': Section.objects.filter(chapter=chapter_obj).count() + 1}
+        # 小节同理：章节内按去掉序号前缀后的名字查重
+        section_key = strip_sequence_prefix(section_title)
+        section_obj = next(
+            (s for s in Section.objects.filter(chapter=chapter_obj) if strip_sequence_prefix(s.title) == section_key),
+            None
         )
+        if section_obj is None:
+            section_obj = Section.objects.create(
+                chapter=chapter_obj,
+                title=section_title,
+                number=(Section.objects.filter(chapter=chapter_obj).aggregate(Max('number'))['number__max'] or 0) + 1
+            )
     if kp_names and subject_obj:
         for kp_name in kp_names.split(','):
             kp_name = kp_name.strip()

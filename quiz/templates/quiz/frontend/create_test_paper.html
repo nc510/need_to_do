@@ -469,9 +469,11 @@
                         </div>
                         <div class="filter-item">
                             <label>分值：</label>
-                            <input type="number" id="minScore" name="min_score" placeholder="最低" min="1" style="width: 60px;">
+                            <input type="number" id="minScore" name="min_score" placeholder="最低" min="1"
+                                style="width: 60px;">
                             <span> - </span>
-                            <input type="number" id="maxScore" name="max_score" placeholder="最高" min="1" style="width: 60px;">
+                            <input type="number" id="maxScore" name="max_score" placeholder="最高" min="1"
+                                style="width: 60px;">
                         </div>
                     </div>
                 </div>
@@ -520,17 +522,22 @@
                 {% if page_obj.has_other_pages %}
                 <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
                     {% if page_obj.has_previous %}
-                    <a href="#" class="page-link" data-page="{{ page_obj.previous_page_number }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">上一页</a>
+                    <a href="#" class="page-link" data-page="{{ page_obj.previous_page_number }}"
+                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">上一页</a>
                     {% endif %}
                     {% for n in page_obj.paginator.page_range %}
                     {% if n == page_obj.number %}
-                    <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n }}</span>
+                    <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n
+                        }}</span>
                     {% else %}
-                    <a href="#" class="page-link" data-page="{{ n }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{ n }}</a>
+                    <a href="#" class="page-link" data-page="{{ n }}"
+                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{
+                        n }}</a>
                     {% endif %}
                     {% endfor %}
                     {% if page_obj.has_next %}
-                    <a href="#" class="page-link" data-page="{{ page_obj.next_page_number }}" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">下一页</a>
+                    <a href="#" class="page-link" data-page="{{ page_obj.next_page_number }}"
+                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">下一页</a>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -641,7 +648,7 @@
             if (!chaptersData[ch.subject_id]) {
                 chaptersData[ch.subject_id] = [];
             }
-            chaptersData[ch.subject_id].push({ id: ch.id, number: ch.number, title: ch.title });
+            chaptersData[ch.subject_id].push({ id: ch.id, number: ch.number, title: ch.title, display_title: ch.display_title });
         });
         knowledgePointsJson.forEach(function (kp) {
             if (!knowledgePointsData[kp.chapter_id]) {
@@ -786,7 +793,7 @@
 
         if (subjectId !== 'all' && chaptersData[subjectId]) {
             chaptersData[subjectId].forEach(chapter => {
-                chapterSelect.innerHTML += '<option value="' + chapter.id + '">第' + chapter.number + '章 ' + chapter.title + '</option>';
+                chapterSelect.innerHTML += '<option value="' + chapter.id + '">' + (chapter.display_title || ('第' + chapter.number + '章 ' + chapter.title)) + '</option>';
             });
         }
         if (fp.chapter && [...chapterSelect.options].some(o => o.value === fp.chapter)) {
