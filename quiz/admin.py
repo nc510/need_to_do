@@ -256,18 +256,19 @@ class TestPaperAdmin(admin.ModelAdmin):
 
 
 class TestRecordAdmin(admin.ModelAdmin):
-    list_display = ('user', 'test_paper', 'score', 'total_score', 'accuracy_rate', 'completed_at', 'is_wrong_paper_display')
+    list_display = ('user', 'test_paper', 'score', 'total_score', 'score_rate', 'completed_at', 'is_wrong_paper_display')
     list_filter = ('completed_at', 'is_wrong_paper')
     search_fields = ('user__username', 'test_paper__title')
     ordering = ('-completed_at',)
 
-    def accuracy_rate(self, obj):
+    def score_rate(self, obj):
+        # 单次答题的得分率（得分 / 卷面总分），与全站「正确率」（答对题次 / 作答题次）不是同一指标
         if obj.total_score > 0:
             rate = int(obj.score / obj.total_score * 100)
             color = '#4caf50' if rate >= 60 else '#f44336'
             return format_html('<span style="color: {}; font-weight: bold;">{}%</span>', color, rate)
         return '0%'
-    accuracy_rate.short_description = '正确率'
+    score_rate.short_description = '得分率'
 
     def is_wrong_paper_display(self, obj):
         if hasattr(obj, 'is_wrong_paper') and obj.is_wrong_paper:
@@ -282,6 +283,9 @@ class AnswerRecordAdmin(admin.ModelAdmin):
     ordering = ('-answered_at',)
 
     def is_correct_display(self, obj):
+        # 未作答既不算对也不算错，单独标记，避免被当成答错
+        if not obj.user_answer:
+            return format_html('<span style="background: #9e9e9e; color: white; padding: 3px 8px; border-radius: 4px;">— 未答</span>')
         if obj.is_correct:
             return format_html('<span style="background: #4caf50; color: white; padding: 3px 8px; border-radius: 4px;">✅ 正确</span>')
         return format_html('<span style="background: #f44336; color: white; padding: 3px 8px; border-radius: 4px;">❌ 错误</span>')

@@ -18,14 +18,9 @@ def user_center(request):
     # 错题数量只统计当前错题本（已消除/已掌握的题归入历史，不计入）
     wrong_count = WrongQuestion.objects.filter(user=request.user).exclude(review_status='mastered').count()
 
-    # 计算正确率（合并为 1 次聚合）
-    answer_stats = AnswerRecord.objects.filter(test_record__user=request.user).aggregate(
-        total=Count('id'),
-        correct=Count('id', filter=Q(is_correct=True)),
-    )
-    total_answered = answer_stats['total']
-    correct_answered = answer_stats['correct']
-    accuracy_rate = int((correct_answered / total_answered) * 100) if total_answered > 0 else 0
+    # 正确率：与榜单同一口径（答对题次 / 实际作答题次，未作答的题不计入分母），
+    # 直接读 Profile 冗余计数，保证与正确率榜显示的数值完全一致
+    accuracy_rate = accuracy_percent(profile.answered_correct, profile.answered_total)
     
     recent_tests = TestRecord.objects.filter(user=request.user).order_by('-completed_at')[:5]
     recent_wrong_questions = WrongQuestion.objects.filter(

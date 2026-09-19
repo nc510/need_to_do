@@ -99,15 +99,9 @@ def test_paper_list(request):
         # 错题数只统计当前错题本（已消除/已掌握的题不计入）
         context['wrong_count'] = WrongQuestion.objects.filter(user=user).exclude(review_status='mastered').count()
         context['profile'] = profile
-        # P1-4：accuracy_rate 改为从 AnswerRecord 实时聚合，不依赖 Profile.accuracy_rate 字段
-        ans_stats = AnswerRecord.objects.filter(test_record__user=user).aggregate(
-            total=Count('id'),
-            correct=Count('id', filter=Q(is_correct=True)),
-        )
-        if ans_stats['total'] > 0:
-            context['accuracy_rate'] = int(ans_stats['correct'] / ans_stats['total'] * 100)
-        else:
-            context['accuracy_rate'] = 0
+        # 正确率：与榜单同一口径（答对题次 / 实际作答题次，未作答的题不计入分母），
+        # 直接读 Profile 冗余计数，保证与正确率榜显示的数值完全一致
+        context['accuracy_rate'] = accuracy_percent(profile.answered_correct, profile.answered_total)
 
         # ===== 我的试卷完成状态：当前页批量聚合，避免逐份试卷查库 =====
         page_papers = list(paginated_test_papers)
@@ -288,6 +282,7 @@ def _auto_submit_expired_draft(request, test_paper, draft):
         'score': score,
         'correct_count': correct_count,
         'wrong_count': wrong_count,
+        'unanswered_count': count_unanswered(question_results),
         'total_count': len(question_results),
         'question_results': question_results,
         'test_record': test_record,
@@ -360,6 +355,7 @@ def submit_test_paper(request, paper_id):
             'score': score,
             'correct_count': correct_count,
             'wrong_count': wrong_count,
+            'unanswered_count': count_unanswered(question_results),
             'total_count': len(question_results),
             'question_results': question_results,
             'test_record': test_record,
@@ -694,6 +690,9 @@ def submit_wrong_question_paper(request, paper_id):
         # 错题本消除机制：连对 2 次才消除（答错 -1），手动保留的题本次不消除
         summary = update_wrong_question_notebook(request.user, question_results, kept_question_ids)
 
+        # 榜单统计（得分 / 斩题数 / 作答题次）：错题巩固同样是刷题，必须与试卷口径一致累加
+        update_profile_leaderboard_stats(request.user, score, question_results)
+
         # 提交成功，删除错题组卷草稿
         if draft:
             draft.delete()
@@ -703,6 +702,7 @@ def submit_wrong_question_paper(request, paper_id):
             'score': score,
             'correct_count': correct_count,
             'wrong_count': wrong_count,
+            'unanswered_count': count_unanswered(question_results),
             'total_count': total_count,
             'question_results': question_results,
             'test_record': test_record,

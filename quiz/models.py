@@ -207,11 +207,11 @@ class Profile(models.Model):
     session_key = models.CharField(max_length=40, verbose_name='当前会话ID', blank=True, null=True)
     total_score = models.IntegerField(default=0, verbose_name='总得分')
     tests_taken = models.IntegerField(default=0, verbose_name='答题次数')
-    accuracy_rate = models.FloatField(default=0.0, verbose_name='正确率')
     # ===== 榜单统计（冗余计数，随答题提交累加，避免榜单每次扫 AnswerRecord 大表）=====
     # 斩题数：答对且去重的题目数（由 ConqueredQuestion 派生，此处冗余用于排名）
     conquered_count = models.PositiveIntegerField(default=0, verbose_name='斩题数')
-    # 累计作答题次（未作答的题不计入）与其中答对题次，用于正确率榜
+    # 累计作答题次（未作答的题不计入）与其中答对题次；
+    # 正确率统一口径 = answered_correct / answered_total，个人卡片与正确率榜共用
     answered_total = models.PositiveIntegerField(default=0, verbose_name='累计作答题次')
     answered_correct = models.PositiveIntegerField(default=0, verbose_name='累计答对题次')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')

@@ -393,10 +393,18 @@ def collect_user_answers(questions, post_data):
     return user_answers
 
 
+def count_unanswered(question_results):
+    """本次未作答的题数。
+
+    未作答既不算对也不算错：不计入正确率分母、不进错题本，仅在结果页单独展示。
+    """
+    return sum(1 for r in question_results if not r.get('user_answer'))
+
+
 def create_test_and_answer_records(user, test_paper, questions, score, question_results, is_wrong_paper=False, duration_seconds=None):
     """创建 TestRecord + 全部 AnswerRecord（bulk_create 一次插入），
     返回 (test_record, wrong_questions)。
-    wrong_questions 为本次答错的 question 列表，供调用方处理错题本。
+    wrong_questions 为本次「已作答且答错」的 question 列表，供调用方处理错题本。
     duration_seconds 为本次答题用时（秒），无法确定时传 None。
     """
     test_record = TestRecord.objects.create(
@@ -424,7 +432,8 @@ def create_test_and_answer_records(user, test_paper, questions, score, question_
             original_options=options_data,
             original_explanation=question.explanation,
         ))
-        if not result['is_correct']:
+        # 未作答的题不进错题本（既不算对也不算错）
+        if not result['is_correct'] and result.get('user_answer'):
             wrong_questions.append(question)
     AnswerRecord.objects.bulk_create(answer_records)
     return test_record, wrong_questions
@@ -434,7 +443,8 @@ def update_wrong_question_notebook(user, question_results, kept_question_ids=fro
     """按本次答题结果维护错题本（消除机制）：
     - 答错：连续答对次数 -1（最低 0），题目留在错题本；已掌握的题答错则退回错题本；
     - 答对且本次勾选「保留」：连对次数归零（视为还没掌握），题目保留；
-    - 答对：连对次数 +1，累计到 MASTERY_STREAK_REQUIRED 次才标记「已掌握」移出错题本，防止蒙对假掌握。
+    - 答对：连对次数 +1，累计到 MASTERY_STREAK_REQUIRED 次才标记「已掌握」移出错题本，防止蒙对假掌握；
+    - 未作答：既不算对也不算错，不新增错题，也不扣已有错题的连对进度。
     kept_question_ids 为本次答题页手动勾选「保留」的题目 id 集合（仅本次有效）。
     返回 summary：{'mastered': [...], 'kept': [...], 'streak_up': [...], 're_added': [...]}，
     mastered 供结果页弹框展示并提供一键恢复。
@@ -451,6 +461,10 @@ def update_wrong_question_notebook(user, question_results, kept_question_ids=fro
     for result in question_results:
         question = result['question']
         wq = existing.get(question.id)
+
+        # 未作答：既不算对也不算错，不新增错题，也不扣已有错题的连对进度
+        if not result.get('user_answer'):
+            continue
 
         if not result['is_correct']:
             # 答错：新增错题，或把已有错题的连对进度扣 1
@@ -567,18 +581,13 @@ def format_duration(seconds):
     return f'{minutes}分{sec}秒' if sec else f'{minutes}分'
 
 
-def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False, duration_seconds=None):
-    """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
-    公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
-    duration_seconds 为本次答题用时（秒），透传给 TestRecord。
-    返回 (test_record, score, correct_count, wrong_count, question_results)。
+def update_profile_leaderboard_stats(user, score, question_results):
+    """把一次作答累计进 Profile 的榜单冗余计数（得分 / 斩题数 / 作答题次与答对题次）。
+
+    正确率统一口径：答对题次 / 实际作答题次，未作答的题不计入分母。
+    榜单与个人正确率都实时读这些字段，因此**所有答题入口**（公开试卷、班级作业考试、
+    错题巩固）落库后都必须调用本函数，否则刷题后榜单与个人正确率都不会变。
     """
-    score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
-    test_record, _wrong_questions_list = create_test_and_answer_records(
-        user, test_paper, questions, score, question_results,
-        is_wrong_paper=is_wrong_paper, duration_seconds=duration_seconds)
-    # 错题本消除机制：答错入库/扣连对次数，答对累计连对次数（达 2 次消除）
-    update_wrong_question_notebook(user, question_results)
     try:
         profile = Profile.objects.get(user=user)
     except Profile.DoesNotExist:
@@ -592,7 +601,9 @@ def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_pap
         )
     # 作答题次只统计实际作答的题，未作答的题不计入正确率分母
     attempted_count = sum(1 for r in question_results if r.get('user_answer'))
-    # 用 F 表达式避免并发读-改-写竞态；不写 accuracy_rate（语义错误，改由 AnswerRecord 聚合）
+    correct_count = sum(1 for r in question_results if r['is_correct'])
+    # 用 F 表达式避免并发读-改-写竞态；不写 Profile.accuracy_rate（该字段已废弃，
+    # 正确率统一由 answered_correct / answered_total 计算，见 accuracy_percent）
     Profile.objects.filter(pk=profile.pk).update(
         total_score=F('total_score') + score,
         tests_taken=F('tests_taken') + 1,
@@ -601,6 +612,22 @@ def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_pap
         # 斩题数直接取去重表条数，保证与 ConqueredQuestion 始终一致
         conquered_count=ConqueredQuestion.objects.filter(user=user).count(),
     )
+
+
+def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False, duration_seconds=None):
+    """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
+    公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
+    duration_seconds 为本次答题用时（秒），透传给 TestRecord。
+    返回 (test_record, score, correct_count, wrong_count, question_results)。
+    """
+    score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
+    test_record, _wrong_questions_list = create_test_and_answer_records(
+        user, test_paper, questions, score, question_results,
+        is_wrong_paper=is_wrong_paper, duration_seconds=duration_seconds)
+    # 错题本消除机制：答错入库/扣连对次数，答对累计连对次数（达 2 次消除）
+    update_wrong_question_notebook(user, question_results)
+    # 榜单统计（得分 / 斩题数 / 作答题次）
+    update_profile_leaderboard_stats(user, score, question_results)
     return test_record, score, correct_count, wrong_count, question_results
 
 

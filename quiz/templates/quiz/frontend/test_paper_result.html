@@ -173,6 +173,12 @@
                 <span>错误:</span>
                 <span class="result-wrong">{{ wrong_count }}</span>题
             </div>
+            {% if unanswered_count %}
+            <div class="result-item">
+                <span>未答:</span>
+                <span>{{ unanswered_count }}</span>题
+            </div>
+            {% endif %}
             <div class="result-item">
                 <span>总题数:</span>
                 <span>{{ total_count }}</span>题
@@ -192,7 +198,7 @@
                     {% if result.question.type == 1 %}单选题{% elif result.question.type == 2 %}多选题{% else %}判断题{% endif %}
                 </span>
                 <span>第{{ forloop.counter }}题 ({{ result.score }}分)</span>
-                <span class="{% if result.result == '正确' %}result-correct{% else %}result-wrong{% endif %}">
+                <span class="{% if result.result == '正确' %}result-correct{% elif result.result == '错误' %}result-wrong{% endif %}">
                     &nbsp;&nbsp;{{ result.result }}
                 </span>
             </div>
@@ -205,7 +211,7 @@
             </div>
             {% endif %}
             <div class="answer-info">
-                <p>你的答案: <span class="user-answer">{{ result.user_answer|default:'' }}</span></p>
+                <p>你的答案: <span class="user-answer">{{ result.user_answer|default:'未答' }}</span></p>
                 <p>正确答案: <span class="correct-answer">{{ result.correct_answer }}</span></p>
             </div>
             {% if result.question.explanation %}

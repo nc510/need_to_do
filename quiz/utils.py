@@ -56,8 +56,14 @@ def compare_answers(user_answer, correct_answer):
     return user_answer.strip().lower() == correct_answer.strip().lower()
 
 def calculate_score(questions, user_answers):
+    """计算本次答题得分与各状态题数。
+
+    未作答的题既不算对也不算错：不计入正确率分母、不进错题本、不计入 wrong_count，
+    仅在结果里标记为「未答」（question_results[].result）。
+    """
     score = 0
     correct_count = 0
+    wrong_count = 0
     question_results = []
 
     for question in questions:
@@ -74,6 +80,7 @@ def calculate_score(questions, user_answers):
         elif user_answer is None:
             result = '未答'
         else:
+            wrong_count += 1
             result = '错误'
 
         question_results.append({
@@ -86,7 +93,6 @@ def calculate_score(questions, user_answers):
         })
 
     total_count = len(question_results)
-    wrong_count = total_count - correct_count
 
     return score, correct_count, wrong_count, total_count, question_results
 

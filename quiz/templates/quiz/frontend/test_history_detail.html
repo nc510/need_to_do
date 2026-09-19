@@ -293,7 +293,7 @@
             <div class="answers">
                 <p><strong>你的答案：</strong>{{ answer_record.user_answer|default:'未答' }}</p>
                 <p><strong>正确答案：</strong>{{ answer_record.correct_answer }}</p>
-                <p><strong>结果：</strong>{% if answer_record.is_correct %}<span class="correct">正确</span>{% else %}<span
+                <p><strong>结果：</strong>{% if not answer_record.user_answer %}未答{% elif answer_record.is_correct %}<span class="correct">正确</span>{% else %}<span
                         class="incorrect">错误</span>{% endif %}</p>
             </div>
 
