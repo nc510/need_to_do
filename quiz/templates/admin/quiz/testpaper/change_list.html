@@ -1,6 +1,30 @@
 {% extends "admin/change_list.html" %}
 {% load i18n admin_urls static %}
 
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* 兜底：simpleui 把 .object-tools 绝对定位在右上角，并依赖 JS（$('.object-tools').hide()
+       配合 Vue 的 _action.exts）把这三个按钮搬进上面的操作条。
+       一旦静态资源 404 导致这段 JS 没执行，按钮就会竖排堆在右上角压住搜索框。
+       这里用更高优先级把它改回普通文档流：JS 正常时该元素已被隐藏，不受任何影响。 */
+    #content .object-tools {
+        position: static;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        height: auto;
+        margin: 0 20px 10px;
+        padding: 0;
+    }
+    #content .object-tools li {
+        float: none;
+        height: auto;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
 {% block object-tools-items %}
 <li>
     <a href="/quiz/admin/create_testpaper/" class="addlink"
