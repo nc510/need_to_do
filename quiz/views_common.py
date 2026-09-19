@@ -200,7 +200,7 @@ class AdminTestPaperImporter(BaseTestPaperImporter):
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, ConqueredQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, MASTERY_STREAK_REQUIRED, MIN_ANSWERS_FOR_ACCURACY_RANK, strip_sequence_prefix
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, ConqueredQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, SiteConfig, MASTERY_STREAK_REQUIRED, MIN_ANSWERS_FOR_ACCURACY_RANK, strip_sequence_prefix
 from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime

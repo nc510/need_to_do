@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save, post_delete, m2m_changed
 from django.dispatch import receiver
 from django.core.cache import cache
+from django.utils import timezone
 
 # 标题自带的序号前缀，如「第一章」「第 2 章」「第1.1节」（导入时章节名可能已含序号）
 SEQUENCE_PREFIX_RE = re.compile(
@@ -203,6 +204,11 @@ class Profile(models.Model):
     qq_number = models.CharField(max_length=20, verbose_name='QQ号码', blank=True, null=True)
     # 关联班级（允许为空，表示未分配班级）
     class_obj = models.ForeignKey('Class', on_delete=models.SET_NULL, verbose_name='所属班级', null=True, blank=True, related_name='profiles')
+    # ===== 会员有效期（后台可单独设置，仅用于记录/展示，不做登录限制）=====
+    member_start_time = models.DateTimeField(verbose_name='会员开始时间', null=True, blank=True)
+    member_expire_time = models.DateTimeField(verbose_name='会员到期时间', null=True, blank=True)
+    # 最后活动时间：由 OnlineActivityMiddleware 节流更新，用于后台统计在线用户
+    last_seen_at = models.DateTimeField(verbose_name='最后活动时间', null=True, blank=True)
     # 单点登录：存储当前活跃的session_key
     session_key = models.CharField(max_length=40, verbose_name='当前会话ID', blank=True, null=True)
     total_score = models.IntegerField(default=0, verbose_name='总得分')
@@ -223,6 +229,55 @@ class Profile(models.Model):
 
     def __str__(self):
         return self.user.username
+
+    # ===== 会员状态（派生字段，仅用于展示，不做访问限制）=====
+    @property
+    def member_status_code(self):
+        """none=未设置 / pending=未开始 / active=生效中 / expired=已到期"""
+        if not self.member_start_time and not self.member_expire_time:
+            return 'none'
+        now = timezone.now()
+        if self.member_start_time and now < self.member_start_time:
+            return 'pending'
+        if self.member_expire_time and now > self.member_expire_time:
+            return 'expired'
+        return 'active'
+
+    @property
+    def member_status_label(self):
+        return {
+            'none': '未设置',
+            'pending': '未开始',
+            'active': '生效中',
+            'expired': '已到期',
+        }[self.member_status_code]
+
+class SiteConfig(models.Model):
+    """站点全局配置（单例），后台「会员默认设置」页维护，影响新用户注册时的默认值"""
+    default_approval_status = models.IntegerField(
+        choices=Profile.APPROVAL_STATUS, default=1,
+        verbose_name='注册用户默认审核状态',
+        help_text='新用户注册后自动写入的会员审核状态默认值')
+    default_member_days = models.PositiveIntegerField(
+        default=0, verbose_name='注册默认会员时长（天）',
+        help_text='新用户注册后自动按该天数设置会员到期时间；0 表示不设到期时间（仅记录开始时间）')
+
+    class Meta:
+        verbose_name = '会员默认设置'
+        verbose_name_plural = '会员默认设置'
+
+    def __str__(self):
+        return '会员默认设置'
+
+    def save(self, *args, **kwargs):
+        # 单例：固定主键为 1，避免后台出现多条配置
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        """获取（不存在则创建）全局配置单例"""
+        return cls.objects.get_or_create(pk=1)[0]
 
 # 创建User时自动创建Profile
 @receiver(post_save, sender=User)

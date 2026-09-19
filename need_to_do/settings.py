@@ -62,6 +62,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'quiz.middleware.AntiSpiderMiddleware',
+    'quiz.middleware.OnlineActivityMiddleware',
 ]
 
 LOGIN_URL = '/quiz/login/'
@@ -278,6 +279,17 @@ SIMPLEUI_CONFIG = {
                     'name': '📝 班级申请',
                     'icon': 'fa-solid fa-file-signature',
                     'url': 'quiz/classapplication/'
+                }
+            ]
+        },
+        {
+            'name': '📡 系统监控',
+            'icon': 'fa-solid fa-heart-pulse',
+            'models': [
+                {
+                    'name': '🟢 在线用户与连接数',
+                    'icon': 'fa-solid fa-signal',
+                    'url': '/quiz/admin/online_users/'
                 }
             ]
         }

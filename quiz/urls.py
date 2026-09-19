@@ -8,6 +8,7 @@ urlpatterns = [
     path('admin/create_testpaper/', views.admin_create_testpaper, name='admin_create_testpaper'),  # 后台组卷
     path('admin/import_testpaper/', views.admin_import_testpaper, name='admin_import_testpaper'),  # 后台导入试卷
     path('admin/preview_testpaper/<int:paper_id>/', views.admin_preview_testpaper, name='admin_preview_testpaper'),  # 后台试卷预览
+    path('admin/online_users/', views.admin_online_users, name='admin_online_users'),  # 后台在线用户与连接数
     
     path('test_paper_list/', views.test_paper_list, name='test_paper_list'),  # 试卷列表
     

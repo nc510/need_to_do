@@ -339,8 +339,7 @@
             <div class="question-header">
                 <div class="question-number">{{ forloop.counter }}</div>
                 <div class="question-content">{{ result.question.content }}</div>
-                <div class="question-type">{% if result.question.type == 1 %}单选题{% elif result.question.type == 2
-                    %}多选题{% else %}判断题{% endif %}</div>
+                <div class="question-type">{% if result.question.type == 1 %}单选题{% elif result.question.type == 2 %}多选题{% else %}判断题{% endif %}</div>
             </div>
 
             {% if result.question.type == 1 or result.question.type == 2 %}

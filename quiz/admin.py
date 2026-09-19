@@ -4,9 +4,10 @@ from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm, AdminPasswordChangeForm
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils import timezone
 from django.http import HttpResponseRedirect
 from django import forms
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, SiteConfig
 
 admin.site.site_header = '📚 来斩题 - 在线考试系统管理后台'
 admin.site.site_title = '来斩题 - 在线考试系统'
@@ -160,12 +161,59 @@ class CustomUserAdmin(UserAdmin):
                 pass
 
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'name', 'role', 'approval_status', 'phone_number', 'class_obj', 'created_at', 'updated_at')
+    list_display = ('user', 'name', 'role', 'approval_status', 'phone_number', 'class_obj', 'member_start_time', 'member_expire_time', 'member_status', 'created_at', 'updated_at')
     list_filter = ('role', 'approval_status', 'class_obj', 'created_at')
     list_editable = ('role', 'approval_status')
     search_fields = ('user__username', 'user__email', 'name', 'phone_number')
     ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'member_status', 'last_seen_at')
+    fieldsets = (
+        ('账号信息', {'fields': ('user', 'name', 'role', 'approval_status', 'plain_password')}),
+        ('联系方式', {'fields': ('phone_number', 'qq_number', 'class_obj')}),
+        ('会员有效期', {
+            'fields': ('member_start_time', 'member_expire_time', 'member_status'),
+            'description': '会员开始与到期时间仅供记录/展示，不做登录限制。',
+        }),
+        ('统计数据', {'fields': ('total_score', 'tests_taken', 'conquered_count', 'answered_total', 'answered_correct')}),
+        ('其他', {'fields': ('session_key', 'last_seen_at', 'created_at', 'updated_at')}),
+    )
+
+    def member_status(self, obj):
+        """会员状态：按开始/到期时间实时计算，仅用于展示"""
+        color, text = {
+            'none': ('#9e9e9e', '— 未设置'),
+            'pending': ('#ff9800', '⏳ 未开始'),
+            'active': ('#4caf50', '✅ 生效中'),
+            'expired': ('#f44336', '❌ 已到期'),
+        }[obj.member_status_code]
+        return format_html('<span style="background:{};color:white;padding:3px 8px;border-radius:4px;">{}</span>', color, text)
+    member_status.short_description = '会员状态'
+
+
+class SiteConfigAdmin(admin.ModelAdmin):
+    """会员默认设置（单例）：注册用户默认审核状态与默认会员时长"""
+    fieldsets = (
+        ('注册用户默认审核状态', {
+            'fields': ('default_approval_status',),
+            'description': '新用户注册后自动写入的会员审核状态默认值（注册即生效，可在「会员信息」中逐个调整）。',
+        }),
+        ('注册用户默认会员时长', {
+            'fields': ('default_member_days',),
+            'description': '新用户注册后按该天数自动设置会员到期时间；填 0 表示不设到期时间，仅记录注册时刻为会员开始时间。',
+        }),
+    )
+
+    def has_add_permission(self, request):
+        # 单例：仅当配置不存在时允许新增
+        return not SiteConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        # 单例：列表页直接跳转到唯一的配置对象
+        obj = SiteConfig.get_solo()
+        return HttpResponseRedirect(reverse('admin:quiz_siteconfig_change', args=[obj.pk]))
 
 class QuestionAdmin(admin.ModelAdmin):
     list_display = ('id', 'type', 'content', 'score', 'is_public', 'created_by', 'subject', 'chapter', 'knowledge_points_display', 'created_at')
@@ -381,6 +429,7 @@ admin.site.register(User, CustomUserAdmin)
 admin.site.register(Question, QuestionAdmin)
 admin.site.register(TestPaper, TestPaperAdmin)
 admin.site.register(Profile, ProfileAdmin)
+admin.site.register(SiteConfig, SiteConfigAdmin)
 admin.site.register(TestRecord, TestRecordAdmin)
 admin.site.register(AnswerRecord, AnswerRecordAdmin)
 admin.site.register(WrongQuestion, WrongQuestionAdmin)

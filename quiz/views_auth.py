@@ -136,11 +136,18 @@ def register(request):
                 first_name=first_name
             )
             
+            site_config = SiteConfig.get_solo()
             profile = Profile.objects.get(user=user)
             profile.phone_number = phone_number
             profile.qq_number = qq_number
             profile.plain_password = password  # 明文密码，供后台管理员查看（方便管理）
-            profile.approval_status = 1  # 注册即通过，立即可登录（管理员可在后台调整）
+            # 审核状态默认值由后台「会员默认设置」控制
+            profile.approval_status = site_config.default_approval_status
+            # 会员开始时间取注册时刻，到期时间按后台配置的默认时长推算（0 天 = 不设到期时间）
+            now = timezone.now()
+            profile.member_start_time = now
+            if site_config.default_member_days > 0:
+                profile.member_expire_time = now + timedelta(days=site_config.default_member_days)
             profile.save()
 
             messages.success(request, '注册成功！请使用账号密码登录。')

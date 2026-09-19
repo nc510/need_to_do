@@ -1,0 +1,246 @@
+{% extends 'admin/base_site.html' %}
+
+{% block title %}在线用户与连接数{% endblock %}
+
+{% block extrastyle %}
+<style>
+    .monitor-wrap {
+        padding: 20px;
+        max-width: 1400px;
+    }
+
+    .monitor-wrap h1 {
+        margin: 0 0 8px;
+        font-size: 22px;
+    }
+
+    .monitor-desc {
+        color: #6b7280;
+        font-size: 13px;
+        line-height: 1.9;
+        margin-bottom: 18px;
+    }
+
+    .monitor-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 26px;
+    }
+
+    .monitor-card {
+        flex: 1 1 190px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-left: 4px solid #4f7cff;
+        border-radius: 8px;
+        padding: 14px 16px;
+    }
+
+    .monitor-card.online {
+        border-left-color: #22c55e;
+    }
+
+    .monitor-card.guest {
+        border-left-color: #f59e0b;
+    }
+
+    .monitor-card.db {
+        border-left-color: #8b5cf6;
+    }
+
+    .monitor-card .label {
+        color: #6b7280;
+        font-size: 13px;
+    }
+
+    .monitor-card .num {
+        font-size: 26px;
+        font-weight: 600;
+        color: #111827;
+        margin-top: 6px;
+    }
+
+    .monitor-card .hint {
+        color: #9ca3af;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .section-head {
+        font-size: 15px;
+        margin: 26px 0 10px;
+    }
+
+    table.monitor-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+    }
+
+    table.monitor-table th,
+    table.monitor-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #eef0f3;
+        text-align: left;
+        font-size: 13px;
+    }
+
+    table.monitor-table th {
+        background: #f8fafc;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .tag {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .tag-active {
+        background: #e8f5e9;
+        color: #1b8a3d;
+    }
+
+    .tag-pending {
+        background: #fff8e1;
+        color: #a5761b;
+    }
+
+    .tag-expired {
+        background: #fdecea;
+        color: #c0392b;
+    }
+
+    .tag-none {
+        background: #eef0f3;
+        color: #6b7280;
+    }
+
+    .dot {
+        color: #22c55e;
+        margin-right: 4px;
+    }
+
+    .empty-tip {
+        background: #fff;
+        border: 1px dashed #dfe3e8;
+        border-radius: 8px;
+        padding: 22px;
+        color: #9ca3af;
+        font-size: 13px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="monitor-wrap">
+    <h1>在线用户与连接数</h1>
+    <div class="monitor-desc">
+        在线口径：最后活动时间距现在 {{ window_minutes }} 分钟以内（活动时间由每次访问自动记录，节流写入，不影响使用）。<br>
+        连接数 = 未过期的会话总数，含未登录的游客会话；会话有效期 {{ session_age_hours }} 小时。<br>
+        统计时间：{{ generated_at|date:"Y-m-d H:i:s" }} &nbsp;
+        <a href="{% url 'admin_online_users' %}" class="button">刷新</a>
+    </div>
+
+    <div class="monitor-cards">
+        <div class="monitor-card online">
+            <div class="label">在线用户数</div>
+            <div class="num">{{ online_user_count }}</div>
+            <div class="hint">{{ window_minutes }} 分钟内有活动的登录用户</div>
+        </div>
+        <div class="monitor-card">
+            <div class="label">连接数（会话总数）</div>
+            <div class="num">{{ connection_count }}</div>
+            <div class="hint">其中已登录 {{ logged_in_connections }} 个</div>
+        </div>
+        <div class="monitor-card guest">
+            <div class="label">游客连接数</div>
+            <div class="num">{{ guest_connections }}</div>
+            <div class="hint">未登录访问（浏览登录页等）</div>
+        </div>
+        <div class="monitor-card db">
+            <div class="label">数据库连接数</div>
+            <div class="num">{% if db_connections %}{{ db_connections }}{% else %}-{% endif %}</div>
+            <div class="hint">MySQL 当前连接线程数</div>
+        </div>
+    </div>
+
+    <h2 class="section-head">在线用户（{{ online_user_count }}）</h2>
+    {% if online_rows %}
+    <table class="monitor-table">
+        <thead>
+            <tr>
+                <th>状态</th>
+                <th>用户名</th>
+                <th>姓名</th>
+                <th>角色</th>
+                <th>审核状态</th>
+                <th>会员状态</th>
+                <th>最后活动</th>
+                <th>会话数</th>
+                <th>会话到期</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in online_rows %}
+            <tr>
+                <td><span class="dot">●</span>在线</td>
+                <td>
+                    {% if row.profile_id %}<a href="{% url 'admin:quiz_profile_change' row.profile_id %}">{{ row.user.username }}</a>{% else %}{{ row.user.username }}{% endif %}
+                    {% if row.is_current %}<span class="tag tag-none">当前会话</span>{% endif %}
+                </td>
+                <td>{{ row.name|default:"-" }}</td>
+                <td>{{ row.role|default:"-" }}</td>
+                <td>{{ row.approval|default:"-" }}</td>
+                <td><span class="tag tag-{{ row.member_code }}">{{ row.member_label }}</span></td>
+                <td>{{ row.last_seen_at|date:"m-d H:i:s" }}</td>
+                <td>{{ row.session_count }}</td>
+                <td>{{ row.expire_date|date:"m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-tip">当前没有活跃中的登录用户</div>
+    {% endif %}
+
+    <h2 class="section-head">已登录但当前不活跃（{{ inactive_rows|length }}）</h2>
+    {% if inactive_rows %}
+    <table class="monitor-table">
+        <thead>
+            <tr>
+                <th>状态</th>
+                <th>用户名</th>
+                <th>姓名</th>
+                <th>角色</th>
+                <th>会员状态</th>
+                <th>最后活动</th>
+                <th>最后登录</th>
+                <th>会话到期</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in inactive_rows %}
+            <tr>
+                <td>离线</td>
+                <td>{% if row.profile_id %}<a href="{% url 'admin:quiz_profile_change' row.profile_id %}">{{ row.user.username }}</a>{% else %}{{ row.user.username }}{% endif %}</td>
+                <td>{{ row.name|default:"-" }}</td>
+                <td>{{ row.role|default:"-" }}</td>
+                <td><span class="tag tag-{{ row.member_code }}">{{ row.member_label }}</span></td>
+                <td>{{ row.last_seen_at|date:"m-d H:i:s"|default:"-" }}</td>
+                <td>{{ row.user.last_login|date:"m-d H:i"|default:"-" }}</td>
+                <td>{{ row.expire_date|date:"m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-tip">没有其他保持登录状态的用户</div>
+    {% endif %}
+</div>
+{% endblock %}

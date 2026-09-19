@@ -527,12 +527,10 @@
                     {% endif %}
                     {% for n in page_obj.paginator.page_range %}
                     {% if n == page_obj.number %}
-                    <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n
-                        }}</span>
+                    <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n }}</span>
                     {% else %}
                     <a href="#" class="page-link" data-page="{{ n }}"
-                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{
-                        n }}</a>
+                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{ n }}</a>
                     {% endif %}
                     {% endfor %}
                     {% if page_obj.has_next %}

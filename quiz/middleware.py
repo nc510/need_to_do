@@ -9,6 +9,7 @@ import secrets
 from django.http import HttpResponseForbidden, HttpResponse
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 
 # 配置常量
 RATE_LIMITS = {
@@ -33,6 +34,11 @@ SUSPICIOUS_USER_AGENTS = [
     'python-requests', 'httpie', 'phantomjs', 'selenium',
     'headless', 'chromedriver', 'geckodriver'
 ]
+
+# 在线活跃度：同一用户在该秒数内只写一次 last_seen_at，避免每请求一次数据库写入
+ACTIVITY_THROTTLE_SECONDS = 60
+# 后台「在线用户」判定窗口（秒）：最后活动时间在该窗口内即视为在线
+ONLINE_WINDOW_SECONDS = 300
 
 # IP白名单（从 settings 读取，支持 .env 覆盖）
 IP_WHITELIST = getattr(settings, 'ANTISPIDER_IP_WHITELIST', ['127.0.0.1', '::1'])
@@ -145,3 +151,32 @@ class AntiSpiderMiddleware:
         nonce = secrets.token_hex(16)
         sig = self._sign_cookie(nonce)
         return f"{nonce}.{sig}"
+
+
+class OnlineActivityMiddleware:
+    """记录已登录用户的最后活动时间，供后台「在线用户」统计使用。
+
+    仅维护 Profile.last_seen_at，不做任何访问限制；
+    借助缓存做 60 秒节流（同一用户每分钟最多一次 UPDATE），避免每请求写库。
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        self.mark_activity(request)
+        return self.get_response(request)
+
+    def mark_activity(self, request):
+        user = getattr(request, 'user', None)
+        if user is None or not user.is_authenticated:
+            return
+        # cache.add 成功说明距上次写入已超过节流窗口，失败则直接跳过本次写库
+        if not cache.add(f'activity:{user.pk}', 1, ACTIVITY_THROTTLE_SECONDS):
+            return
+        from .models import Profile
+        try:
+            Profile.objects.filter(user_id=user.pk).update(last_seen_at=timezone.now())
+        except Exception:
+            # 活跃度记录属于附加统计，失败不能影响正常请求
+            pass

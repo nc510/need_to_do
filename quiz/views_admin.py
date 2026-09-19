@@ -2,6 +2,10 @@
 from .views_common import *  # noqa: F401,F403
 # 后台组卷复用前端手工组卷的选题上下文（学科/章节/知识点级联筛选 + 分页 + 随机选题）
 from .views_paper import _paper_editor_context  # noqa: E402
+# 在线判定窗口与中间件共用同一常量，避免两处口径不一致
+from .middleware import ONLINE_WINDOW_SECONDS  # noqa: E402
+from django.conf import settings  # noqa: E402
+from django.db import connections  # noqa: E402
 
 class QuestionImporter:
     """后台导入题库 - 只导入题目到共享题库，可选一键生成试卷"""
@@ -212,5 +216,80 @@ def admin_import_testpaper(request):
     """后台导入试卷 - 使用导入器类"""
     importer = AdminTestPaperImporter(request)
     return importer.handle()
+
+
+@staff_member_required
+def admin_online_users(request):
+    """后台「在线用户」页：按真实活跃度统计当前在线用户与连接数"""
+    now = timezone.now()
+    window_start = now - timedelta(seconds=ONLINE_WINDOW_SECONDS)
+    current_key = request.session.session_key
+
+    # 未过期的会话数即当前连接数（含未登录游客）
+    sessions = list(Session.objects.filter(expire_date__gte=now))
+    guest_connections = 0
+    session_map = {}
+    for s in sessions:
+        try:
+            uid = s.get_decoded().get('_auth_user_id')
+        except Exception:
+            uid = None
+        if not uid:
+            guest_connections += 1
+            continue
+        session_map.setdefault(str(uid), []).append(s)
+
+    users = {str(u.id): u for u in User.objects.filter(id__in=session_map.keys())}
+    profiles = {str(p.user_id): p for p in Profile.objects.filter(user_id__in=session_map.keys())}
+
+    rows = []
+    for uid, sess_list in session_map.items():
+        user = users.get(uid)
+        if user is None:
+            # 会话里保留的是已删除用户，忽略
+            continue
+        profile = profiles.get(uid)
+        last_seen = profile.last_seen_at if profile else None
+        rows.append({
+            'user': user,
+            'profile_id': profile.id if profile else None,
+            'name': profile.name if profile else '',
+            'role': profile.get_role_display() if profile else '',
+            'approval': profile.get_approval_status_display() if profile else '',
+            'member_code': profile.member_status_code if profile else 'none',
+            'member_label': profile.member_status_label if profile else '无会员信息',
+            'last_seen_at': last_seen,
+            'session_count': len(sess_list),
+            'expire_date': max(s.expire_date for s in sess_list),
+            'is_current': any(s.session_key == current_key for s in sess_list),
+            'is_online': bool(last_seen and last_seen >= window_start),
+        })
+
+    def sort_key(row):
+        return row['last_seen_at'] or row['user'].last_login or now
+
+    rows.sort(key=sort_key, reverse=True)
+    online_rows = [r for r in rows if r['is_online']]
+
+    # 数据库连接数（MySQL），查询失败不影响页面
+    try:
+        with connections['default'].cursor() as cursor:
+            cursor.execute("SHOW STATUS LIKE 'Threads_connected'")
+            db_connections = int(cursor.fetchone()[1])
+    except Exception:
+        db_connections = None
+
+    return render(request, 'quiz/admin/online_users.html', {
+        'online_rows': online_rows,
+        'inactive_rows': [r for r in rows if not r['is_online']],
+        'online_user_count': len(online_rows),
+        'logged_in_connections': sum(r['session_count'] for r in rows),
+        'connection_count': len(sessions),
+        'guest_connections': guest_connections,
+        'db_connections': db_connections,
+        'window_minutes': ONLINE_WINDOW_SECONDS // 60,
+        'session_age_hours': settings.SESSION_COOKIE_AGE // 3600,
+        'generated_at': now,
+    })
 
 
