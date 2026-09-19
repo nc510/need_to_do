@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm, AdminPasswordChangeForm
-from django.urls import reverse
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils import timezone
 from django.http import HttpResponseRedirect
@@ -261,25 +261,40 @@ class TestPaperAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    def get_queryset(self, request):
-        """试卷列表按用途分流：默认只看正式试卷，?paper_type=wrong 时只看错题组卷。
+    def get_urls(self):
+        """追加「错题组卷试卷」独立列表页。
 
-        仅在列表页生效；单条查看/编辑/删除不受影响，管理员仍可查看错题组卷试卷。
+        不能用 ?paper_type=xxx 这种自定义查询参数：admin 的 ChangeList 会把无法识别的
+        参数当作字段查找，抛 IncorrectLookupParameters 后重定向，页面始终显示不出结果。
+        这里改为独立 URL，并放在默认的 <object_id>/ 之前，避免被当成试卷 ID 匹配。
+        """
+        custom_urls = [
+            path('wrong/', self.admin_site.admin_view(self.wrong_paper_changelist),
+                 name='quiz_testpaper_wrong_changelist'),
+        ]
+        return custom_urls + super().get_urls()
+
+    def wrong_paper_changelist(self, request, extra_context=None):
+        """错题组卷试卷列表（复用试卷 changelist 模板，仅供查看与清理）"""
+        extra_context = {
+            **(extra_context or {}),
+            'wrong_mode': True,
+            'title': '错题组卷试卷（仅供查看与清理）',
+        }
+        return self.changelist_view(request, extra_context=extra_context)
+
+    def get_queryset(self, request):
+        """试卷列表按用途分流：正式列表只看正式试卷，错题组卷列表只看错题组卷。
+
+        仅在两个列表页生效；单条查看/编辑/删除不受影响，管理员仍可查看错题组卷试卷。
         """
         qs = super().get_queryset(request)
-        if request.resolver_match and request.resolver_match.url_name == 'quiz_testpaper_changelist':
-            if request.GET.get('paper_type') == 'wrong':
-                return qs.filter(is_wrong_paper=True)
+        url_name = request.resolver_match.url_name if request.resolver_match else ''
+        if url_name == 'quiz_testpaper_wrong_changelist':
+            return qs.filter(is_wrong_paper=True)
+        if url_name == 'quiz_testpaper_changelist':
             return qs.filter(is_wrong_paper=False)
         return qs
-
-    def changelist_view(self, request, extra_context=None):
-        wrong_mode = request.GET.get('paper_type') == 'wrong'
-        extra_context = extra_context or {}
-        extra_context['wrong_mode'] = wrong_mode
-        if wrong_mode:
-            extra_context['title'] = '错题组卷试卷（仅供查看与清理）'
-        return super().changelist_view(request, extra_context=extra_context)
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == 'questions':
