@@ -152,6 +152,9 @@ class TestPaper(models.Model):
     is_published = models.BooleanField(verbose_name='是否发布', default=False)
     is_public = models.BooleanField(verbose_name='是否公开', default=True, help_text='否表示私有试卷，只有创建者和后台能看到')
     source = models.CharField(max_length=20, verbose_name='试卷来源', choices=SOURCE_CHOICES, default='frontend')
+    # 错题组卷：学生从错题本临时生成的练习卷，不计入试卷管理/作业选题/公开列表；
+    # 后台「试卷」列表默认隐藏，可通过列表页「错题组卷」入口单独查看
+    is_wrong_paper = models.BooleanField(default=False, db_index=True, verbose_name='是否错题组卷')
     # ===== P2-3 考试控制字段 =====
     duration = models.IntegerField(verbose_name='考试时长(分钟)', null=True, blank=True, help_text='为空表示不限时；设置后答题页显示倒计时，到时自动交卷')
     max_attempts = models.IntegerField(verbose_name='最大答题次数', null=True, blank=True, help_text='为空表示不限次数')

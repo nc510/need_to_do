@@ -26,6 +26,14 @@
 {% endblock %}
 
 {% block object-tools-items %}
+{% if wrong_mode %}
+<li>
+    <a href="{% url 'admin:quiz_testpaper_changelist' %}" class="addlink"
+        style="background: #607d8b; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+        ← 返回正式试卷列表
+    </a>
+</li>
+{% else %}
 <li>
     <a href="/quiz/admin/create_testpaper/" class="addlink"
         style="background: #007bff !important; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block; border: 1px solid #007bff;">
@@ -44,4 +52,21 @@
         📄 下载导入模板
     </a>
 </li>
+<li>
+    <a href="{% url 'admin:quiz_testpaper_changelist' %}?paper_type=wrong" class="addlink"
+        style="background: #9e9e9e; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+        ❌ 错题组卷试卷
+    </a>
+</li>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if wrong_mode %}
+<div style="margin: 0 20px 12px; padding: 12px 16px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; color: #856404; font-size: 13px;">
+    ℹ️ 以下为学生在「错题本」中临时组卷生成的练习卷，不属于正式试卷，不会出现在作业/考试选题列表与前台试卷列表中。
+    此处仅供管理员查看、预览与清理。
+</div>
+{% endif %}
+{{ block.super }}
 {% endblock %}

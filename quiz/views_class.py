@@ -501,8 +501,10 @@ def create_class_assignment(request, class_id):
         return redirect('class_detail', class_id=class_id)
     
     # 获取已发布的试卷 或 自己创建的试卷（未发布也可用）
+    # 排除错题组卷试卷：它们只是错题本临时练习卷，不参与作业/考试布置
     available_papers = TestPaper.objects.filter(
-        models.Q(is_published=True) | models.Q(created_by=request.user.username)
+        models.Q(is_published=True) | models.Q(created_by=request.user.username),
+        is_wrong_paper=False
     )
     # 供模板"搜索框快捷选试卷"使用：序列化为轻量列表注入 json_script
     papers_list = [{
@@ -545,6 +547,16 @@ def create_class_assignment(request, class_id):
                 'papers_list': papers_list,
             })
 
+        # 错题组卷试卷不可用于布置作业/考试（防止构造请求绕过下拉列表过滤）
+        test_paper = TestPaper.objects.filter(id=paper_id, is_wrong_paper=False).first()
+        if not test_paper:
+            messages.error(request, '所选试卷不可用于布置作业，请重新选择')
+            return render(request, 'quiz/frontend/create_class_assignment.html', {
+                'class_obj': class_obj,
+                'available_papers': available_papers,
+                'papers_list': papers_list,
+            })
+
         assignment_type_int = int(assignment_type)
         assignment = ClassAssignment.objects.create(
             class_obj=class_obj,
@@ -553,7 +565,7 @@ def create_class_assignment(request, class_id):
             type=assignment_type_int,
             deadline=parse_datetime_local(deadline) if deadline else None,
             time_limit=int(time_limit) if (time_limit and assignment_type_int == 2) else None,
-            test_paper=TestPaper.objects.get(id=paper_id),
+            test_paper=test_paper,
             is_allow_exam=True
         )
         

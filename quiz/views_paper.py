@@ -26,10 +26,11 @@ def test_paper_list(request):
     status = request.GET.get('status', 'all')  # all / undone / done（我的作答状态，仅登录用户）
 
     if user.is_staff:
-        test_papers = TestPaper.objects.filter(is_published=True)
+        test_papers = TestPaper.objects.filter(
+            is_published=True, is_wrong_paper=False)
     else:
         test_papers = TestPaper.objects.filter(
-            is_published=True
+            is_published=True, is_wrong_paper=False
         ).filter(
             models.Q(is_public=True) | models.Q(created_by=user.username)
         )
@@ -82,7 +83,7 @@ def test_paper_list(request):
         'hero_stats',
         lambda: {
             'total_papers': TestPaper.objects.filter(
-                is_published=True, is_public=True).count(),
+                is_published=True, is_public=True, is_wrong_paper=False).count(),
             'total_questions': Question.objects.filter(is_public=True).count(),
         },
         300,
@@ -641,7 +642,9 @@ def create_wrong_question_paper(request):
             title='错题巩固试卷',
             description='错题巩固试卷',
             created_by=request.user.username,
-            is_published=False
+            is_published=False,
+            # 打标：不进入后台试卷列表、作业选题列表与「我的试卷」管理
+            is_wrong_paper=True
         )
         
         # 一次查询所有题目（原逐题 get，N+1）；m2m_changed 自动更新 total_score，无需手动算
@@ -741,7 +744,10 @@ def delete_wrong_question(request, wrong_question_id):
 def my_test_papers(request):
     """我的试卷 - 列表 + 搜索/筛选/排序 + 聚合统计"""
     user = request.user
-    base_qs = TestPaper.objects.filter(created_by=user.username).annotate(
+    # 错题组卷试卷不进入「我的试卷」管理列表（由错题本功能内部维护）
+    base_qs = TestPaper.objects.filter(
+        created_by=user.username, is_wrong_paper=False
+    ).annotate(
         question_count=models.Count('questions')
     )
 
@@ -776,7 +782,8 @@ def my_test_papers(request):
 
     # 聚合统计（基于自己创建的全部试卷，不受搜索影响）
     # P2-7：5 次独立 count 合并为 1 次 aggregate with conditional Count
-    stats = TestPaper.objects.filter(created_by=user.username).aggregate(
+    stats = TestPaper.objects.filter(
+        created_by=user.username, is_wrong_paper=False).aggregate(
         total=models.Count('id'),
         published=models.Count('id', filter=models.Q(is_published=True)),
         unpublished=models.Count('id', filter=models.Q(is_published=False)),

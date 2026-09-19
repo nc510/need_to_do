@@ -261,6 +261,26 @@ class TestPaperAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def get_queryset(self, request):
+        """试卷列表按用途分流：默认只看正式试卷，?paper_type=wrong 时只看错题组卷。
+
+        仅在列表页生效；单条查看/编辑/删除不受影响，管理员仍可查看错题组卷试卷。
+        """
+        qs = super().get_queryset(request)
+        if request.resolver_match and request.resolver_match.url_name == 'quiz_testpaper_changelist':
+            if request.GET.get('paper_type') == 'wrong':
+                return qs.filter(is_wrong_paper=True)
+            return qs.filter(is_wrong_paper=False)
+        return qs
+
+    def changelist_view(self, request, extra_context=None):
+        wrong_mode = request.GET.get('paper_type') == 'wrong'
+        extra_context = extra_context or {}
+        extra_context['wrong_mode'] = wrong_mode
+        if wrong_mode:
+            extra_context['title'] = '错题组卷试卷（仅供查看与清理）'
+        return super().changelist_view(request, extra_context=extra_context)
+
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == 'questions':
             field = super().formfield_for_manytomany(db_field, request, **kwargs)
@@ -444,6 +464,12 @@ class ClassAssignmentAdmin(admin.ModelAdmin):
     search_fields = ('title', 'description')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'published_at')
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # 错题组卷试卷不参与作业/考试布置，后台选题下拉同样排除
+        if db_field.name == 'test_paper':
+            kwargs['queryset'] = TestPaper.objects.filter(is_wrong_paper=False)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class ClassAssignmentRecordAdmin(admin.ModelAdmin):
