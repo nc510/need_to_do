@@ -1,5 +1,6 @@
 # 本模块由 quiz/views.py 拆分生成（P2-1），公共依赖（import/类/常量/工具函数）见 views_common.py
 from .views_common import *  # noqa: F401,F403
+from django.template.loader import render_to_string
 
 # 答题视图
 def question_detail(request, question_id):
@@ -17,6 +18,77 @@ def question_detail(request, question_id):
             'correct_answer': question.correct_answer
         })
     return render(request, 'quiz/frontend/question_detail.html', {'question': question})
+
+def _annotate_my_paper_status(paginated_test_papers, user):
+    """给当前页试卷补上「我的作答状态」字段（my_status/my_hint/my_btn_label 等）。
+
+    批量聚合当前页的作答记录与草稿，避免逐份试卷查库；整页渲染与 AJAX 翻页共用。
+    """
+    page_papers = list(paginated_test_papers)
+    paper_ids = [p.pk for p in page_papers]
+    record_stats = {
+        row['test_paper_id']: row
+        for row in TestRecord.objects.filter(
+            user=user, test_paper_id__in=paper_ids
+        ).values('test_paper_id').annotate(
+            cnt=Count('id'),
+            best=models.Max('score'),
+            last=models.Max('completed_at'),
+        )
+    }
+    draft_ids = set(TestDraft.objects.filter(
+        user=user, test_paper_id__in=paper_ids, is_wrong_paper=False
+    ).values_list('test_paper_id', flat=True))
+    now = timezone.now()
+    for paper in page_papers:
+        row = record_stats.get(paper.pk)
+        paper.my_attempts = row['cnt'] if row else 0
+        paper.my_best_score = row['best'] if row else 0
+        paper.my_last_time = row['last'] if row else None
+        paper.my_has_draft = paper.pk in draft_ids
+        paper.my_remaining = None
+        if paper.max_attempts:
+            paper.my_remaining = max(0, paper.max_attempts - paper.my_attempts)
+        paper.my_best_rate = int(
+            paper.my_best_score * 100 / paper.total_score) if paper.total_score else 0
+        # 状态：ended/upcoming（不可答） > done（已答） > doing（有草稿） > new（未作答）
+        if paper.end_time and now > paper.end_time:
+            paper.my_status, paper.my_status_label = 'ended', '已结束'
+        elif paper.start_time and now < paper.start_time:
+            paper.my_status, paper.my_status_label = 'upcoming', '未开放'
+        elif paper.my_attempts:
+            paper.my_status = 'done'
+            paper.my_status_label = '已答 {} 次'.format(paper.my_attempts)
+        elif paper.my_has_draft:
+            paper.my_status, paper.my_status_label = 'doing', '答题中'
+        else:
+            paper.my_status, paper.my_status_label = 'new', '未作答'
+        # 卡片提示语 + 按钮文案（模板内不再做多条件判断）
+        if paper.my_status == 'ended':
+            paper.my_hint = '该试卷已结束答题'
+            paper.my_btn_label = '查看详情 →'
+        elif paper.my_status == 'upcoming':
+            paper.my_hint = '开放时间：' + paper.start_time.strftime('%m-%d %H:%M')
+            paper.my_btn_label = '查看详情 →'
+        elif paper.my_status == 'done':
+            paper.my_hint = '最高 {} 分（得分率 {}%）· 最近 {}'.format(
+                paper.my_best_score, paper.my_best_rate,
+                paper.my_last_time.strftime('%m-%d %H:%M'))
+            if paper.my_remaining is not None:
+                if paper.my_remaining > 0:
+                    paper.my_hint += ' · 剩余 {} 次机会'.format(paper.my_remaining)
+                else:
+                    paper.my_hint += ' · 已用完答题次数'
+            paper.my_btn_label = '再次答题 →' if paper.my_remaining != 0 else '查看详情 →'
+        elif paper.my_status == 'doing':
+            paper.my_hint = '有未提交的作答记录，可继续答题'
+            paper.my_btn_label = '继续答题 →'
+        else:
+            paper.my_hint = '尚未作答'
+            if paper.max_attempts:
+                paper.my_hint += ' · 共 {} 次机会'.format(paper.max_attempts)
+            paper.my_btn_label = '开始答题 →'
+
 
 def test_paper_list(request):
     user = request.user
@@ -70,12 +142,26 @@ def test_paper_list(request):
 
     paginated_test_papers = paginate_queryset(test_papers, request.GET.get('page', 1))
 
+    # 分页链接的公共查询串（去掉 page，页码由模板拼接），避免模板里重复拼筛选条件
+    page_params = request.GET.copy()
+    page_params.pop('page', None)
+
     context = {
         'test_papers': paginated_test_papers,
         'search': search,
         'sort': sort,
         'status': status,
+        'query_string': page_params.urlencode(),
     }
+
+    # 我的试卷完成状态：当前页批量聚合（列表区块渲染所需，AJAX 翻页同样要算）
+    if user.is_authenticated:
+        _annotate_my_paper_status(paginated_test_papers, user)
+
+    # 列表区块的 AJAX 请求（翻页/筛选/重置）：只返回列表片段，
+    # 跳过 Hero 统计/全站榜单等与列表无关的重查询
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render(request, 'quiz/frontend/_test_paper_list_body.html', context)
 
     # Hero 区全站统计（公开试卷 + 公开题目，不受搜索影响）
     # P2-4：加 5 分钟 cache，避免每次列表页都 count 全表
@@ -104,72 +190,6 @@ def test_paper_list(request):
         # 正确率：与榜单同一口径（答对题次 / 实际作答题次，未作答的题不计入分母），
         # 直接读 Profile 冗余计数，保证与正确率榜显示的数值完全一致
         context['accuracy_rate'] = accuracy_percent(profile.answered_correct, profile.answered_total)
-
-        # ===== 我的试卷完成状态：当前页批量聚合，避免逐份试卷查库 =====
-        page_papers = list(paginated_test_papers)
-        paper_ids = [p.pk for p in page_papers]
-        record_stats = {
-            row['test_paper_id']: row
-            for row in TestRecord.objects.filter(
-                user=user, test_paper_id__in=paper_ids
-            ).values('test_paper_id').annotate(
-                cnt=Count('id'),
-                best=models.Max('score'),
-                last=models.Max('completed_at'),
-            )
-        }
-        draft_ids = set(TestDraft.objects.filter(
-            user=user, test_paper_id__in=paper_ids, is_wrong_paper=False
-        ).values_list('test_paper_id', flat=True))
-        now = timezone.now()
-        for paper in page_papers:
-            row = record_stats.get(paper.pk)
-            paper.my_attempts = row['cnt'] if row else 0
-            paper.my_best_score = row['best'] if row else 0
-            paper.my_last_time = row['last'] if row else None
-            paper.my_has_draft = paper.pk in draft_ids
-            paper.my_remaining = None
-            if paper.max_attempts:
-                paper.my_remaining = max(0, paper.max_attempts - paper.my_attempts)
-            paper.my_best_rate = int(
-                paper.my_best_score * 100 / paper.total_score) if paper.total_score else 0
-            # 状态：ended/upcoming（不可答） > done（已答） > doing（有草稿） > new（未作答）
-            if paper.end_time and now > paper.end_time:
-                paper.my_status, paper.my_status_label = 'ended', '已结束'
-            elif paper.start_time and now < paper.start_time:
-                paper.my_status, paper.my_status_label = 'upcoming', '未开放'
-            elif paper.my_attempts:
-                paper.my_status = 'done'
-                paper.my_status_label = '已答 {} 次'.format(paper.my_attempts)
-            elif paper.my_has_draft:
-                paper.my_status, paper.my_status_label = 'doing', '答题中'
-            else:
-                paper.my_status, paper.my_status_label = 'new', '未作答'
-            # 卡片提示语 + 按钮文案（模板内不再做多条件判断）
-            if paper.my_status == 'ended':
-                paper.my_hint = '该试卷已结束答题'
-                paper.my_btn_label = '查看详情 →'
-            elif paper.my_status == 'upcoming':
-                paper.my_hint = '开放时间：' + paper.start_time.strftime('%m-%d %H:%M')
-                paper.my_btn_label = '查看详情 →'
-            elif paper.my_status == 'done':
-                paper.my_hint = '最高 {} 分（得分率 {}%）· 最近 {}'.format(
-                    paper.my_best_score, paper.my_best_rate,
-                    paper.my_last_time.strftime('%m-%d %H:%M'))
-                if paper.my_remaining is not None:
-                    if paper.my_remaining > 0:
-                        paper.my_hint += ' · 剩余 {} 次机会'.format(paper.my_remaining)
-                    else:
-                        paper.my_hint += ' · 已用完答题次数'
-                paper.my_btn_label = '再次答题 →' if paper.my_remaining != 0 else '查看详情 →'
-            elif paper.my_status == 'doing':
-                paper.my_hint = '有未提交的作答记录，可继续答题'
-                paper.my_btn_label = '继续答题 →'
-            else:
-                paper.my_hint = '尚未作答'
-                if paper.max_attempts:
-                    paper.my_hint += ' · 共 {} 次机会'.format(paper.max_attempts)
-                paper.my_btn_label = '开始答题 →'
 
         # 我的完成进度（可见试卷中已作答的份数）
         progress_total = progress_base.count()
@@ -461,13 +481,17 @@ def test_history(request):
     ).annotate(question_count=Count('test_paper__questions')).order_by('-completed_at')
     paginated_records = paginate_queryset(test_records, request.GET.get('page', 1), items_per_page=10)
 
-    # 成绩等级：及格线 60%、优秀线 80%
+    # 成绩等级：按试卷配置的等级线（默认及格 60%、优秀 80%）
     # 在视图算好数值再比较（模板 {% widthratio ... as x %} 存的是字符串，与数字比较恒为 False，会导致全部落到"不及格"）
     for record in paginated_records:
         record.percentage = int(round(record.score * 100 / record.total_score)) if record.total_score else 0
-        if record.percentage >= 80:
+        paper = record.test_paper
+        # test_paper 允许为空（模板同样做了判空），为空时回落到默认等级线
+        excellent_line = paper.excellent_rate if paper else TestPaper.DEFAULT_EXCELLENT_RATE
+        pass_line = paper.pass_rate if paper else TestPaper.DEFAULT_PASS_RATE
+        if record.percentage >= excellent_line:
             record.grade, record.grade_class = '优秀', 'excellent'
-        elif record.percentage >= 60:
+        elif record.percentage >= pass_line:
             record.grade, record.grade_class = '及格', 'pass'
         else:
             record.grade, record.grade_class = '不及格', 'fail'
@@ -916,6 +940,10 @@ def create_test_paper(request):
             messages.error(request, '请填写试卷标题并至少选择一道题目')
 
     context = _paper_editor_context(request)
+    ajax_response = _paper_editor_ajax_response(
+        request, context, 'quiz/frontend/_editor_questions.html')
+    if ajax_response:
+        return ajax_response
     if context.get('redirect_url'):
         return redirect(request.path + context['redirect_url'])
     return render(request, 'quiz/frontend/create_test_paper.html', context)
@@ -1004,11 +1032,13 @@ def _paper_editor_context(request, test_paper=None):
         'id': q.id, 'content': q.content, 'score': q.score, 'type': q.type
     } for q in selected]
 
-    # 随机选中的题目并入已选（JS 直接构造 selectedQuestions）
-    if random_questions:
-        sel_questions += [{
-            'id': q.id, 'content': q.content, 'score': q.score, 'type': q.type
-        } for q in random_questions]
+    # 本次随机抽中的题目（AJAX 局部刷新时前端直接并入已选，无需整页 redirect）
+    random_picked = [{
+        'id': q.id, 'content': q.content, 'score': q.score, 'type': q.type
+    } for q in random_questions]
+
+    # 随机选中的题目并入已选（整页渲染时 JS 直接构造 selectedQuestions）
+    sel_questions += random_picked
 
     # 筛选参数回显 + 分页/筛选链接共用查询串
     filter_params = {
@@ -1037,8 +1067,25 @@ def _paper_editor_context(request, test_paper=None):
         'filter_params': filter_params,
         'filter_query': filter_query,
         'sel_questions': sel_questions,
+        'random_questions': random_picked,
         'redirect_url': redirect_url,
     }
+
+
+def _paper_editor_ajax_response(request, context, template):
+    """组卷页局部刷新（翻页/筛选/随机选题）：返回题目列表片段 + 随机结果 JSON。
+
+    非 AJAX 请求返回 None，由调用方按整页渲染处理；
+    这样翻页不会整页重载，表单里已填的试卷标题/描述不会被清空。
+    """
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return None
+    return JsonResponse({
+        'html': render_to_string(template, context, request=request),
+        'total': context['question_total'],
+        'page': context['page_obj'].number,
+        'random': context['random_questions'],
+    })
 
 
 @login_required
@@ -1104,13 +1151,17 @@ def edit_test_paper(request, paper_id):
             messages.error(request, '请填写试卷标题并至少选择一道题目')
 
     context = _paper_editor_context(request, test_paper=test_paper)
-    if context.get('redirect_url'):
-        return redirect(request.path + context['redirect_url'])
     context.update({
         'edit_mode': True,
         'test_paper': test_paper,
         'ps_pub': 'true' if test_paper.is_published else 'false',
     })
+    ajax_response = _paper_editor_ajax_response(
+        request, context, 'quiz/frontend/_editor_questions.html')
+    if ajax_response:
+        return ajax_response
+    if context.get('redirect_url'):
+        return redirect(request.path + context['redirect_url'])
     return render(request, 'quiz/frontend/create_test_paper.html', context)
 
 

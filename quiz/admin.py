@@ -252,7 +252,7 @@ class TestPaperAdmin(admin.ModelAdmin):
     search_fields = ('title', 'description', 'created_by')
     ordering = ('-created_at',)
     filter_horizontal = ('questions',)
-    fields = ('title', 'description', 'questions', 'is_published', 'is_public', 'review_status', 'review_remark', 'duration', 'max_attempts', 'start_time', 'end_time')
+    fields = ('title', 'description', 'questions', 'is_published', 'is_public', 'review_status', 'review_remark', 'duration', 'max_attempts', 'start_time', 'end_time', 'pass_rate', 'good_rate', 'excellent_rate')
     readonly_fields = ('total_score', 'created_at', 'created_by', 'reviewed_at', 'reviewed_by')
     change_list_template = 'admin/quiz/testpaper/change_list.html'
     change_form_template = 'admin/quiz/testpaper/change_form.html'
@@ -414,9 +414,11 @@ class TestRecordAdmin(admin.ModelAdmin):
 
     def score_rate(self, obj):
         # 单次答题的得分率（得分 / 卷面总分），与全站「正确率」（答对题次 / 作答题次）不是同一指标
+        # 是否及格按该试卷配置的及格线着色；test_paper 为空（历史脏数据）时回落到默认 60
         if obj.total_score > 0:
             rate = int(obj.score / obj.total_score * 100)
-            color = '#4caf50' if rate >= 60 else '#f44336'
+            pass_line = obj.test_paper.pass_rate if obj.test_paper else TestPaper.DEFAULT_PASS_RATE
+            color = '#4caf50' if rate >= pass_line else '#f44336'
             return format_html('<span style="color: {}; font-weight: bold;">{}%</span>', color, rate)
         return '0%'
     score_rate.short_description = '得分率'

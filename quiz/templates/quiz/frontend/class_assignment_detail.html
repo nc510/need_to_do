@@ -83,38 +83,6 @@
         background: #eee;
     }
 
-    .member-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
-    .member-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        background: #f8f9fa;
-        transition: background 0.3s ease;
-    }
-
-    .member-item:hover {
-        background: #f0f0f0;
-    }
-
-    .member-item .name {
-        font-weight: 500;
-        color: #2c3e50;
-    }
-
-    .member-item .email {
-        font-size: 13px;
-        color: #888;
-        margin-top: 2px;
-    }
-
     .status-badge {
         font-size: 12px;
         padding: 4px 12px;
@@ -132,14 +100,112 @@
         color: #856404;
     }
 
-    .score {
-        font-size: 16px;
+    .stats-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        margin-top: 20px;
+    }
+
+    .stats-table th,
+    .stats-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid #eee;
+        text-align: left;
+    }
+
+    .stats-table th {
+        background: #f8f9fa;
+        color: #555;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .stats-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .stats-table td.value {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .stats-subtitle {
+        font-size: 15px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin: 25px 0 0 0;
+    }
+
+    .stats-note {
+        font-size: 12px;
+        color: #999;
+        margin: 10px 0 0 0;
+    }
+
+    .records-table th.sortable a {
+        color: #555;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .records-table th.sortable a:hover,
+    .records-table th.active a {
+        color: #667eea;
+    }
+
+    .sort-arrow {
+        font-size: 11px;
+        opacity: 0.6;
+    }
+
+    .records-table td.score-cell {
         font-weight: 600;
         color: #667eea;
     }
 
-    .score.full {
+    .records-table td.rank-cell {
+        font-weight: 600;
+        color: #667eea;
+        text-align: center;
+    }
+
+    .records-table tr.own-row td {
+        background: #f0f4ff;
+    }
+
+    .records-table td.score-cell.full {
         color: #28a745;
+    }
+
+    .grade-badge {
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+        margin-left: 6px;
+    }
+
+    .grade-excellent {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .grade-good {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+
+    .grade-pass {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .grade-fail {
+        background: #f8d7da;
+        color: #721c24;
     }
 
     .empty-list {
@@ -275,8 +341,13 @@
             {% if assignment.type == 1 %}作业已关闭{% else %}考试已关闭{% endif %}{% endif %}
         </span>
         <div class="header-actions">
-            <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回列表</a>
-            {% if assignment.status == 0 %}
+            {% if is_admin %}
+            <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回作业列表</a>
+            {% else %}
+            <a href="{% url 'student_class_assignments' %}?type={{ assignment.type }}" class="btn btn-secondary">←
+                返回我的{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</a>
+            {% endif %}
+            {% if is_admin and assignment.status == 0 %}
             <a href="{% url 'publish_class_assignment' class_obj.id assignment.id %}" class="btn btn-primary">🚀
                 发布作业</a>
             {% endif %}
@@ -305,43 +376,169 @@
         <h2 class="section-title">📊 统计信息</h2>
         <div class="stats-row">
             <div class="stat-item">
-                <div class="stat-value">{{ total_students }}</div>
+                <div class="stat-value">{{ stats.total_students }}</div>
                 <div class="stat-label">班级人数</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" style="color: #28a745;">{{ completed_count }}</div>
+                <div class="stat-value" style="color: #28a745;">{{ stats.completed_count }}</div>
                 <div class="stat-label">已提交</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value" style="color: #dc3545;">{{ not_submitted_count }}</div>
+                <div class="stat-value" style="color: #dc3545;">{{ stats.not_submitted_count }}</div>
                 <div class="stat-label">未提交</div>
             </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ stats.completion_rate }}%</div>
+                <div class="stat-label">提交率</div>
+            </div>
         </div>
+
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>成绩指标</th>
+                    <th>数值</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>已提交 / 班级人数</td>
+                    <td class="value">{{ stats.completed_count }} / {{ stats.total_students }}</td>
+                </tr>
+                <tr>
+                    <td>平均分</td>
+                    <td class="value">
+                        {% if stats.avg_score is not None %}{{ stats.avg_score }} / {{ total_score }}{% else %}--{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>平均得分率</td>
+                    <td class="value">
+                        {% if stats.avg_rate is not None %}{{ stats.avg_rate }}%{% else %}--{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>最高分</td>
+                    <td class="value">
+                        {% if stats.max_score is not None %}{{ stats.max_score }} / {{ total_score }}{% else %}--{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>最低分</td>
+                    <td class="value">
+                        {% if stats.min_score is not None %}{{ stats.min_score }} / {{ total_score }}{% else %}--{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>及格人数（得分率 ≥{{ pass_rate }}%）</td>
+                    <td class="value" style="color: #28a745;">{{ stats.pass_count }} 人</td>
+                </tr>
+                <tr>
+                    <td>及格率</td>
+                    <td class="value" style="color: #28a745;">{{ stats.pass_rate }}%</td>
+                </tr>
+                <tr>
+                    <td>优秀人数（得分率 ≥{{ excellent_rate }}%）</td>
+                    <td class="value" style="color: #155724;">{{ stats.excellent_count }} 人</td>
+                </tr>
+                <tr>
+                    <td>优秀率</td>
+                    <td class="value" style="color: #155724;">{{ stats.excellent_rate }}%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3 class="stats-subtitle">分段人数统计</h3>
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>分数段</th>
+                    <th>人数</th>
+                    <th>占班级比例</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for segment in segments %}
+                <tr>
+                    <td>{{ segment.label }}</td>
+                    <td class="value">{{ segment.count }} 人</td>
+                    <td class="value">{{ segment.percent }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="stats-note">
+            注：及格率、优秀率以已提交人数为基数；分段占比以班级人数为基数；得分率 = 得分 / 试卷总分；
+            等级线按试卷配置（当前 及格 {{ pass_rate }}% / 良好 {{ good_rate }}% / 优秀 {{ excellent_rate }}%）。
+        </p>
     </div>
 
     <div class="section">
         <h2 class="section-title">👤 学生完成情况</h2>
-        {% if records %}
-        <ul class="member-list">
-            {% for record in records %}
-            <li class="member-item">
-                <div>
-                    <div class="name">{{ record.user.username }}</div>
-                    <div class="email">{{ record.user.email }}</div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    {% if record.is_submitted %}
-                    <span class="status-badge status-submitted">已提交</span>
-                    <span class="score {% if record.score == assignment.test_paper.total_score %}full{% endif %}">
-                        {{ record.score }}/{{ assignment.test_paper.total_score }}
-                    </span>
-                    {% else %}
-                    <span class="status-badge status-not-submitted">未提交</span>
-                    {% endif %}
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
+        {% if rows %}
+        <table class="stats-table records-table">
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th class="sortable {% if sort == 'name' %}active{% endif %}">
+                        <a href="?sort=name&order={% if sort == 'name' and order == 'asc' %}desc{% else %}asc{% endif %}">
+                            学生
+                            <span class="sort-arrow">{% if sort == 'name' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}↕{% endif %}</span>
+                        </a>
+                    </th>
+                    {% if is_admin %}<th>邮箱</th>{% endif %}
+                    <th class="sortable {% if sort == 'status' %}active{% endif %}">
+                        <a href="?sort=status&order={% if sort == 'status' and order == 'desc' %}asc{% else %}desc{% endif %}">
+                            状态
+                            <span class="sort-arrow">{% if sort == 'status' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}↕{% endif %}</span>
+                        </a>
+                    </th>
+                    <th class="sortable {% if sort == 'score' %}active{% endif %}">
+                        <a href="?sort=score&order={% if sort == 'score' and order == 'desc' %}asc{% else %}desc{% endif %}">
+                            得分
+                            <span class="sort-arrow">{% if sort == 'score' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}↕{% endif %}</span>
+                        </a>
+                    </th>
+                    <th>得分率</th>
+                    <th class="sortable {% if sort == 'submitted_at' %}active{% endif %}">
+                        <a
+                            href="?sort=submitted_at&order={% if sort == 'submitted_at' and order == 'desc' %}asc{% else %}desc{% endif %}">
+                            提交时间
+                            <span class="sort-arrow">{% if sort == 'submitted_at' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}↕{% endif %}</span>
+                        </a>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr{% if row.user.id == request.user.id %} class="own-row"{% endif %}>
+                    <td class="rank-cell">{{ row.rank|default:"--" }}</td>
+                    <td>{{ row.user.username }}</td>
+                    {% if is_admin %}<td style="color: #888;">{{ row.user.email|default:"--" }}</td>{% endif %}
+                    <td>
+                        {% if row.is_submitted %}
+                        <span class="status-badge status-submitted">已提交</span>
+                        {% else %}
+                        <span class="status-badge status-not-submitted">未提交</span>
+                        {% endif %}
+                    </td>
+                    <td class="score-cell {% if row.is_submitted and row.score == total_score %}full{% endif %}">
+                        {% if row.is_submitted %}{{ row.score }}/{{ total_score }}{% else %}--{% endif %}
+                    </td>
+                    <td>
+                        {% if row.is_submitted %}
+                        {{ row.rate }}%
+                        {% if row.rate >= excellent_rate %}<span class="grade-badge grade-excellent">优秀</span>
+                        {% elif row.rate >= good_rate %}<span class="grade-badge grade-good">良好</span>
+                        {% elif row.rate >= pass_rate %}<span class="grade-badge grade-pass">及格</span>
+                        {% else %}<span class="grade-badge grade-fail">不及格</span>{% endif %}
+                        {% else %}--{% endif %}
+                    </td>
+                    <td style="color: #888;">{{ row.submitted_at|date:"Y-m-d H:i"|default:"--" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% else %}
         <div class="empty-list">
             <span style="font-size: 30px;">🔍</span>

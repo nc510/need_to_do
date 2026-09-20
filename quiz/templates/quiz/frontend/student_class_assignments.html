@@ -323,6 +323,8 @@
             {% else %}
             <a href="{% url 'do_class_assignment' assignment_id=assignment.id %}" class="btn btn-primary">✏️ 开始答题</a>
             {% endif %}
+            <a href="{% url 'class_assignment_detail' assignment.class_obj_id assignment.id %}"
+                class="btn btn-secondary">📊 成绩排行</a>
         </div>
     </div>
     {% endwith %}

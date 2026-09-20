@@ -581,23 +581,130 @@ def create_class_assignment(request, class_id):
 @login_required
 def class_assignment_detail(request, class_id, assignment_id):
     assignment = get_object_or_404(ClassAssignment, pk=assignment_id, class_obj_id=class_id)
-    
+
     is_admin = ClassAdmin.objects.filter(class_obj=assignment.class_obj, user=request.user).exists()
-    
-    records = ClassAssignmentRecord.objects.filter(assignment=assignment).select_related('user')
-    
-    total_students = assignment.get_total_students()
-    completed_count = assignment.get_completed_count()
+
+    # 权限：班级管理员或本班成员（学生）均可查看完成情况与成绩排行，非本班用户不可访问。
+    # 注：原实现没有任何校验，任意登录用户都能越权查看其他班级的成绩，此处补齐。
+    if not is_admin and not Class.objects.filter(id=class_id, profiles__user=request.user).exists():
+        messages.error(request, '您不是该班级的管理员或学生')
+        return redirect('class_list')
+
+    paper = assignment.test_paper
+    total_score = paper.total_score or 0
+    # 等级线按试卷配置（默认 60/70/80），答题历史与作业统计共用同一口径
+    pass_rate = paper.pass_rate
+    good_rate = paper.good_rate
+    excellent_rate = paper.excellent_rate
+
+    # 作业允许多次提交（每次提交生成新记录），统计与列表统一按"每位学生取最高分"的口径，
+    # 保证与"班级人数"基数一致，不会出现完成率超过 100% 的情况
+    best_records = {}
+    for record in ClassAssignmentRecord.objects.filter(
+        assignment=assignment, is_submitted=True
+    ).select_related('user'):
+        current = best_records.get(record.user_id)
+        if current is None or (record.score or 0) > (current.score or 0):
+            best_records[record.user_id] = record
+
+    rows = []
+    for student in assignment.class_obj.get_students():
+        record = best_records.get(student.id)
+        score = record.score if (record and record.score is not None) else None
+        rows.append({
+            'user': student,
+            'name': student.username,
+            'is_submitted': score is not None,
+            'score': score,
+            # 得分率（百分制），等级划分与答题历史保持一致
+            'rate': round(score * 100 / total_score, 1) if (score is not None and total_score) else (0 if score is not None else None),
+            'submitted_at': record.submitted_at if record else None,
+            'rank': None,
+        })
+
+    submitted_rows = [r for r in rows if r['is_submitted']]
+    scores = [r['score'] for r in submitted_rows]
+    rates = [r['rate'] for r in submitted_rows]
+
+    # 成绩排行名次：按得分降序，同分并列（1,2,2,4）；未提交无名次
+    rank = 0
+    previous_score = None
+    for position, row in enumerate(sorted(submitted_rows, key=lambda r: r['score'], reverse=True), start=1):
+        if row['score'] != previous_score:
+            rank, previous_score = position, row['score']
+        row['rank'] = rank
+
+    total_students = len(rows)
+    completed_count = len(submitted_rows)
     not_submitted_count = total_students - completed_count
-    
+
+    def _pct(part, whole):
+        """百分比：基数 0 时返回 0，避免除零"""
+        return round(part * 100 / whole, 1) if whole else 0
+
+    pass_count = sum(1 for rate in rates if rate >= pass_rate)
+    excellent_count = sum(1 for rate in rates if rate >= excellent_rate)
+
+    stats = {
+        'total_students': total_students,
+        'completed_count': completed_count,
+        'not_submitted_count': not_submitted_count,
+        'completion_rate': _pct(completed_count, total_students),
+        'avg_score': round(sum(scores) / len(scores), 1) if scores else None,
+        'avg_rate': round(sum(rates) / len(rates), 1) if rates else None,
+        'max_score': max(scores) if scores else None,
+        'min_score': min(scores) if scores else None,
+        'pass_count': pass_count,
+        # 及格率/优秀率以已提交人数为基数（未提交学生不计入成绩统计）
+        'pass_rate': _pct(pass_count, completed_count),
+        'excellent_count': excellent_count,
+        'excellent_rate': _pct(excellent_count, completed_count),
+    }
+
+    # 分段人数统计：占比以班级人数为基数，各段之和 = 100%
+    segments = [
+        {'label': f'优秀（≥{excellent_rate}%）', 'count': sum(1 for rate in rates if rate >= excellent_rate)},
+        {'label': f'良好（{good_rate}%~{excellent_rate - 1}%）', 'count': sum(1 for rate in rates if good_rate <= rate < excellent_rate)},
+        {'label': f'及格（{pass_rate}%~{good_rate - 1}%）', 'count': sum(1 for rate in rates if pass_rate <= rate < good_rate)},
+        {'label': f'不及格（<{pass_rate}%）', 'count': sum(1 for rate in rates if rate < pass_rate)},
+        {'label': '未提交', 'count': not_submitted_count},
+    ]
+    for segment in segments:
+        segment['percent'] = _pct(segment['count'], total_students)
+
+    # 排序：白名单校验参数，提交记录里"未提交"始终排在最后
+    sort = request.GET.get('sort', 'score')
+    order = request.GET.get('order', 'desc')
+    if sort not in ('name', 'status', 'score', 'submitted_at'):
+        sort = 'score'
+    if order not in ('asc', 'desc'):
+        order = 'desc'
+    reverse = order == 'desc'
+
+    # 先按姓名排一次，作为各排序键的稳定兜底
+    rows.sort(key=lambda r: (r['name'] or '').lower())
+    if sort == 'name':
+        rows.sort(key=lambda r: (r['name'] or '').lower(), reverse=reverse)
+    elif sort == 'status':
+        rows.sort(key=lambda r: r['is_submitted'], reverse=reverse)
+    else:
+        sort_key = (lambda r: r['score']) if sort == 'score' else (lambda r: r['submitted_at'] or timezone.now())
+        unsubmitted = [r for r in rows if not r['is_submitted']]
+        rows = sorted(submitted_rows, key=sort_key, reverse=reverse) + unsubmitted
+
     return render(request, 'quiz/frontend/class_assignment_detail.html', {
         'assignment': assignment,
         'class_obj': assignment.class_obj,
-        'records': records,
+        'rows': rows,
         'is_admin': is_admin,
-        'total_students': total_students,
-        'completed_count': completed_count,
-        'not_submitted_count': not_submitted_count
+        'stats': stats,
+        'segments': segments,
+        'total_score': total_score,
+        'pass_rate': pass_rate,
+        'good_rate': good_rate,
+        'excellent_rate': excellent_rate,
+        'sort': sort,
+        'order': order,
     })
 
 @login_required

@@ -1,0 +1,121 @@
+{% comment %}
+首页「全站试卷」列表区块：标题统计 + 筛选条 + 试卷卡片 + 分页。
+翻页时由前端 fetch 该模板单独替换（见 test_paper_list.html 的脚本），
+避免整页刷新后用户需要重新下滑找列表。
+{% endcomment %}
+<div class="section-header">
+    <h2>📋 全站试卷</h2>
+    {% if test_papers %}
+    <div class="stats-bar">
+        <div class="stat-item"><span>📚</span><span>共 <strong>{{ test_papers.paginator.count }}</strong> 份</span></div>
+        <div class="stat-item"><span>📝</span><span>第 <strong>{{ test_papers.number }}</strong>
+                / {{ test_papers.paginator.num_pages }} 页</span></div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 搜索筛选条 -->
+<form class="filter-bar" method="get">
+    <input type="text" name="search" value="{{ search|default:'' }}" placeholder="🔍 搜索试卷标题或描述..." class="search-input">
+    <select name="sort" class="sort-select">
+        <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>发布时间（早→晚）</option>
+        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>发布时间（晚→早）</option>
+        <option value="score" {% if sort == 'score' %}selected{% endif %}>分数最高</option>
+        <option value="questions" {% if sort == 'questions' %}selected{% endif %}>题量最多</option>
+    </select>
+    {% if user.is_authenticated %}
+    <select name="status" class="sort-select">
+        <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
+        <option value="undone" {% if status == 'undone' %}selected{% endif %}>我未作答</option>
+        <option value="done" {% if status == 'done' %}selected{% endif %}>我已作答</option>
+    </select>
+    {% endif %}
+    <button type="submit" class="filter-btn">🔍 筛选</button>
+    {% if search or sort != 'oldest' or status != 'all' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺
+        重置</a>{% endif %}
+    {% if test_papers %}
+    <span class="result-count">匹配 <strong>{{ test_papers.paginator.count }}</strong> 份</span>
+    {% endif %}
+</form>
+
+{% if test_papers %}
+<ul class="test-paper-list">
+    {% for paper in test_papers %}
+    <li class="test-paper-item">
+        <div class="paper-header">
+            <span class="paper-number">{{ forloop.counter }}</span>
+            <span class="paper-tags">
+                {% if paper.question_count %}<span class="paper-tag">📝 {{ paper.question_count }} 题</span>{% endif %}
+                {% if user.is_authenticated %}
+                <span class="status-badge status-{{ paper.my_status }}">{{ paper.my_status_label }}</span>
+                {% endif %}
+            </span>
+        </div>
+        <h3 class="test-paper-title">{{ paper.title }}</h3>
+        {% if paper.description %}
+        <div class="test-paper-description">{{ paper.description }}</div>
+        {% endif %}
+        <div class="test-paper-meta">
+            <div class="meta-item"><span class="icon">⭐</span><span>{{ paper.total_score }}分</span></div>
+            <div class="meta-item"><span class="icon">👤</span><span>
+                    {{ paper.created_by|default:'系统' }}</span></div>
+            <div class="meta-item"><span class="icon">📅</span><span>{{ paper.created_at|date:"Y-m-d" }}</span></div>
+        </div>
+        {% if user.is_authenticated %}
+        <div class="my-status-line status-{{ paper.my_status }}">
+            {% if paper.my_status == 'done' %}
+            <span>✅</span><span>我已作答 <strong>{{ paper.my_attempts }}</strong> 次</span>
+            {% elif paper.my_status == 'doing' %}
+            <span>⏳</span><span>答题中</span>
+            {% elif paper.my_status == 'ended' %}
+            <span>🔒</span><span>已结束</span>
+            {% elif paper.my_status == 'upcoming' %}
+            <span>🕒</span><span>未开放</span>
+            {% else %}
+            <span>🆕</span><span>我还没做过这份试卷</span>
+            {% endif %}
+            <span>· {{ paper.my_hint }}</span>
+        </div>
+        {% endif %}
+        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">{{ paper.my_btn_label|default:'开始答题 →' }}</a>
+    </li>
+    {% endfor %}
+</ul>
+
+{% with total_pages=test_papers.paginator.num_pages %}
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if test_papers.has_previous %}
+    <a class="page-btn page-nav"
+        href="?page={{ test_papers.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}"
+        title="上一页"><span class="pn-arrow">‹</span><span class="pn-text">上一页</span></a>
+    {% else %}
+    <span class="page-btn page-nav disabled"><span class="pn-arrow">‹</span><span class="pn-text">上一页</span></span>
+    {% endif %}
+
+    {% for num in test_papers.paginator.page_range %}
+    {% if num == test_papers.number %}
+    <span class="page-btn current" aria-current="page">{{ num }}</span>
+    {% else %}
+    <a class="page-btn" href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}">{{ num }}</a>
+    {% endif %}
+    {% endfor %}
+
+    {% if test_papers.has_next %}
+    <a class="page-btn page-nav"
+        href="?page={{ test_papers.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}"
+        title="下一页"><span class="pn-text">下一页</span><span class="pn-arrow">›</span></a>
+    {% else %}
+    <span class="page-btn page-nav disabled"><span class="pn-text">下一页</span><span class="pn-arrow">›</span></span>
+    {% endif %}
+</div>
+{% endif %}
+{% endwith %}
+
+{% else %}
+<div class="empty-state">
+    <div class="icon">📭</div>
+    <h3>暂无已发布的试卷</h3>
+    <p>敬请期待，稍后再来看看吧</p>
+</div>
+{% endif %}

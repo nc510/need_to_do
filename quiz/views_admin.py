@@ -1,7 +1,7 @@
 # 本模块由 quiz/views.py 拆分生成（P2-1），公共依赖（import/类/常量/工具函数）见 views_common.py
 from .views_common import *  # noqa: F401,F403
 # 后台组卷复用前端手工组卷的选题上下文（学科/章节/知识点级联筛选 + 分页 + 随机选题）
-from .views_paper import _paper_editor_context  # noqa: E402
+from .views_paper import _paper_editor_context, _paper_editor_ajax_response  # noqa: E402
 # 在线判定窗口与中间件共用同一常量，避免两处口径不一致
 from .middleware import ONLINE_WINDOW_SECONDS  # noqa: E402
 from django.conf import settings  # noqa: E402
@@ -186,6 +186,10 @@ def admin_create_testpaper(request):
     
     # ===== 复用前端手工组卷的选题体验（学科/章节/知识点级联筛选 + 分页 + 随机选题）=====
     context = _paper_editor_context(request)
+    ajax_response = _paper_editor_ajax_response(
+        request, context, 'quiz/admin/_editor_questions.html')
+    if ajax_response:
+        return ajax_response
     if context.get('redirect_url'):
         return redirect(request.path + context['redirect_url'])
     return render(request, 'quiz/admin/create_testpaper.html', context)

@@ -5,6 +5,8 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save, post_delete, m2m_changed
 from django.dispatch import receiver
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator
 from django.utils import timezone
 
 # 标题自带的序号前缀，如「第一章」「第 2 章」「第1.1节」（导入时章节名可能已含序号）
@@ -153,6 +155,10 @@ class TestPaper(models.Model):
         (REVIEW_APPROVED, '审核通过'),
         (REVIEW_REJECTED, '审核驳回'),
     ]
+    # 成绩等级线默认值（60/70/80）：既作字段默认值，也作 TestRecord.test_paper 为空时的兜底口径
+    DEFAULT_PASS_RATE = 60
+    DEFAULT_GOOD_RATE = 70
+    DEFAULT_EXCELLENT_RATE = 80
     title = models.CharField(max_length=100, verbose_name='试卷标题')
     description = models.TextField(verbose_name='试卷描述', null=True, blank=True)
     questions = models.ManyToManyField(Question, verbose_name='包含题目')
@@ -170,6 +176,18 @@ class TestPaper(models.Model):
     max_attempts = models.IntegerField(verbose_name='最大答题次数', null=True, blank=True, help_text='为空表示不限次数')
     start_time = models.DateTimeField(verbose_name='开放开始时间', null=True, blank=True, help_text='为空表示立即开放')
     end_time = models.DateTimeField(verbose_name='开放结束时间', null=True, blank=True, help_text='为空表示无截止')
+    # ===== 成绩等级线 =====
+    # 按「得分率」（得分 / 卷面总分）划分等级，供答题历史与班级作业「作业情况」统计共用。
+    # 三条线可随试卷难度调整；默认 60/70/80 与历史硬编码口径一致。
+    pass_rate = models.PositiveIntegerField(
+        verbose_name='及格得分率(%)', default=DEFAULT_PASS_RATE, validators=[MaxValueValidator(100)],
+        help_text='得分率达到该百分比视为及格，默认 60')
+    good_rate = models.PositiveIntegerField(
+        verbose_name='良好得分率(%)', default=DEFAULT_GOOD_RATE, validators=[MaxValueValidator(100)],
+        help_text='得分率达到该百分比视为良好（分段统计用），默认 70')
+    excellent_rate = models.PositiveIntegerField(
+        verbose_name='优秀得分率(%)', default=DEFAULT_EXCELLENT_RATE, validators=[MaxValueValidator(100)],
+        help_text='得分率达到该百分比视为优秀，默认 80')
     # ===== 发布审核字段 =====
     # 默认「审核通过」以兼容历史数据与后台创建的试卷；前台提交发布时由 submit_for_review() 置为待审核
     review_status = models.IntegerField(choices=REVIEW_STATUS_CHOICES, default=REVIEW_APPROVED,
@@ -212,6 +230,16 @@ class TestPaper(models.Model):
     def is_exam_controlled(self):
         # 是否启用考试控制（限时/限次/时间窗口），供模板用短名替代超长多条件 if
         return bool(self.duration or self.max_attempts or self.start_time or self.end_time)
+
+    def clean(self):
+        """等级线必须递增：及格 < 良好 < 优秀，否则分段统计会出现空段或错位"""
+        super().clean()
+        lines = [('及格', self.pass_rate), ('良好', self.good_rate), ('优秀', self.excellent_rate)]
+        if any(value is None for _, value in lines):
+            return
+        for (prev_name, prev), (name, value) in zip(lines, lines[1:]):
+            if prev >= value:
+                raise ValidationError({f'{prev_name}_rate': f'{prev_name}得分率必须小于{name}得分率'})
 
     def save(self, *args, **kwargs):
         # total_score 由 m2m_changed 信号和显式赋值管理，save 不自动重算

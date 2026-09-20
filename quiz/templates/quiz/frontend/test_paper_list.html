@@ -663,44 +663,78 @@
     .pagination {
         margin-top: 22px;
         display: flex;
+        flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
     }
 
-    .pagination a,
-    .pagination span {
+    .pagination .page-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 36px;
-        height: 36px;
-        padding: 0 12px;
+        gap: 5px;
+        min-width: 38px;
+        height: 38px;
+        padding: 0 13px;
         background-color: #fff;
         color: #667eea;
         text-decoration: none;
         border-radius: 8px;
         font-size: 14px;
-        font-weight: 500;
-        transition: all 0.3s ease;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+        transition: all 0.25s ease;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
-    .pagination a:hover {
+    .pagination a.page-btn:hover {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: #fff;
         transform: translateY(-2px);
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     }
 
-    .pagination .current {
+    .pagination .page-btn.current {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: #fff;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+        cursor: default;
     }
 
-    .pagination .disabled {
-        background-color: #f0f0f0;
-        color: #ccc;
+    .pagination .page-btn.disabled {
+        background-color: #f5f6fa;
+        color: #b9bfcc;
+        box-shadow: none;
+        pointer-events: none;
+    }
+
+    /* 窄屏下「上一页/下一页」只留箭头，避免页码控件过多换行 */
+    @media (max-width: 520px) {
+        .pagination {
+            gap: 6px;
+        }
+
+        .pagination .page-btn {
+            min-width: 34px;
+            height: 34px;
+            padding: 0 10px;
+            font-size: 13px;
+        }
+
+        .pagination .pn-text {
+            display: none;
+        }
+    }
+
+    /* 翻页加载态：只让列表区块变淡，避免整页跳动 */
+    #paper-list-region {
+        transition: opacity 0.15s ease;
+    }
+
+    #paper-list-region.is-loading {
+        opacity: 0.45;
         pointer-events: none;
     }
 
@@ -983,122 +1017,10 @@
 </section>
 {% endif %}
 
-<!-- 试卷列表区 -->
-<div class="section-header">
-    <h2>📋 全站试卷</h2>
-    {% if test_papers %}
-    <div class="stats-bar">
-        <div class="stat-item"><span>📚</span><span>共 <strong>{{ test_papers.paginator.count }}</strong> 份</span></div>
-        <div class="stat-item"><span>📝</span><span>第 <strong>{{ test_papers.number }}</strong>
-                / {{ test_papers.paginator.num_pages }} 页</span></div>
-    </div>
-    {% endif %}
+<!-- 试卷列表区：翻页/筛选只替换本区块，不整页刷新 -->
+<div id="paper-list-region">
+    {% include 'quiz/frontend/_test_paper_list_body.html' %}
 </div>
-
-<!-- 搜索筛选条 -->
-<form class="filter-bar" method="get">
-    <input type="text" name="search" value="{{ search|default:'' }}" placeholder="🔍 搜索试卷标题或描述..." class="search-input">
-    <select name="sort" class="sort-select">
-        <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>发布时间（早→晚）</option>
-        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>发布时间（晚→早）</option>
-        <option value="score" {% if sort == 'score' %}selected{% endif %}>分数最高</option>
-        <option value="questions" {% if sort == 'questions' %}selected{% endif %}>题量最多</option>
-    </select>
-    {% if user.is_authenticated %}
-    <select name="status" class="sort-select">
-        <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
-        <option value="undone" {% if status == 'undone' %}selected{% endif %}>我未作答</option>
-        <option value="done" {% if status == 'done' %}selected{% endif %}>我已作答</option>
-    </select>
-    {% endif %}
-    <button type="submit" class="filter-btn">🔍 筛选</button>
-    {% if search or sort != 'oldest' or status != 'all' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺
-        重置</a>{% endif %}
-    {% if test_papers %}
-    <span class="result-count">匹配 <strong>{{ test_papers.paginator.count }}</strong> 份</span>
-    {% endif %}
-</form>
-
-{% if test_papers %}
-<ul class="test-paper-list">
-    {% for paper in test_papers %}
-    <li class="test-paper-item">
-        <div class="paper-header">
-            <span class="paper-number">{{ forloop.counter }}</span>
-            <span class="paper-tags">
-                {% if paper.question_count %}<span class="paper-tag">📝 {{ paper.question_count }} 题</span>{% endif %}
-                {% if user.is_authenticated %}
-                <span class="status-badge status-{{ paper.my_status }}">{{ paper.my_status_label }}</span>
-                {% endif %}
-            </span>
-        </div>
-        <h3 class="test-paper-title">{{ paper.title }}</h3>
-        {% if paper.description %}
-        <div class="test-paper-description">{{ paper.description }}</div>
-        {% endif %}
-        <div class="test-paper-meta">
-            <div class="meta-item"><span class="icon">⭐</span><span>{{ paper.total_score }}分</span></div>
-            <div class="meta-item"><span class="icon">👤</span><span>
-                    {{ paper.created_by|default:'系统' }}</span></div>
-            <div class="meta-item"><span class="icon">📅</span><span>{{ paper.created_at|date:"Y-m-d" }}</span></div>
-        </div>
-        {% if user.is_authenticated %}
-        <div class="my-status-line status-{{ paper.my_status }}">
-            {% if paper.my_status == 'done' %}
-            <span>✅</span><span>我已作答 <strong>{{ paper.my_attempts }}</strong> 次</span>
-            {% elif paper.my_status == 'doing' %}
-            <span>⏳</span><span>答题中</span>
-            {% elif paper.my_status == 'ended' %}
-            <span>🔒</span><span>已结束</span>
-            {% elif paper.my_status == 'upcoming' %}
-            <span>🕒</span><span>未开放</span>
-            {% else %}
-            <span>🆕</span><span>我还没做过这份试卷</span>
-            {% endif %}
-            <span>· {{ paper.my_hint }}</span>
-        </div>
-        {% endif %}
-        <a href="{% url 'test_paper_detail' paper.id %}" class="view-btn">{{ paper.my_btn_label|default:'开始答题 →' }}</a>
-    </li>
-    {% endfor %}
-</ul>
-
-<div class="pagination">
-    {% if test_papers.has_previous %}
-    <a
-        href="?page={{ test_papers.previous_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'oldest' %}&sort={{ sort }}{% endif %}{% if status != 'all' %}&status={{ status }}{% endif %}">←
-        上一页</a>
-    {% else %}
-    <span class="disabled">← 上一页</span>
-    {% endif %}
-
-    {% with cur=test_papers.number %}
-    {% for num in test_papers.paginator.page_range %}
-    {% if num == cur %}
-    <span class="current">{{ num }}</span>
-    {% elif num >= cur|add:'-2' and num <= cur|add:'2' %} <a
-        href="?page={{ num }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'oldest' %}&sort={{ sort }}{% endif %}{% if status != 'all' %}&status={{ status }}{% endif %}">
-        {{ num }}</a>
-        {% endif %}
-        {% endfor %}
-        {% endwith %}
-
-        {% if test_papers.has_next %}
-        <a
-            href="?page={{ test_papers.next_page_number }}{% if search %}&search={{ search|urlencode }}{% endif %}{% if sort != 'oldest' %}&sort={{ sort }}{% endif %}{% if status != 'all' %}&status={{ status }}{% endif %}">下一页
-            →</a>
-        {% else %}
-        <span class="disabled">下一页 →</span>
-        {% endif %}
-</div>
-
-{% else %}
-<div class="empty-state">
-    <div class="icon">📭</div>
-    <h3>暂无已发布的试卷</h3>
-    <p>敬请期待，稍后再来看看吧</p>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -1115,6 +1037,70 @@
                 var target = document.querySelector('.lb-panel[data-board="' + tab.dataset.board + '"]');
                 if (target) { target.classList.add('active'); }
             });
+        });
+    })();
+
+    // 试卷列表 AJAX 局部刷新：翻页/筛选/重置都只替换列表区块，不整页刷新
+    (function () {
+        var region = document.getElementById('paper-list-region');
+        if (!region || !window.fetch) { return; }
+        var nav = document.querySelector('.nav');
+        var loading = false;
+
+        // 刷新后把列表顶部对齐到导航栏下方，保持「停在列表」的浏览位置
+        function scrollToRegion() {
+            var offset = (nav ? nav.offsetHeight : 0) + 14;
+            var top = region.getBoundingClientRect().top + window.pageYOffset - offset;
+            window.scrollTo({ top: top > 0 ? top : 0, behavior: 'smooth' });
+        }
+
+        function load(url, push) {
+            if (loading) { return; }
+            loading = true;
+            region.classList.add('is-loading');
+            fetch(url, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            }).then(function (resp) {
+                if (!resp.ok) { throw new Error('HTTP ' + resp.status); }
+                return resp.text();
+            }).then(function (html) {
+                region.innerHTML = html;
+                if (push) { history.pushState({ paperList: true }, '', url); }
+                scrollToRegion();
+            }).catch(function () {
+                // 请求失败（网络异常/登录过期等）回退整页跳转，保证功能可用
+                window.location.href = url;
+            }).then(function () {
+                loading = false;
+                region.classList.remove('is-loading');
+            });
+        }
+
+        // 分页链接 + 筛选条「重置」链接：局部刷新
+        region.addEventListener('click', function (e) {
+            var link = e.target.closest ? e.target.closest('.pagination a, .reset-btn') : null;
+            if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) { return; }
+            e.preventDefault();
+            load(link.href, true);
+        });
+
+        // 筛选表单提交：去掉空参数后拼查询串（不带 page，回到第 1 页）
+        region.addEventListener('submit', function (e) {
+            var form = e.target;
+            if (!form.classList || !form.classList.contains('filter-bar')) { return; }
+            e.preventDefault();
+            var cleaned = new URLSearchParams();
+            new FormData(form).forEach(function (value, key) {
+                if (value !== '') { cleaned.append(key, value); }
+            });
+            var qs = cleaned.toString();
+            load(window.location.pathname + (qs ? '?' + qs : ''), true);
+        });
+
+        // 浏览器前进/后退时同步列表内容
+        window.addEventListener('popstate', function () {
+            load(window.location.href, false);
         });
     })();
 </script>

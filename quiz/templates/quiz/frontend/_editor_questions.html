@@ -1,0 +1,51 @@
+{% comment %}
+手工组卷「题目库」列表区块：题目列表 + 分页。
+翻页/筛选/随机选题时由前端 fetch 本片段局部替换（见 create_test_paper.html 脚本），
+避免整页刷新把已填的试卷标题、描述清空。
+{% endcomment %}
+<div class="question-list" id="questionList">
+    {% for q in questions %}
+    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" data-score="{{ q.score }}"
+        data-subject="{{ q.subject_id }}" data-chapter="{{ q.chapter_id }}"
+        data-knowledge-points="{% for kp_id in q.knowledge_point_ids %}{{ kp_id }},{% endfor %}">
+        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" name="questions" value="{{ q.id }}">
+        <span
+            class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
+            {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
+        </span>
+        <span class="question-content" title="{{ q.content }}">{{ q.content }}</span>
+        <div class="question-meta">
+            <span>分值: {{ q.score }}</span>
+            {% if q.subject_id %}
+            <span style="color: #667eea; font-weight: 500;">学科标记</span>
+            {% endif %}
+        </div>
+    </div>
+    {% empty %}
+    <div style="text-align: center; padding: 40px; color: #888;">
+        暂无题目，请先在管理后台添加题目
+    </div>
+    {% endfor %}
+</div>
+<div class="question-pagination">
+    {% if page_obj.has_other_pages %}
+    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+        {% if page_obj.has_previous %}
+        <a href="#" class="page-link" data-page="{{ page_obj.previous_page_number }}"
+            style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">上一页</a>
+        {% endif %}
+        {% for n in page_obj.paginator.page_range %}
+        {% if n == page_obj.number %}
+        <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n }}</span>
+        {% else %}
+        <a href="#" class="page-link" data-page="{{ n }}"
+            style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{ n }}</a>
+        {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+        <a href="#" class="page-link" data-page="{{ page_obj.next_page_number }}"
+            style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

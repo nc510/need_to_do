@@ -169,6 +169,16 @@
         margin-bottom: 10px;
     }
 
+    /* 局部刷新加载态：只让题目区块变淡，避免整页跳动 */
+    #questionPanel {
+        transition: opacity 0.15s ease;
+    }
+
+    #questionPanel.is-loading {
+        opacity: 0.45;
+        pointer-events: none;
+    }
+
     .question-item {
         display: flex;
         align-items: center;
@@ -494,51 +504,9 @@
 
                 <div class="question-counter">共 <span id="questionCount">{{ question_total }}</span> 道题目</div>
 
-                <div class="question-list" id="questionList">
-                    {% for q in questions %}
-                    <div class="question-item" data-id="{{ q.id }}" data-type="{{ q.type }}" data-score="{{ q.score }}"
-                        data-subject="{{ q.subject_id }}" data-chapter="{{ q.chapter_id }}"
-                        data-knowledge-points="{% for kp_id in q.knowledge_point_ids %}{{ kp_id }},{% endfor %}">
-                        <input type="checkbox" class="question-checkbox" data-id="{{ q.id }}" name="questions"
-                            value="{{ q.id }}">
-                        <span
-                            class="type-badge {% if q.type == 1 %}type-single{% elif q.type == 2 %}type-multi{% else %}type-judge{% endif %}">
-                            {% if q.type == 1 %}单选{% elif q.type == 2 %}多选{% else %}判断{% endif %}
-                        </span>
-                        <span class="question-content" title="{{ q.content }}">{{ q.content }}</span>
-                        <div class="question-meta">
-                            <span>分值: {{ q.score }}</span>
-                            {% if q.subject_id %}
-                            <span style="color: #667eea; font-weight: 500;">学科标记</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div style="text-align: center; padding: 40px; color: #888;">
-                        暂无题目，请先在管理后台添加题目
-                    </div>
-                    {% endfor %}
+                <div id="questionPanel">
+                    {% include 'quiz/frontend/_editor_questions.html' %}
                 </div>
-                {% if page_obj.has_other_pages %}
-                <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center;">
-                    {% if page_obj.has_previous %}
-                    <a href="#" class="page-link" data-page="{{ page_obj.previous_page_number }}"
-                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">上一页</a>
-                    {% endif %}
-                    {% for n in page_obj.paginator.page_range %}
-                    {% if n == page_obj.number %}
-                    <span style="padding:4px 10px;background:#667eea;color:#fff;border-radius:6px;font-size:13px;">{{ n }}</span>
-                    {% else %}
-                    <a href="#" class="page-link" data-page="{{ n }}"
-                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">{{ n }}</a>
-                    {% endif %}
-                    {% endfor %}
-                    {% if page_obj.has_next %}
-                    <a href="#" class="page-link" data-page="{{ page_obj.next_page_number }}"
-                        style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#667eea;text-decoration:none;">下一页</a>
-                    {% endif %}
-                </div>
-                {% endif %}
             </div>
 
             <div>
@@ -679,31 +647,32 @@
                 selectedQuestions.push(q);
             }
         });
-        document.querySelectorAll('.question-item').forEach(item => {
-            const id = parseInt(item.getAttribute('data-id'));
-            if (selectedQuestions.some(sq => sq.id === id)) {
-                const cb = item.querySelector('.question-checkbox');
-                if (cb) cb.checked = true;
+        syncCheckboxes();
+
+        // 题目勾选 / 分页：事件委托挂在稳定的 #questionPanel 上，局部刷新后依然有效
+        var panel = document.getElementById('questionPanel');
+        panel.addEventListener('click', function (event) {
+            var pageLink = event.target.closest ? event.target.closest('.page-link') : null;
+            if (pageLink) {
+                event.preventDefault();
+                reloadWithParams({ page: pageLink.getAttribute('data-page') });
+                return;
+            }
+            var item = event.target.closest ? event.target.closest('.question-item') : null;
+            if (!item) { return; }
+            const checkbox = item.querySelector('.question-checkbox');
+            if (checkbox && event.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                onCheckboxChange(checkbox);
+            }
+        });
+        panel.addEventListener('change', function (event) {
+            if (event.target.classList && event.target.classList.contains('question-checkbox')) {
+                onCheckboxChange(event.target);
             }
         });
 
-        // 题目勾选交互
-        document.querySelectorAll('.question-item').forEach(item => {
-            item.addEventListener('click', function (event) {
-                const checkbox = this.querySelector('.question-checkbox');
-                if (checkbox && event.target !== checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    onCheckboxChange(checkbox);
-                }
-            });
-        });
-        document.querySelectorAll('.question-checkbox').forEach(cb => {
-            cb.addEventListener('change', function () {
-                onCheckboxChange(this);
-            });
-        });
-
-        // 筛选（服务端提交）
+        // 筛选（服务端筛选，局部刷新）
         document.getElementById('searchBox').addEventListener('input', debounceFilter);
         document.getElementById('typeFilter').addEventListener('change', reloadWithParams);
         document.getElementById('subjectFilter').addEventListener('change', onSubjectChange);
@@ -712,14 +681,6 @@
         document.getElementById('minScore').addEventListener('change', reloadWithParams);
         document.getElementById('maxScore').addEventListener('change', reloadWithParams);
         document.getElementById('title').addEventListener('input', updateSubmitButton);
-
-        // 分页（保留筛选与已选）
-        document.querySelectorAll('.page-link').forEach(a => {
-            a.addEventListener('click', function (e) {
-                e.preventDefault();
-                reloadWithParams({ page: this.getAttribute('data-page') });
-            });
-        });
 
         // 表单提交时填充隐藏域
         document.getElementById('createForm').addEventListener('submit', function () {
@@ -735,6 +696,11 @@
             if (pubCb) pubCb.checked = true;
         }
         {% endif %}
+
+        // 浏览器前进/后退：整页恢复（与改造前行为一致）
+        window.addEventListener('popstate', function () {
+            location.reload();
+        });
 
         updateSelectedList();
         updateSubmitButton();
@@ -767,12 +733,58 @@
         return params;
     }
 
+    // 题目区块局部刷新：只替换 #questionPanel，已填的试卷标题/描述不会被清空
+    var panelRequestSeq = 0;
+
+    function loadQuestionPanel(url) {
+        var panel = document.getElementById('questionPanel');
+        if (!panel || !window.fetch) {
+            location.href = url;
+            return;
+        }
+        // 搜索是防抖触发，可能有多个请求在飞：只应用最后一次的结果，避免列表与输入不一致
+        var seq = ++panelRequestSeq;
+        panel.classList.add('is-loading');
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function (resp) {
+            if (!resp.ok) { throw new Error('HTTP ' + resp.status); }
+            return resp.json();
+        }).then(function (data) {
+            if (seq !== panelRequestSeq) { return; }
+            panel.innerHTML = data.html;
+            document.getElementById('questionCount').textContent = data.total;
+            // 随机选题结果并入已选（服务端已避开重复）
+            (data.random || []).forEach(function (q) {
+                if (!selectedQuestions.some(function (sq) { return sq.id === q.id; })) {
+                    selectedQuestions.push(q);
+                }
+            });
+            // 地址栏同步为干净 URL：不带 random（刷新不会重复随机），带当前页与已选
+            var clean = currentFilterParams();
+            if (data.page > 1) { clean.set('page', data.page); }
+            history.pushState(null, '', window.location.pathname + '?' + clean.toString());
+
+            syncCheckboxes();
+            updateSelectedList();
+            updateSubmitButton();
+            updateQuestionHighlight();
+        }).catch(function () {
+            // 请求失败（网络异常/登录过期等）回退整页跳转，保证功能可用
+            if (seq !== panelRequestSeq) { return; }
+            location.href = url;
+        }).then(function () {
+            if (seq === panelRequestSeq) { panel.classList.remove('is-loading'); }
+        });
+    }
+
     function reloadWithParams(extra) {
         var params = currentFilterParams();
         if (extra) {
             Object.keys(extra).forEach(k => params.set(k, extra[k]));
         }
-        location.href = '?' + params.toString();
+        loadQuestionPanel('?' + params.toString());
     }
 
     function randomSelect() {
@@ -917,6 +929,14 @@
             submitBtn.disabled = true;
             submitBtn.innerHTML = '✓ 确认组卷';
         }
+    }
+
+    function syncCheckboxes() {
+        document.querySelectorAll('.question-item').forEach(item => {
+            const id = parseInt(item.getAttribute('data-id'));
+            const cb = item.querySelector('.question-checkbox');
+            if (cb) { cb.checked = selectedQuestions.some(sq => sq.id === id); }
+        });
     }
 
     function updateQuestionHighlight() {
