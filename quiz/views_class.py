@@ -602,7 +602,7 @@ def class_assignment_detail(request, class_id, assignment_id):
     best_records = {}
     for record in ClassAssignmentRecord.objects.filter(
         assignment=assignment, is_submitted=True
-    ).select_related('user'):
+    ).select_related('user', 'test_record'):
         current = best_records.get(record.user_id)
         if current is None or (record.score or 0) > (current.score or 0):
             best_records[record.user_id] = record
@@ -619,6 +619,9 @@ def class_assignment_detail(request, class_id, assignment_id):
             # 得分率（百分制），等级划分与答题历史保持一致
             'rate': round(score * 100 / total_score, 1) if (score is not None and total_score) else (0 if score is not None else None),
             'submitted_at': record.submitted_at if record else None,
+            # 答题用时取自答题记录（TestRecord.duration_seconds），与答题历史口径一致
+            'duration_display': format_duration(record.test_record.duration_seconds)
+            if (record and record.test_record) else None,
             'rank': None,
         })
 

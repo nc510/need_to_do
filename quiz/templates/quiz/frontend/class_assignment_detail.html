@@ -486,7 +486,6 @@
                             <span class="sort-arrow">{% if sort == 'name' %}{% if order == 'asc' %}▲{% else %}▼{% endif %}{% else %}↕{% endif %}</span>
                         </a>
                     </th>
-                    {% if is_admin %}<th>邮箱</th>{% endif %}
                     <th class="sortable {% if sort == 'status' %}active{% endif %}">
                         <a href="?sort=status&order={% if sort == 'status' and order == 'desc' %}asc{% else %}desc{% endif %}">
                             状态
@@ -500,6 +499,7 @@
                         </a>
                     </th>
                     <th>得分率</th>
+                    <th>答题用时</th>
                     <th class="sortable {% if sort == 'submitted_at' %}active{% endif %}">
                         <a
                             href="?sort=submitted_at&order={% if sort == 'submitted_at' and order == 'desc' %}asc{% else %}desc{% endif %}">
@@ -514,7 +514,6 @@
                 <tr{% if row.user.id == request.user.id %} class="own-row"{% endif %}>
                     <td class="rank-cell">{{ row.rank|default:"--" }}</td>
                     <td>{{ row.user.username }}</td>
-                    {% if is_admin %}<td style="color: #888;">{{ row.user.email|default:"--" }}</td>{% endif %}
                     <td>
                         {% if row.is_submitted %}
                         <span class="status-badge status-submitted">已提交</span>
@@ -534,6 +533,7 @@
                         {% else %}<span class="grade-badge grade-fail">不及格</span>{% endif %}
                         {% else %}--{% endif %}
                     </td>
+                    <td style="color: #888;">{{ row.duration_display|default:"--" }}</td>
                     <td style="color: #888;">{{ row.submitted_at|date:"Y-m-d H:i"|default:"--" }}</td>
                 </tr>
                 {% endfor %}
