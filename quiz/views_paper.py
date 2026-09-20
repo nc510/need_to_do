@@ -25,13 +25,13 @@ def test_paper_list(request):
     sort = request.GET.get('sort', 'oldest')  # oldest / newest / score / questions
     status = request.GET.get('status', 'all')  # all / undone / done（我的作答状态，仅登录用户）
 
+    # 全站列表只展示「已发布 + 审核通过」的正式试卷
+    listed = dict(is_published=True, is_wrong_paper=False,
+                  review_status=TestPaper.REVIEW_APPROVED)
     if user.is_staff:
-        test_papers = TestPaper.objects.filter(
-            is_published=True, is_wrong_paper=False)
+        test_papers = TestPaper.objects.filter(**listed)
     else:
-        test_papers = TestPaper.objects.filter(
-            is_published=True, is_wrong_paper=False
-        ).filter(
+        test_papers = TestPaper.objects.filter(**listed).filter(
             models.Q(is_public=True) | models.Q(created_by=user.username)
         )
     # 我可见的全部试卷，用于「我的完成进度」（不受搜索/状态筛选影响）
@@ -83,7 +83,8 @@ def test_paper_list(request):
         'hero_stats',
         lambda: {
             'total_papers': TestPaper.objects.filter(
-                is_published=True, is_public=True, is_wrong_paper=False).count(),
+                is_published=True, is_public=True, is_wrong_paper=False,
+                review_status=TestPaper.REVIEW_APPROVED).count(),
             'total_questions': Question.objects.filter(is_public=True).count(),
         },
         300,
@@ -186,10 +187,24 @@ def test_paper_list(request):
 
     return render(request, 'quiz/frontend/test_paper_list.html', context)
 
+def _can_view_unapproved_paper(test_paper, user):
+    """未审核通过的试卷（待审核/已驳回）仅创建者本人与管理员可访问。
+
+    这类试卷不会出现在全站列表，直接凭 URL 访问也要拦住，避免绕过审核传播。
+    """
+    if test_paper.is_approved:
+        return True
+    if not user.is_authenticated:
+        return False
+    return test_paper.created_by == user.username or user.is_staff
+
+
 def test_paper_detail(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
     user = request.user
     if not test_paper.is_public and (not user.is_authenticated or (test_paper.created_by != user.username and not user.is_staff)):
+        raise Http404('试卷不存在或无权访问')
+    if not _can_view_unapproved_paper(test_paper, user):
         raise Http404('试卷不存在或无权访问')
     questions = list(test_paper.questions.all())
     for q in questions:
@@ -293,6 +308,8 @@ def _auto_submit_expired_draft(request, test_paper, draft):
 @login_required
 def submit_test_paper(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
+    if not _can_view_unapproved_paper(test_paper, request.user):
+        raise Http404('试卷不存在或无权访问')
     questions = list(test_paper.questions.all())
 
     if request.method == 'POST':
@@ -756,12 +773,18 @@ def my_test_papers(request):
     if q:
         base_qs = base_qs.filter(title__icontains=q)
 
-    # 筛选：状态（published/unpublished/exam）
+    # 筛选：状态（published/unpublished/pending/rejected/exam）
     status = request.GET.get('status', '')
     if status == 'published':
-        base_qs = base_qs.filter(is_published=True)
+        base_qs = base_qs.filter(is_published=True, review_status=TestPaper.REVIEW_APPROVED)
     elif status == 'unpublished':
-        base_qs = base_qs.filter(is_published=False)
+        # 未发布 = 不是「已上架」也不是已驳回的草稿（与统计口径一致，避免与待审核/已驳回重复）
+        base_qs = base_qs.filter(is_published=False,
+                                 review_status=TestPaper.REVIEW_APPROVED)
+    elif status == 'pending':
+        base_qs = base_qs.filter(review_status=TestPaper.REVIEW_PENDING)
+    elif status == 'rejected':
+        base_qs = base_qs.filter(review_status=TestPaper.REVIEW_REJECTED)
     elif status == 'exam':
         base_qs = base_qs.filter(
             models.Q(duration__isnull=False) | models.Q(max_attempts__isnull=False) |
@@ -782,11 +805,18 @@ def my_test_papers(request):
 
     # 聚合统计（基于自己创建的全部试卷，不受搜索影响）
     # P2-7：5 次独立 count 合并为 1 次 aggregate with conditional Count
+    # 「已发布」只算已上架（审核通过）的；待审核/已驳回单独计数，三者互不重叠
     stats = TestPaper.objects.filter(
         created_by=user.username, is_wrong_paper=False).aggregate(
         total=models.Count('id'),
-        published=models.Count('id', filter=models.Q(is_published=True)),
-        unpublished=models.Count('id', filter=models.Q(is_published=False)),
+        published=models.Count('id', filter=models.Q(
+            is_published=True, review_status=TestPaper.REVIEW_APPROVED)),
+        pending=models.Count('id', filter=models.Q(
+            review_status=TestPaper.REVIEW_PENDING)),
+        unpublished=models.Count('id', filter=(
+            models.Q(is_published=False, review_status=TestPaper.REVIEW_APPROVED) |
+            models.Q(review_status=TestPaper.REVIEW_REJECTED)
+        )),
         exam_controlled=models.Count('id', filter=(
             models.Q(duration__isnull=False) | models.Q(max_attempts__isnull=False) |
             models.Q(start_time__isnull=False) | models.Q(end_time__isnull=False)
@@ -808,6 +838,18 @@ def my_test_papers(request):
         'sort': sort,
         'base_query': base_query,
     })
+
+def _notify_paper_submitted(test_paper, user):
+    """前台试卷提交发布后，通知后台管理员前往审核"""
+    Notification.notify_many(
+        recipients=User.objects.filter(is_staff=True, is_active=True),
+        sender=user,
+        ntype='system',
+        title=f'试卷待审核：{test_paper.title}',
+        content=f'用户 {user.username} 提交了试卷「{test_paper.title}」，请前往后台试卷管理审核。',
+        link='/admin/quiz/testpaper/?review_status__exact=0',
+    )
+
 
 @login_required
 def create_test_paper(request):
@@ -842,7 +884,7 @@ def create_test_paper(request):
             max_attempts = request.POST.get('max_attempts') or None
             start_time = _parse_dt(request.POST.get('start_time'))
             end_time = _parse_dt(request.POST.get('end_time'))
-            test_paper = TestPaper.objects.create(
+            test_paper = TestPaper(
                 title=title,
                 description=description,
                 created_by=request.user.username,
@@ -852,6 +894,10 @@ def create_test_paper(request):
                 start_time=start_time,
                 end_time=end_time,
             )
+            if is_published:
+                # 前台发布需管理员审核，审核通过后才进入全站列表
+                test_paper.submit_for_review()
+            test_paper.save()
             # ===== P2-3 END =====
 
             # 一次查询所有题目（原逐题 get，N+1）；m2m_changed 自动更新 total_score
@@ -859,7 +905,12 @@ def create_test_paper(request):
             test_paper.questions.set(questions)
             total_score = sum(q.score for q in questions)
 
-            messages.success(request, f'试卷 "{title}" 创建成功！共 {len(questions)} 道题目，总分 {total_score} 分。')
+            messages.success(
+                request,
+                f'试卷 "{title}" 创建成功！共 {len(questions)} 道题目，总分 {total_score} 分。'
+                + ('已提交管理员审核，审核通过后将展示到全站试卷列表。' if is_published else ''))
+            if is_published:
+                _notify_paper_submitted(test_paper, request.user)
             return redirect('my_test_papers')
         else:
             messages.error(request, '请填写试卷标题并至少选择一道题目')
@@ -1025,7 +1076,12 @@ def edit_test_paper(request, paper_id):
 
             test_paper.title = title
             test_paper.description = request.POST.get('description')
+            was_published = test_paper.is_published
             test_paper.is_published = request.POST.get('is_published') == 'on'
+            # 由「未发布」变为发布：重新提交管理员审核
+            submitted = test_paper.is_published and not was_published
+            if submitted:
+                test_paper.submit_for_review()
             test_paper.duration = int(duration) if duration and duration.isdigit() else None
             test_paper.max_attempts = int(max_attempts) if max_attempts and max_attempts.isdigit() else None
             test_paper.start_time = start_time
@@ -1039,7 +1095,10 @@ def edit_test_paper(request, paper_id):
 
             messages.success(
                 request,
-                f'试卷 "{title}" 已更新！共 {len(questions)} 道题目，总分 {total_score} 分。')
+                f'试卷 "{title}" 已更新！共 {len(questions)} 道题目，总分 {total_score} 分。'
+                + ('已提交管理员审核，审核通过后将展示到全站试卷列表。' if submitted else ''))
+            if submitted:
+                _notify_paper_submitted(test_paper, request.user)
             return redirect('my_test_papers')
         else:
             messages.error(request, '请填写试卷标题并至少选择一道题目')
@@ -1067,10 +1126,19 @@ def publish_test_paper(request, paper_id):
     
     if request.method == 'POST':
         test_paper.is_published = not test_paper.is_published
-        test_paper.save()
         if test_paper.is_published:
-            messages.success(request, f'试卷 "{test_paper.title}" 已发布到全站')
+            # 前台发布需管理员审核：进入待审核，审核通过后才会展示到全站列表
+            test_paper.submit_for_review()
+            test_paper.save()
+            messages.success(request, f'试卷 "{test_paper.title}" 已提交发布，等待管理员审核通过后展示到全站')
+            _notify_paper_submitted(test_paper, request.user)
         else:
+            # 取消发布时撤回待审核状态，回到普通「未发布」草稿（审核队列中不再保留）
+            if test_paper.is_review_pending:
+                test_paper.review_status = TestPaper.REVIEW_APPROVED
+                test_paper.reviewed_at = None
+                test_paper.reviewed_by = None
+            test_paper.save()
             messages.success(request, f'试卷 "{test_paper.title}" 已取消发布')
         return redirect('my_test_papers')
     

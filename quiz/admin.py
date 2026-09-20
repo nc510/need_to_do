@@ -246,17 +246,17 @@ class QuestionAdmin(admin.ModelAdmin):
     make_private.short_description = '设为私有'
 
 class TestPaperAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'is_public', 'duration', 'max_attempts', 'created_by', 'created_at', 'action_buttons')
+    list_display = ('id', 'title', 'total_score', 'question_count', 'is_published', 'is_public', 'review_status_column', 'duration', 'max_attempts', 'created_by', 'created_at', 'action_buttons')
     list_display_links = ('id', 'title')
-    list_filter = ('is_published', 'is_public', 'created_by', 'created_at')
+    list_filter = ('is_published', 'is_public', 'review_status', 'created_by', 'created_at')
     search_fields = ('title', 'description', 'created_by')
     ordering = ('-created_at',)
     filter_horizontal = ('questions',)
-    fields = ('title', 'description', 'questions', 'is_published', 'is_public', 'duration', 'max_attempts', 'start_time', 'end_time')
-    readonly_fields = ('total_score', 'created_at', 'created_by')
+    fields = ('title', 'description', 'questions', 'is_published', 'is_public', 'review_status', 'review_remark', 'duration', 'max_attempts', 'start_time', 'end_time')
+    readonly_fields = ('total_score', 'created_at', 'created_by', 'reviewed_at', 'reviewed_by')
     change_list_template = 'admin/quiz/testpaper/change_list.html'
     change_form_template = 'admin/quiz/testpaper/change_form.html'
-    actions = ['make_public', 'make_private', 'delete_selected']
+    actions = ['approve_papers', 'reject_papers', 'make_public', 'make_private', 'delete_selected']
 
     def has_add_permission(self, request):
         return False
@@ -307,6 +307,63 @@ class TestPaperAdmin(admin.ModelAdmin):
         return obj.questions.count()
     question_count.short_description = '题目数量'
 
+    def review_status_column(self, obj):
+        """审核状态：前台提交发布后需管理员审核，通过后才进入全站列表"""
+        color, text = {
+            TestPaper.REVIEW_PENDING: ('#ff9800', '⏳ 待审核'),
+            TestPaper.REVIEW_APPROVED: ('#4caf50', '✅ 已通过'),
+            TestPaper.REVIEW_REJECTED: ('#f44336', '❌ 已驳回'),
+        }[obj.review_status]
+        return format_html('<span style="background:{};color:white;padding:3px 8px;border-radius:4px;font-size:12px;">{}</span>', color, text)
+    review_status_column.short_description = '审核状态'
+
+    def _notify_creator(self, paper, reviewer):
+        """把审核结果通知给试卷创建者（created_by 存的是用户名）"""
+        creator = User.objects.filter(username=paper.created_by).first()
+        if not creator:
+            return
+        if paper.review_status == TestPaper.REVIEW_APPROVED:
+            title = f'试卷审核通过：{paper.title}'
+            content = f'您提交的试卷「{paper.title}」已通过审核，已发布到全站试卷列表。'
+        else:
+            title = f'试卷审核未通过：{paper.title}'
+            content = f'您提交的试卷「{paper.title}」未通过审核，不会出现在全站试卷列表。'
+            if paper.review_remark:
+                content += f' 驳回原因：{paper.review_remark}'
+        try:
+            Notification.notify(
+                recipient=creator, sender=reviewer, ntype='system',
+                title=title, content=content, link='/quiz/my_test_papers/')
+        except Exception:
+            # 通知失败不影响审核本身
+            pass
+
+    def approve_papers(self, request, queryset):
+        """批量审核通过：同时发布到全站列表"""
+        papers = list(queryset.filter(is_wrong_paper=False))
+        for paper in papers:
+            paper.review_status = TestPaper.REVIEW_APPROVED
+            paper.is_published = True
+            paper.reviewed_at = timezone.now()
+            paper.reviewed_by = request.user
+            paper.save(update_fields=['review_status', 'is_published', 'reviewed_at', 'reviewed_by'])
+            self._notify_creator(paper, request.user)
+        self.message_user(request, f'已审核通过 {len(papers)} 份试卷并发布到全站列表')
+    approve_papers.short_description = '✅ 审核通过（发布到全站）'
+
+    def reject_papers(self, request, queryset):
+        """批量审核驳回：从全站列表撤下，可在试卷编辑页补充驳回原因"""
+        papers = list(queryset.filter(is_wrong_paper=False))
+        for paper in papers:
+            paper.review_status = TestPaper.REVIEW_REJECTED
+            paper.is_published = False
+            paper.reviewed_at = timezone.now()
+            paper.reviewed_by = request.user
+            paper.save(update_fields=['review_status', 'is_published', 'reviewed_at', 'reviewed_by'])
+            self._notify_creator(paper, request.user)
+        self.message_user(request, f'已驳回 {len(papers)} 份试卷，已从全站列表撤下')
+    reject_papers.short_description = '❌ 审核驳回（从全站撤下）'
+
     def action_buttons(self, obj):
         change_url = reverse('admin:quiz_testpaper_change', args=[obj.pk])
         delete_url = reverse('admin:quiz_testpaper_delete', args=[obj.pk])
@@ -335,6 +392,17 @@ class TestPaperAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if not change:
             obj.created_by = request.user.username
+        # 在编辑页直接改审核状态时，补齐审核人/时间并通知创建者（与批量操作口径一致）
+        if change and 'review_status' in form.changed_data:
+            if obj.review_status == TestPaper.REVIEW_APPROVED:
+                obj.is_published = True
+            elif obj.review_status == TestPaper.REVIEW_REJECTED:
+                obj.is_published = False
+            obj.reviewed_at = timezone.now()
+            obj.reviewed_by = request.user
+            obj.save()
+            self._notify_creator(obj, request.user)
+            return
         obj.save()
 
 

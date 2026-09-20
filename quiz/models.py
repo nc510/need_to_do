@@ -143,6 +143,16 @@ class TestPaper(models.Model):
         ('admin', '后台创建'),
         ('frontend', '前台创建'),
     ]
+    # 审核状态：前台创建的试卷提交发布后为「待审核」，管理员审核通过才会进入全站列表；
+    # 后台创建/导入的试卷视为可信，直接通过
+    REVIEW_PENDING = 0
+    REVIEW_APPROVED = 1
+    REVIEW_REJECTED = 2
+    REVIEW_STATUS_CHOICES = [
+        (REVIEW_PENDING, '待审核'),
+        (REVIEW_APPROVED, '审核通过'),
+        (REVIEW_REJECTED, '审核驳回'),
+    ]
     title = models.CharField(max_length=100, verbose_name='试卷标题')
     description = models.TextField(verbose_name='试卷描述', null=True, blank=True)
     questions = models.ManyToManyField(Question, verbose_name='包含题目')
@@ -160,6 +170,15 @@ class TestPaper(models.Model):
     max_attempts = models.IntegerField(verbose_name='最大答题次数', null=True, blank=True, help_text='为空表示不限次数')
     start_time = models.DateTimeField(verbose_name='开放开始时间', null=True, blank=True, help_text='为空表示立即开放')
     end_time = models.DateTimeField(verbose_name='开放结束时间', null=True, blank=True, help_text='为空表示无截止')
+    # ===== 发布审核字段 =====
+    # 默认「审核通过」以兼容历史数据与后台创建的试卷；前台提交发布时由 submit_for_review() 置为待审核
+    review_status = models.IntegerField(choices=REVIEW_STATUS_CHOICES, default=REVIEW_APPROVED,
+                                        db_index=True, verbose_name='审核状态',
+                                        help_text='前台试卷提交发布后为「待审核」，管理员审核通过后才会出现在全站试卷列表')
+    review_remark = models.TextField(verbose_name='审核备注', blank=True, default='', help_text='驳回时填写的原因，会展示给试卷创建者')
+    reviewed_at = models.DateTimeField(verbose_name='审核时间', null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, verbose_name='审核人', null=True, blank=True,
+                                    related_name='reviewed_test_papers')
 
     class Meta:
         verbose_name = '试卷'
@@ -168,6 +187,26 @@ class TestPaper(models.Model):
 
     def __str__(self):
         return self.title
+
+    def submit_for_review(self):
+        """前台提交发布：置为待审核，并清空上一次的审核结论"""
+        self.review_status = self.REVIEW_PENDING
+        self.review_remark = ''
+        self.reviewed_at = None
+        self.reviewed_by = None
+
+    @property
+    def is_review_pending(self):
+        return self.review_status == self.REVIEW_PENDING
+
+    @property
+    def is_review_rejected(self):
+        return self.review_status == self.REVIEW_REJECTED
+
+    @property
+    def is_approved(self):
+        """审核通过：配合 is_published 才代表已上架到全站列表"""
+        return self.review_status == self.REVIEW_APPROVED
 
     @property
     def is_exam_controlled(self):

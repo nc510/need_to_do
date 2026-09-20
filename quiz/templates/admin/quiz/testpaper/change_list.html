@@ -35,6 +35,12 @@
 </li>
 {% else %}
 <li>
+    <a href="?review_status__exact=0" class="addlink"
+        style="background: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block;">
+        ⏳ 待审核试卷
+    </a>
+</li>
+<li>
     <a href="/quiz/admin/create_testpaper/" class="addlink"
         style="background: #007bff !important; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block; border: 1px solid #007bff;">
         📝 手工组卷

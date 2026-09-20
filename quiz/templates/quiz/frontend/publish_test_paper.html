@@ -136,8 +136,8 @@
     </div>
     {% else %}
     <div class="publish-icon">📢</div>
-    <h2>发布试卷到全站</h2>
-    <p>您确定要将试卷发布到全站题库吗？</p>
+    <h2>提交发布试卷</h2>
+    <p>您确定要将试卷提交发布吗？提交后需管理员审核通过才会展示到全站。</p>
 
     <div class="paper-info">
         <h3>{{ test_paper.title }}</h3>
@@ -149,18 +149,18 @@
     </div>
 
     <div class="info-box">
-        <strong>发布后：</strong>
+        <strong>提交后：</strong>
         <ul style="margin: 10px 0 0 20px; color: #666;">
-            <li>试卷将出现在全站试卷列表中</li>
-            <li>所有用户都可以查看和答题</li>
-            <li>您可以随时取消发布</li>
+            <li>试卷进入管理员审核队列</li>
+            <li>审核通过后出现在全站试卷列表，所有用户都可以查看和答题</li>
+            <li>审核期间试卷仅您本人可见，您可以随时取消发布</li>
         </ul>
     </div>
 
     <div class="form-actions">
         <form method="post" style="display: inline;">
             {% csrf_token %}
-            <button type="submit" class="btn btn-success">📢 确认发布</button>
+            <button type="submit" class="btn btn-success">📢 确认提交发布</button>
         </form>
         <a href="{% url 'my_test_papers' %}" class="btn btn-secondary">← 取消</a>
     </div>

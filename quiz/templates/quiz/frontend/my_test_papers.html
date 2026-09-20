@@ -323,6 +323,28 @@
         color: #856404;
     }
 
+    .status-pending {
+        background: #ffe0b2;
+        color: #e65100;
+    }
+
+    .status-rejected {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    /* 驳回原因提示 */
+    .review-remark {
+        background: #fdf2f2;
+        border-left: 3px solid #f44336;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: #b71c1c;
+        line-height: 1.5;
+    }
+
     .action-buttons {
         display: flex;
         gap: 8px;
@@ -383,7 +405,7 @@
 {% block content %}
 <div class="page-header">
     <h1>📝 我的试卷</h1>
-    <p>管理您创建的所有试卷</p>
+    <p>管理您创建的所有试卷（发布后需管理员审核通过，才会展示到全站试卷列表）</p>
 
     <div class="header-actions">
         <a href="{% url 'create_test_paper' %}" class="view-btn">
@@ -399,6 +421,7 @@
 <div class="stats-bar">
     <div class="stat-item"><span>📚</span><span>共 <strong>{{ stats.total }}</strong> 份</span></div>
     <div class="stat-item"><span>✅</span><span>已发布 <strong>{{ stats.published }}</strong></span></div>
+    <div class="stat-item"><span>⏳</span><span>待审核 <strong>{{ stats.pending }}</strong></span></div>
     <div class="stat-item"><span>⏸</span><span>未发布 <strong>{{ stats.unpublished }}</strong></span></div>
     <div class="stat-item"><span>⏱</span><span>考试控制 <strong>{{ stats.exam_controlled }}</strong></span></div>
     <div class="stat-item"><span>📊</span><span>题目总数 <strong>{{ stats.total_questions }}</strong></span></div>
@@ -409,6 +432,8 @@
     <select name="status" class="filter-select">
         <option value="">全部状态</option>
         <option value="published" {% if status == 'published' %}selected{% endif %}>已发布</option>
+        <option value="pending" {% if status == 'pending' %}selected{% endif %}>待审核</option>
+        <option value="rejected" {% if status == 'rejected' %}selected{% endif %}>已驳回</option>
         <option value="unpublished" {% if status == 'unpublished' %}selected{% endif %}>未发布</option>
         <option value="exam" {% if status == 'exam' %}selected{% endif %}>考试控制</option>
     </select>
@@ -432,13 +457,20 @@
             <span class="paper-number">{{ forloop.counter0|add:test_papers.start_index }}</span>
             <div class="paper-info">
                 <h3 class="test-paper-title">{{ paper.title }}</h3>
-                {% if paper.is_published %}
-                <span class="status-badge status-published">✓ 已发布</span>
-                {% else %}
+                {% if paper.is_review_rejected %}
+                <span class="status-badge status-rejected">❌ 已驳回</span>
+                {% elif not paper.is_published %}
                 <span class="status-badge status-unpublished">⏸ 未发布</span>
+                {% elif paper.is_review_pending %}
+                <span class="status-badge status-pending">⏳ 待审核</span>
+                {% else %}
+                <span class="status-badge status-published">✓ 已发布</span>
                 {% endif %}
             </div>
         </div>
+        {% if paper.is_review_rejected and paper.review_remark %}
+        <div class="review-remark">📋 驳回原因：{{ paper.review_remark }}</div>
+        {% endif %}
         {% if paper.description %}
         <div class="test-paper-description">{{ paper.description }}</div>
         {% endif %}
