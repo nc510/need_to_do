@@ -763,6 +763,95 @@
         font-size: 14px;
     }
 
+    /* ========== 分类导航（学科 / 章节 / 知识点） ========== */
+    .cat-nav {
+        background: #fff;
+        padding: 14px 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .cat-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .cat-label {
+        flex: 0 0 auto;
+        min-width: 56px;
+        padding-top: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #7f8c8d;
+    }
+
+    .cat-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    /* 知识点选项可能较多：单行横向滚动，不额外占用高度 */
+    .cat-chips.cat-scroll {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .cat-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        background: #f4f6fb;
+        color: #2c3e50;
+        border-radius: 20px;
+        font-size: 13px;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+    }
+
+    .cat-chip:hover {
+        background: #e8ecfb;
+        color: #667eea;
+    }
+
+    .cat-chip.is-on {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        font-weight: 600;
+    }
+
+    .cat-count {
+        font-size: 12px;
+        opacity: 0.75;
+    }
+
+    .cat-hint {
+        padding-top: 6px;
+        font-size: 13px;
+        color: #a0a6b4;
+    }
+
+    /* 试卷卡片上的学科 / 章节徽标 */
+    .paper-tag.cat-tag {
+        background: #eaf7f0;
+        color: #27ae60;
+    }
+
+    @media (max-width: 768px) {
+        .cat-label {
+            min-width: 44px;
+        }
+    }
+
     /* ========== 搜索筛选条 ========== */
     .filter-bar {
         display: flex;
@@ -970,8 +1059,9 @@
     </div>
     <div class="lb-tabs">
         {% for board in site_boards %}
-        <button type="button" class="lb-tab{% if forloop.first %} active{% endif %}"
-            data-board="{{ board.key }}">{{ board.icon }} {{ board.name }}</button>
+        <button type="button" class="lb-tab{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+            {{ board.icon }} {{ board.name }}
+        </button>
         {% endfor %}
     </div>
     {% for board in site_boards %}
@@ -981,9 +1071,7 @@
                 {% if board.entries %}
                 {% for row in board.entries %}
                 <div class="lb-row{% if row.is_me %} is-me{% endif %}">
-                    <div class="lb-rank">
-                        {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}{% endif %}
-                    </div>
+                    <div class="lb-rank">{% rank_medal row.rank %}</div>
                     <div class="lb-name">{{ row.name }}<span class="lb-detail">{{ row.sub }}</span></div>
                     <div class="lb-value">{{ row.value }}</div>
                 </div>
@@ -1077,12 +1165,22 @@
             });
         }
 
-        // 分页链接 + 筛选条「重置」链接：局部刷新
+        // 分页链接 + 筛选条「重置」链接 + 分类 chip（学科/章节/知识点）：局部刷新
         region.addEventListener('click', function (e) {
-            var link = e.target.closest ? e.target.closest('.pagination a, .reset-btn') : null;
+            var sel = '.pagination a, .reset-btn, .cat-chip';
+            var link = e.target.closest ? e.target.closest(sel) : null;
             if (!link || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) { return; }
             e.preventDefault();
             load(link.href, true);
+        });
+
+        // 排序/出题人/状态下拉：选中即筛选，不必再点「筛选」按钮
+        region.addEventListener('change', function (e) {
+            var select = e.target;
+            if (!select.classList || !select.classList.contains('sort-select')) { return; }
+            var form = select.form;
+            if (!form) { return; }
+            if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
         });
 
         // 筛选表单提交：去掉空参数后拼查询串（不带 page，回到第 1 页）

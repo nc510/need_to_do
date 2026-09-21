@@ -90,12 +90,203 @@ def _annotate_my_paper_status(paginated_test_papers, user):
             paper.my_btn_label = '开始答题 →'
 
 
+# ===== 首页「全站试卷」分类导航（学科 / 章节 / 知识点 / 出题人）=====
+# 试卷没有分类字段，分类统一由卷内题目的 subject/chapter/knowledge_points 派生；
+# 在 M2M 上过滤一律走 through 表的 pk__in 子查询，不用 JOIN：
+# JOIN 会让 annotate(Count('questions')) 与分页 count() 出现行膨胀和重复计数。
+
+def _paper_ids_with(**question_filter):
+    """「卷内至少有一道满足条件的题目」的试卷 ID 子查询。"""
+    return TestPaper.questions.through.objects.filter(
+        **question_filter).values('testpaper_id')
+
+
+def _facet_url(params, path, **overrides):
+    """在保留其余筛选条件的前提下覆盖分类参数，生成分类 chip 的链接。
+
+    params 为当前查询串（不含 page）。切换学科时必须一并清空 chapter/topic，
+    否则会残留上一个学科的章节上下文，导致筛出空结果。
+    """
+    query = params.copy()
+    for field, value in overrides.items():
+        if value:
+            query[field] = value
+        else:
+            query.pop(field, None)
+    encoded = query.urlencode()
+    return path + ('?' + encoded if encoded else '')
+
+
+def _chapter_label(number, title):
+    """章节文案：标题自带「第X章」前缀时不再重复拼编号（与 Chapter.display_title 同口径）。"""
+    cleaned = (title or '').replace('\u3000', ' ').strip()
+    if not cleaned:
+        return ''
+    if strip_sequence_prefix(cleaned) != cleaned:
+        return cleaned
+    return '第{}章 {}'.format(number, cleaned) if number else cleaned
+
+
+def _paper_category_nav(visible, subject_key, chapter_key, topic_key, params, path):
+    """构造分类导航三行（学科 / 章节 / 知识点）。
+
+    visible 为当前可见试卷集合（不受关键词搜索与分类筛选影响），计数逐级收敛：
+    学科 = 全部可见试卷；章节 = 已选学科范围内；知识点再按已选章节收窄。
+    知识点数量可能较多且交叉命中不可相加，故不给计数。
+    """
+    through = TestPaper.questions.through
+    # ---- 学科行：卷内题目出现过的学科 + 「未分类」（题目未设学科的卷）----
+    subject_items = [{
+        'key': 'all', 'label': '全部', 'count': visible.count(),
+        'active': subject_key == 'all', 'url': _facet_url(
+            params, path, subject='', chapter='', topic=''),
+    }]
+    subject_rows = through.objects.filter(
+        testpaper_id__in=visible.values('id'), question__subject__isnull=False
+    ).values('question__subject_id', 'question__subject__name',
+             'question__subject__icon').annotate(
+        n=Count('testpaper_id', distinct=True)).order_by('-n')
+    for row in subject_rows:
+        key = str(row['question__subject_id'])
+        subject_items.append({
+            'key': key,
+            'label': '{} {}'.format(
+                row['question__subject__icon'] or '', row['question__subject__name']).strip(),
+            'count': row['n'], 'active': subject_key == key,
+            'url': _facet_url(params, path, subject=key, chapter='', topic=''),
+        })
+    uncategorized = visible.exclude(
+        pk__in=_paper_ids_with(question__subject__isnull=False)).count()
+    if uncategorized:
+        subject_items.append({
+            'key': 'none', 'label': '未分类', 'count': uncategorized,
+            'active': subject_key == 'none',
+            'url': _facet_url(params, path, subject='none', chapter='', topic=''),
+        })
+
+    # ---- 章节行 / 知识点行：选中具体学科后才展开，避免全站选项平铺 ----
+    chapter_items, topic_items = [], []
+    subject_paper_ids = None
+    if subject_key.isdigit():
+        subject_paper_ids = visible.filter(
+            pk__in=_paper_ids_with(question__subject_id=int(subject_key))).values('id')
+        chapter_items.append({
+            'key': '', 'label': '全部章节', 'count': None, 'active': not chapter_key,
+            'url': _facet_url(params, path, chapter='', topic=''),
+        })
+        chapter_rows = Chapter.objects.filter(
+            subject_id=int(subject_key),
+            questions__testpaper__in=subject_paper_ids,
+        ).annotate(n=Count('questions__testpaper', distinct=True)).order_by('number')
+        for chapter in chapter_rows:
+            key = str(chapter.pk)
+            chapter_items.append({
+                'key': key, 'label': chapter.display_title, 'count': chapter.n,
+                'active': chapter_key == key,
+                'url': _facet_url(params, path, chapter=key, topic=''),
+            })
+    kp_base_ids = None
+    if subject_paper_ids is not None:
+        if chapter_key:
+            kp_base_ids = visible.filter(
+                pk__in=_paper_ids_with(question__chapter_id=int(chapter_key))).values('id')
+        else:
+            kp_base_ids = subject_paper_ids
+    if kp_base_ids is not None:
+        topic_items.append({
+            'key': '', 'label': '全部知识点', 'count': None, 'active': not topic_key,
+            'url': _facet_url(params, path, topic=''),
+        })
+        kp_ids = through.objects.filter(
+            testpaper_id__in=kp_base_ids).values('question__knowledge_points')
+        for kp in KnowledgePoint.objects.filter(id__in=kp_ids).order_by('name'):
+            key = str(kp.pk)
+            topic_items.append({
+                'key': key, 'label': kp.name, 'count': None, 'active': topic_key == key,
+                'url': _facet_url(params, path, topic=key),
+            })
+    if subject_key == 'none':
+        chapter_hint = topic_hint = '未分类试卷未设置学科，无章节 / 知识点'
+    elif subject_key.isdigit():
+        chapter_hint, topic_hint = '该学科暂无可联动的章节', '该学科暂无可联动的知识点'
+    else:
+        chapter_hint, topic_hint = '选学科后展开该学科章节', '选学科后展开该学科知识点'
+    return [
+        {'key': 'subject', 'label': '学科', 'items': subject_items,
+         'hint': '', 'scroll': False},
+        {'key': 'chapter', 'label': '章节', 'items': chapter_items,
+         'hint': chapter_hint, 'scroll': False},
+        {'key': 'topic', 'label': '知识点', 'items': topic_items,
+         'hint': topic_hint, 'scroll': True},
+    ]
+
+
+def _paper_author_options(visible, author):
+    """出题人下拉选项：取自当前可见试卷集合，带份数（不随分类与搜索变化）。
+
+    text 已在服务端拼好「名字（N）」：模板只做单行输出，
+    避免 `{{ opt.name }}（{{ opt.count }}）` 被格式化折行。
+    """
+    options = [{'key': '', 'text': '全部出题人'}]
+    rows = visible.exclude(created_by__isnull=True).exclude(created_by='').values(
+        'created_by').annotate(n=Count('id')).order_by('-n', 'created_by')
+    for row in rows:
+        options.append({'key': row['created_by'],
+                        'text': '{}（{}）'.format(row['created_by'], row['n'])})
+    return options
+
+
+def _annotate_paper_categories(paginated_test_papers):
+    """给当前页试卷补上「学科 / 章节」徽标（取卷内命中题数最多的那个）。
+
+    与 _annotate_my_paper_status 同为「当前页批量聚合」，整页渲染与 AJAX 翻页共用。
+    """
+    page_papers = list(paginated_test_papers)
+    paper_ids = [paper.pk for paper in page_papers]
+    if not paper_ids:
+        return
+    through = TestPaper.questions.through
+    best_subject, best_chapter = {}, {}
+    for row in through.objects.filter(
+            testpaper_id__in=paper_ids, question__subject__isnull=False
+    ).values('testpaper_id', 'question__subject__name', 'question__subject__icon'
+             ).annotate(n=Count('id')):
+        pid, n = row['testpaper_id'], row['n']
+        if pid not in best_subject or n > best_subject[pid][0]:
+            best_subject[pid] = (n, '{} {}'.format(
+                row['question__subject__icon'] or '',
+                row['question__subject__name']).strip())
+    for row in through.objects.filter(
+            testpaper_id__in=paper_ids, question__chapter__isnull=False
+    ).values('testpaper_id', 'question__chapter__title',
+             'question__chapter__number').annotate(n=Count('id')):
+        pid, n = row['testpaper_id'], row['n']
+        if pid not in best_chapter or n > best_chapter[pid][0]:
+            best_chapter[pid] = (n, _chapter_label(
+                row['question__chapter__number'], row['question__chapter__title']))
+    for paper in page_papers:
+        paper.subject_label = best_subject.get(paper.pk, (0, ''))[1]
+        paper.chapter_label = best_chapter.get(paper.pk, (0, ''))[1]
+
+
 def test_paper_list(request):
     user = request.user
     # 搜索筛选参数
     search = request.GET.get('search', '').strip()
     sort = request.GET.get('sort', 'oldest')  # oldest / newest / score / questions
     status = request.GET.get('status', 'all')  # all / undone / done（我的作答状态，仅登录用户）
+    # 分类导航参数：subject=学科ID/none/all，chapter=章节ID，topic=知识点ID
+    subject_key = request.GET.get('subject', 'all').strip()
+    chapter_key = request.GET.get('chapter', '').strip()
+    topic_key = request.GET.get('topic', '').strip()
+    author = request.GET.get('author', '').strip()
+    # 非法参数静默回落，避免手改 URL 造成空结果或报错
+    if subject_key != 'none' and not subject_key.isdigit():
+        subject_key = 'all'
+    if not chapter_key.isdigit():
+        chapter_key = ''
+    if not topic_key.isdigit():
+        topic_key = ''
 
     # 全站列表只展示「已发布 + 审核通过」的正式试卷
     listed = dict(is_published=True, is_wrong_paper=False,
@@ -106,13 +297,28 @@ def test_paper_list(request):
         test_papers = TestPaper.objects.filter(**listed).filter(
             models.Q(is_public=True) | models.Q(created_by=user.username)
         )
-    # 我可见的全部试卷，用于「我的完成进度」（不受搜索/状态筛选影响）
+    # 我可见的全部试卷：分类计数的口径基准（不受关键词搜索与分类筛选影响）
     progress_base = test_papers
     # 关键词搜索（标题或描述模糊匹配）
     if search:
         test_papers = test_papers.filter(
             models.Q(title__icontains=search) | models.Q(description__icontains=search)
         )
+    # 分类筛选（派生口径：按卷内题目的学科 / 章节 / 知识点过滤）
+    if subject_key == 'none':
+        test_papers = test_papers.exclude(
+            pk__in=_paper_ids_with(question__subject__isnull=False))
+    elif subject_key.isdigit():
+        test_papers = test_papers.filter(
+            pk__in=_paper_ids_with(question__subject_id=int(subject_key)))
+    if chapter_key:
+        test_papers = test_papers.filter(
+            pk__in=_paper_ids_with(question__chapter_id=int(chapter_key)))
+    if topic_key:
+        test_papers = test_papers.filter(
+            pk__in=_paper_ids_with(question__knowledge_points=int(topic_key)))
+    if author:
+        test_papers = test_papers.filter(created_by=author)
     # 我的作答状态筛选（未登录时忽略）
     if user.is_authenticated:
         my_paper_ids = TestRecord.objects.filter(
@@ -151,12 +357,26 @@ def test_paper_list(request):
         'search': search,
         'sort': sort,
         'status': status,
+        'subject_key': subject_key,
+        'chapter_key': chapter_key,
+        'topic_key': topic_key,
+        'author': author,
+        # 分类导航三行（学科/章节/知识点）与出题人选项：计数基于可见集合
+        'category_nav': _paper_category_nav(
+            progress_base, subject_key, chapter_key, topic_key,
+            page_params, request.path),
+        'author_options': _paper_author_options(progress_base, author),
+        'has_filter': bool(search or author or chapter_key or topic_key
+                           or subject_key != 'all' or sort != 'oldest'
+                           or status != 'all'),
         'query_string': page_params.urlencode(),
     }
 
     # 我的试卷完成状态：当前页批量聚合（列表区块渲染所需，AJAX 翻页同样要算）
     if user.is_authenticated:
         _annotate_my_paper_status(paginated_test_papers, user)
+    # 卡片上的「学科 / 章节」徽标：同为当前页批量聚合
+    _annotate_paper_categories(paginated_test_papers)
 
     # 列表区块的 AJAX 请求（翻页/筛选/重置）：只返回列表片段，
     # 跳过 Hero 统计/全站榜单等与列表无关的重查询

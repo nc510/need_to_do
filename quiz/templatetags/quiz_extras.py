@@ -38,6 +38,34 @@ def option_class(key, correct_answer, user_answer, multi=False):
 
 
 @register.simple_tag
+def selected_attr(value, current):
+    """下拉框选中态：值相等返回 'selected'，否则返回空串。
+
+    用法：
+        <option value="{{ opt.key }}" {% selected_attr opt.key author %}>
+
+    收敛模板里的 `==` 比较：IDE 自动格式化会删掉比较运算符两侧空格
+    （`{% if author == opt.key %}` 变成 `{% if author==opt.key %}`），
+    Django 3.2 的 smartif 无法解析这种写法。
+    """
+    return 'selected' if str(value) == str(current) else ''
+
+
+@register.simple_tag
+def rank_medal(rank):
+    """名次徽标：前三名返回奖牌，其余返回名次数字。
+
+    用法：
+        <div class="lb-rank">{% rank_medal row.rank %}</div>
+
+    收敛模板里 `{% if row.rank == 1 %}🥇{% elif ... %}` 这种超长 if/elif 链：
+    它超过 80 字符后会被 IDE 自动格式化折行，而 Django 的标签正则不跨行匹配，
+    折行后的 `{{` / `}}` 会被当成普通文本直接输出到页面上。
+    """
+    return {1: '🥇', 2: '🥈', 3: '🥉'}.get(rank, str(rank))
+
+
+@register.simple_tag
 def role_greeting(role):
     """根据用户角色返回问候语后缀，替代模板里超长跨行 if/elif/else。
 

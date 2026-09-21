@@ -1,8 +1,10 @@
 {% comment %}
-首页「全站试卷」列表区块：标题统计 + 筛选条 + 试卷卡片 + 分页。
-翻页时由前端 fetch 该模板单独替换（见 test_paper_list.html 的脚本），
-避免整页刷新后用户需要重新下滑找列表。
+首页「全站试卷」列表区块：标题统计 + 分类导航 + 筛选条 + 试卷卡片 + 分页。
+翻页/筛选/分类点击时由前端 fetch 该模板单独替换（见 test_paper_list.html 的脚本），
+分类导航与列表同属一个片段：点学科时「选中态 + 章节/知识点行 + 列表」一次请求到位，
+避免整页刷新后用户需要重新下滑找列表，也避免分两次请求导致行与列表不一致。
 {% endcomment %}
+{% load quiz_extras %}
 <div class="section-header">
     <h2>📋 全站试卷</h2>
     {% if test_papers %}
@@ -14,25 +16,54 @@
     {% endif %}
 </div>
 
+<!-- 分类导航：搜索筛选条的上一级，学科 → 章节 → 知识点逐级联动 -->
+<div class="cat-nav">
+    {% for row in category_nav %}
+    <div class="cat-row">
+        <span class="cat-label">{{ row.label }}</span>
+        <div class="cat-chips{% if row.scroll %} cat-scroll{% endif %}">
+            {% if row.items %}
+            {% for item in row.items %}
+            <a href="{{ item.url }}" class="cat-chip{% if item.active %} is-on{% endif %}">
+                <span>{{ item.label }}</span>
+                {% if item.count %}<span class="cat-count">{{ item.count }}</span>{% endif %}
+            </a>
+            {% endfor %}
+            {% else %}
+            <span class="cat-hint">{{ row.hint }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
 <!-- 搜索筛选条 -->
 <form class="filter-bar" method="get">
+    {# 分类上下文随表单提交，避免搜索/筛选后丢掉上方已选的学科、章节、知识点 #}
+    <input type="hidden" name="subject" value="{{ subject_key }}">
+    <input type="hidden" name="chapter" value="{{ chapter_key }}">
+    <input type="hidden" name="topic" value="{{ topic_key }}">
     <input type="text" name="search" value="{{ search|default:'' }}" placeholder="🔍 搜索试卷标题或描述..." class="search-input">
     <select name="sort" class="sort-select">
-        <option value="oldest" {% if sort == 'oldest' %}selected{% endif %}>发布时间（早→晚）</option>
-        <option value="newest" {% if sort == 'newest' %}selected{% endif %}>发布时间（晚→早）</option>
-        <option value="score" {% if sort == 'score' %}selected{% endif %}>分数最高</option>
-        <option value="questions" {% if sort == 'questions' %}selected{% endif %}>题量最多</option>
+        <option value="oldest" {% selected_attr 'oldest' sort %}>发布时间（早→晚）</option>
+        <option value="newest" {% selected_attr 'newest' sort %}>发布时间（晚→早）</option>
+        <option value="score" {% selected_attr 'score' sort %}>分数最高</option>
+        <option value="questions" {% selected_attr 'questions' sort %}>题量最多</option>
+    </select>
+    <select name="author" class="sort-select">
+        {% for opt in author_options %}
+        <option value="{{ opt.key }}" {% selected_attr opt.key author %}>{{ opt.text }}</option>
+        {% endfor %}
     </select>
     {% if user.is_authenticated %}
     <select name="status" class="sort-select">
-        <option value="all" {% if status == 'all' %}selected{% endif %}>全部状态</option>
-        <option value="undone" {% if status == 'undone' %}selected{% endif %}>我未作答</option>
-        <option value="done" {% if status == 'done' %}selected{% endif %}>我已作答</option>
+        <option value="all" {% selected_attr 'all' status %}>全部状态</option>
+        <option value="undone" {% selected_attr 'undone' status %}>我未作答</option>
+        <option value="done" {% selected_attr 'done' status %}>我已作答</option>
     </select>
     {% endif %}
     <button type="submit" class="filter-btn">🔍 筛选</button>
-    {% if search or sort != 'oldest' or status != 'all' %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺
-        重置</a>{% endif %}
+    {% if has_filter %}<a href="{% url 'test_paper_list' %}" class="reset-btn">↺ 重置</a>{% endif %}
     {% if test_papers %}
     <span class="result-count">匹配 <strong>{{ test_papers.paginator.count }}</strong> 份</span>
     {% endif %}
@@ -46,6 +77,12 @@
             <span class="paper-number">{{ forloop.counter }}</span>
             <span class="paper-tags">
                 {% if paper.question_count %}<span class="paper-tag">📝 {{ paper.question_count }} 题</span>{% endif %}
+                {% if paper.subject_label %}
+                <span class="paper-tag cat-tag">{{ paper.subject_label }}</span>
+                {% endif %}
+                {% if paper.chapter_label %}
+                <span class="paper-tag cat-tag">{{ paper.chapter_label }}</span>
+                {% endif %}
                 {% if user.is_authenticated %}
                 <span class="status-badge status-{{ paper.my_status }}">{{ paper.my_status_label }}</span>
                 {% endif %}
@@ -115,7 +152,12 @@
 {% else %}
 <div class="empty-state">
     <div class="icon">📭</div>
+    {% if has_filter %}
+    <h3>没有符合条件的试卷</h3>
+    <p>试着换一个学科 / 章节 / 知识点，或放宽搜索条件</p>
+    {% else %}
     <h3>暂无已发布的试卷</h3>
     <p>敬请期待，稍后再来看看吧</p>
+    {% endif %}
 </div>
 {% endif %}
