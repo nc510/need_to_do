@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'quiz',
+    'membership',
 ]
 
 MIDDLEWARE = [
@@ -195,6 +196,32 @@ SIMPLEUI_CONFIG = {
                     'name': '🎫 会员信息',
                     'icon': 'fa-solid fa-id-card',
                     'url': 'quiz/profile/'
+                }
+            ]
+        },
+        {
+            'name': '💎 会员与支付',
+            'icon': 'fa-solid fa-gem',
+            'models': [
+                {
+                    'name': '💳 会员充值折扣',
+                    'icon': 'fa-solid fa-percent',
+                    'url': 'membership/rechargeconfig/'
+                },
+                {
+                    'name': '📑 会员套餐',
+                    'icon': 'fa-solid fa-credit-card',
+                    'url': 'membership/plan/'
+                },
+                {
+                    'name': '🧾 会员订单',
+                    'icon': 'fa-solid fa-receipt',
+                    'url': 'membership/order/'
+                },
+                {
+                    'name': '⚙️ 注册默认会员设置',
+                    'icon': 'fa-solid fa-user-gear',
+                    'url': 'quiz/siteconfig/'
                 }
             ]
         },
@@ -353,3 +380,33 @@ ANTISPIDER_IP_WHITELIST = os.getenv(
 MIDDLEWARE += [
     'django.middleware.http.ConditionalGetMiddleware',
 ]
+
+# ==============================================================================
+# 会员支付配置（支付宝电脑网站支付）
+# ==============================================================================
+
+# 支付宝应用 APPID（沙箱与正式环境的 APPID 不同）
+ALIPAY_APPID = os.getenv('ALIPAY_APPID', '')
+# True=沙箱环境，False=正式环境
+ALIPAY_SANDBOX = os.getenv('ALIPAY_SANDBOX', 'True').lower() == 'true'
+# 网关地址，留空则按上面的沙箱开关自动选择
+ALIPAY_GATEWAY = os.getenv('ALIPAY_GATEWAY', '')
+# RSA2 密钥文件路径（普通公钥模式），留空则使用 keys/ 下的默认文件名
+ALIPAY_PRIVATE_KEY_PATH = os.getenv('ALIPAY_PRIVATE_KEY_PATH') or str(
+    BASE_DIR / 'keys' / 'app_private_key.pem'
+)
+ALIPAY_PUBLIC_KEY_PATH = os.getenv('ALIPAY_PUBLIC_KEY_PATH') or str(
+    BASE_DIR / 'keys' / 'alipay_public_key.pem'
+)
+# 支付完成后跳回本站的地址，必须是公网可访问的 https 地址
+ALIPAY_RETURN_URL = os.getenv('ALIPAY_RETURN_URL', '')
+# 支付宝异步通知地址，必须是公网可访问的 https 地址
+ALIPAY_NOTIFY_URL = os.getenv('ALIPAY_NOTIFY_URL', '')
+
+# 订单支付超时时间（分钟）
+ORDER_TIMEOUT_MINUTES = int(os.getenv('ORDER_TIMEOUT_MINUTES', '30'))
+# 支付页兜底查单的最小订单账龄（秒）：新订单不做无意义的查询
+ORDER_SYNC_MIN_AGE_SECONDS = int(os.getenv('ORDER_SYNC_MIN_AGE_SECONDS', '60'))
+
+# 位于 nginx 等反向代理之后时，据此识别客户端的原始协议（https）
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

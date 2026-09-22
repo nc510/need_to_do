@@ -1,0 +1,48 @@
+{% extends 'quiz/frontend/base.html' %}
+{% load membership_extras %}
+
+{% block title %}支付结果 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'membership/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="mem-result {% if success %}ok{% else %}fail{% endif %}">
+    <div class="mem-result-icon">{% if success %}✅{% else %}⚠️{% endif %}</div>
+    <div class="mem-result-title">{% if success %}支付成功{% else %}支付未完成{% endif %}</div>
+    <div class="mem-result-msg">{{ message }}</div>
+</div>
+
+{% if order %}
+<div class="mem-order">
+    <div class="mem-order-row">
+        <span>套餐</span>
+        <strong>{{ order.plan.name }}</strong>
+    </div>
+    <div class="mem-order-row">
+        <span>订单金额</span>
+        <span class="mem-amount">￥{{ order.amount|money }}</span>
+    </div>
+    <div class="mem-order-row">
+        <span>订单号</span>
+        <span class="mem-order-no">{{ order.order_no }}</span>
+    </div>
+    <div class="mem-order-row">
+        <span>订单状态</span>
+        <strong>{{ order.get_status_display }}</strong>
+    </div>
+    {% if order.trade_no %}
+    <div class="mem-order-row">
+        <span>支付宝交易号</span>
+        <span class="mem-order-no">{{ order.trade_no }}</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="mem-actions">
+    <a href="{% url 'user_center' %}" class="mem-btn mem-btn-pay">查看我的会员状态</a>
+    <div class="mem-links">
+        <a href="{% url 'membership:plans' %}">← 返回套餐列表</a>
+    </div>
+</div>
+{% endblock %}

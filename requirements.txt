@@ -23,6 +23,9 @@ django-simpleui==2026.1.13
 # Environment Variables
 python-dotenv==1.0.1
 
+# Alipay SDK（会员支付）
+python-alipay-sdk==3.4.0
+
 # Optional: For better performance in production
 # redis==5.0.1
 # hiredis==2.3.2

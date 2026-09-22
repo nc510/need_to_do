@@ -1,0 +1,65 @@
+{% extends 'quiz/frontend/base.html' %}
+{% load membership_extras %}
+
+{% block title %}订单支付 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'membership/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="mem-header">
+    <h1>💳 订单支付</h1>
+    <p>请点击下方按钮前往支付宝完成付款</p>
+</div>
+
+<div class="mem-order">
+    <div class="mem-order-row">
+        <span>套餐</span>
+        <strong>{{ order.plan.name }}</strong>
+    </div>
+    <div class="mem-order-row">
+        <span>有效天数</span>
+        <span>{{ order.plan.duration_days }} 天</span>
+    </div>
+    <div class="mem-order-row">
+        <span>充值折扣</span>
+        {% if order.is_discounted %}
+        <span class="mem-price-save">{{ order.discount_label }}</span>
+        {% else %}
+        <span>无折扣</span>
+        {% endif %}
+    </div>
+    {% if order.is_discounted %}
+    <div class="mem-order-row">
+        <span>套餐原价</span>
+        <span class="mem-price-origin">￥{{ order.plan.price|money }}</span>
+    </div>
+    <div class="mem-order-row">
+        <span>优惠金额</span>
+        <span class="mem-price-save">-￥{{ order.saved_amount|money }}</span>
+    </div>
+    {% endif %}
+    <div class="mem-order-row">
+        <span>应付金额</span>
+        <strong class="mem-amount">￥{{ order.amount|money }}</strong>
+    </div>
+    <div class="mem-order-row">
+        <span>订单号</span>
+        <span class="mem-order-no">{{ order.order_no }}</span>
+    </div>
+    <div class="mem-order-row">
+        <span>下单时间</span>
+        <span>{{ order.created_at|date:"Y-m-d H:i:s" }}</span>
+    </div>
+</div>
+
+<div class="mem-actions">
+    <a href="{{ pay_url }}" class="mem-btn mem-btn-pay">前往支付宝支付</a>
+    <p class="mem-tip">
+        付款完成后请返回本页刷新查看，会员将自动生效。<br>
+        订单有时效限制，超时未支付将自动关闭，请重新下单。
+    </p>
+    <div class="mem-links">
+        <a href="{% url 'membership:plans' %}">← 返回套餐列表</a>
+    </div>
+</div>
+{% endblock %}
