@@ -294,6 +294,68 @@
         color: #98a2b3
     }
 
+    /* ===== 作业完成情况轮播（每页5条，自动播放+手动切换） ===== */
+    .ap-carousel {
+        margin-top: 18px
+    }
+
+    .ap-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 10px
+    }
+
+    .ap-head h3 {
+        font-size: 15px;
+        color: #2c3e50;
+        margin: 0
+    }
+
+    .ap-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px
+    }
+
+    .ap-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid #d6dbec;
+        background: #fff;
+        color: #667eea;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease
+    }
+
+    .ap-btn:hover {
+        background: #667eea;
+        color: #fff;
+        border-color: #667eea
+    }
+
+    .ap-indicator {
+        font-size: 12px;
+        color: #8a94a6;
+        min-width: 34px;
+        text-align: center
+    }
+
+    .ap-page {
+        display: none
+    }
+
+    .ap-page.active {
+        display: block
+    }
+
     @media(max-width:600px) {
 
         .mlb-head,
@@ -350,18 +412,31 @@
                 <div class="stat-content"><h3>班级平均得分率</h3><div class="value">{{ class_stats.avg_rate }}%</div></div>
             </div>
         </div>
-        {% if assignment_progress %}
-        <div style="margin-top:18px">
-            <h3 style="font-size:15px;color:#2c3e50;margin:0 0 12px">作业完成情况</h3>
-            {% for item in assignment_progress %}
-            <div style="margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#555;margin-bottom:4px;gap:8px">
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ item.assignment.title }}">{{ item.assignment.title }}</span>
-                    <span style="color:#95a5a6;white-space:nowrap">{{ item.submitted }}/{{ item.total }} 已提交（{{ item.rate }}%）</span>
+        {% if progress_pages %}
+        <div class="ap-carousel" id="apCarousel">
+            <div class="ap-head">
+                <h3>作业完成情况</h3>
+                {% if progress_pages|length > 1 %}
+                <div class="ap-controls">
+                    <button type="button" class="ap-btn" id="apPrev" title="上一页">‹</button>
+                    <span class="ap-indicator" id="apIndicator">1/{{ progress_pages|length }}</span>
+                    <button type="button" class="ap-btn" id="apNext" title="下一页">›</button>
                 </div>
-                <div style="background:#ecf0f1;border-radius:6px;height:10px;overflow:hidden">
-                    <div style="height:100%;width:{{ item.rate }}%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:6px"></div>
+                {% endif %}
+            </div>
+            {% for page in progress_pages %}
+            <div class="ap-page{% if forloop.first %} active{% endif %}">
+                {% for item in page %}
+                <div style="margin-bottom:14px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#555;margin-bottom:4px;gap:8px">
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ item.assignment.title }}">{{ item.assignment.title }}</span>
+                        <span style="color:#95a5a6;white-space:nowrap">{{ item.submitted }}/{{ item.total }} 已提交（{{ item.rate }}%）</span>
+                    </div>
+                    <div style="background:#ecf0f1;border-radius:6px;height:10px;overflow:hidden">
+                        <div style="height:100%;width:{{ item.rate }}%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:6px"></div>
+                    </div>
                 </div>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>
@@ -519,6 +594,39 @@
                 if (target) { target.classList.add('active'); }
             });
         });
+    })();
+
+    // 作业完成情况轮播：每页5条，4秒自动翻页（循环），鼠标悬停暂停，可手动前后切换
+    (function () {
+        var carousel = document.getElementById('apCarousel');
+        if (!carousel) { return; }
+        var pages = carousel.querySelectorAll('.ap-page');
+        var indicator = document.getElementById('apIndicator');
+        var prevBtn = document.getElementById('apPrev');
+        var nextBtn = document.getElementById('apNext');
+        var current = 0;
+        var timer = null;
+
+        function show(index) {
+            current = (index + pages.length) % pages.length;
+            pages.forEach(function (p, i) { p.classList.toggle('active', i === current); });
+            if (indicator) { indicator.textContent = (current + 1) + '/' + pages.length; }
+        }
+        function start() {
+            stop();
+            if (pages.length > 1) {
+                timer = setInterval(function () { show(current + 1); }, 4000);
+            }
+        }
+        function stop() {
+            if (timer) { clearInterval(timer); timer = null; }
+        }
+
+        if (nextBtn) { nextBtn.addEventListener('click', function () { show(current + 1); start(); }); }
+        if (prevBtn) { prevBtn.addEventListener('click', function () { show(current - 1); start(); }); }
+        carousel.addEventListener('mouseenter', stop);
+        carousel.addEventListener('mouseleave', start);
+        start();
     })();
 </script>
 {% endblock %}

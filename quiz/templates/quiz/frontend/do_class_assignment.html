@@ -289,7 +289,7 @@
     </div>
     {% endif %}
 
-    <a href="{% url 'student_class_assignments' %}" class="back-btn">← 返回列表</a>
+    <a href="{% url 'student_class_assignments' %}?class_id={{ assignment.class_obj_id }}&type={{ assignment.type }}" class="back-btn">← 返回列表</a>
 
     <div class="paper-info">
         {% if test_paper.description %}
@@ -643,7 +643,8 @@
                     // 提交成功，离开时不再拦截（避免提交后再触发临时保存）
                     window.setDraftSubmitted();
                     // 添加时间戳参数强制刷新页面，避免缓存旧数据
-                    window.location.href = '{% url "student_class_assignments" %}?t=' + Date.now();
+                    window.location.href = '{% url "student_class_assignments" %}?t=' + Date.now()
+                        + '&class_id={{ assignment.class_obj_id }}&type={{ assignment.type }}';
                 } else {
                     alert(data.message);
                     submitBtn.disabled = false;

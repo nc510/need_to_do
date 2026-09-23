@@ -150,6 +150,21 @@
         flex-wrap: wrap;
     }
 
+    .my-rank-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 5px 0;
+        flex-wrap: wrap;
+    }
+
+    .my-rank-class {
+        font-size: 13px;
+        font-weight: 600;
+        color: #2c3e50;
+        flex: 0 0 auto;
+    }
+
     .my-rank-item {
         font-size: 13px;
         color: #667eea;
@@ -228,19 +243,24 @@
     </div>
 </div>
 
-{% if my_class %}
-<div class="my-rank-card">
-    <div class="my-rank-title">🏆 我的班级「{{ my_class.name }}」当前排名</div>
-    {% if my_class_ranks %}
-    <div class="my-rank-items">
-        {% for item in my_class_ranks %}
-        <span class="my-rank-item">{{ item.icon }} {{ item.name }} 第 <strong>{{ item.rank }}</strong> 名（{{ item.value }}）</span>
-        {% endfor %}
+{% if my_classes_ranks %}
+<div class="my-rank-card" style="display:block">
+    <div class="my-rank-title" style="margin-bottom:8px">🏆 我的班级当前排名</div>
+    {% for group in my_classes_ranks %}
+    <div class="my-rank-row">
+        <span class="my-rank-class">📚 {{ group.class_obj.name }}</span>
+        {% if group.ranks %}
+        <span class="my-rank-items">
+            {% for item in group.ranks %}
+            <span class="my-rank-item">{{ item.icon }} {{ item.name }} 第 <strong>{{ item.rank }}</strong> 名（{{ item.value }}）</span>
+            {% endfor %}
+        </span>
+        {% else %}
+        <span class="my-rank-empty">暂无上榜数据，完成作业或刷题即可累积分数</span>
+        {% endif %}
     </div>
-    {% else %}
-    <p class="my-rank-empty">本班还没有上榜数据，完成作业或刷题就能为班级累积分数</p>
-    {% endif %}
-    <a href="{% url 'class_leaderboard' %}" class="my-rank-link">查看完整班级榜单 →</a>
+    {% endfor %}
+    <a href="{% url 'class_leaderboard' %}" class="my-rank-link" style="display:block;margin-top:8px">查看完整班级榜单 →</a>
 </div>
 {% endif %}
 
@@ -264,7 +284,7 @@
             <a href="{% url 'class_detail' class_id=class_obj.id %}" class="btn btn-primary">
                 班级信息
             </a>
-            <a href="{% url 'student_class_assignments' %}" class="btn btn-secondary"
+            <a href="{% url 'student_class_assignments' %}?class_id={{ class_obj.id }}" class="btn btn-secondary"
                 style="background:#fff; border:1px solid #667eea; color:#667eea;">
                 📝 我的作业
             </a>

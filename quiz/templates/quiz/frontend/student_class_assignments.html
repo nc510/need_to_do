@@ -241,14 +241,18 @@
 <h1 class="page-title">{% if current_type == 2 %}📝 我的班级考试{% else %}📋 我的班级作业{% endif %}</h1>
 
 {% if class_obj %}
-<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：{{ class_obj.name }}【{{ class_obj.code }}】</p>
+<p style="text-align: center; color: #888; margin-bottom: 25px;">班级：<a
+        href="{% url 'class_detail' class_obj.id %}"
+        style="color:#667eea;font-weight:600;text-decoration:none">{{ class_obj.name }}</a>【{{ class_obj.code }}】</p>
 {% endif %}
 
 <div class="tabs-container">
-    <a href="?type=1" class="tab-btn {% if current_type == 1 %}active{% endif %}">
+    <a href="?type=1{% if class_obj %}&class_id={{ class_obj.id }}{% endif %}"
+        class="tab-btn {% if current_type == 1 %}active{% endif %}">
         📋 作业
     </a>
-    <a href="?type=2" class="tab-btn {% if current_type == 2 %}active exam{% endif %}">
+    <a href="?type=2{% if class_obj %}&class_id={{ class_obj.id }}{% endif %}"
+        class="tab-btn {% if current_type == 2 %}active exam{% endif %}">
         📝 考试
     </a>
 </div>

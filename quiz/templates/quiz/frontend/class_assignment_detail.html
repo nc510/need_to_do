@@ -344,7 +344,7 @@
             {% if is_admin %}
             <a href="{% url 'class_assignments' class_id=class_obj.id %}" class="btn btn-secondary">← 返回作业列表</a>
             {% else %}
-            <a href="{% url 'student_class_assignments' %}?type={{ assignment.type }}" class="btn btn-secondary">←
+            <a href="{% url 'student_class_assignments' %}?type={{ assignment.type }}&class_id={{ assignment.class_obj_id }}" class="btn btn-secondary">←
                 返回我的{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</a>
             {% endif %}
             {% if is_admin and assignment.status == 0 %}

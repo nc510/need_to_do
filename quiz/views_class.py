@@ -3,12 +3,16 @@ from .views_common import *  # noqa: F401,F403
 import traceback
 
 
-def _get_my_class(user):
-    """取当前用户所属班级（无 Profile 或未分配班级时返回 None）"""
-    try:
-        return user.profile.class_obj
-    except Profile.DoesNotExist:
-        return None
+def _get_my_class_ids(user):
+    """当前用户以管理员或学生身份所属的全部班级ID。
+
+    一个用户可能管理多个班级（ClassAdmin），也可能同时是某班学生（Profile.class_obj），
+    班级榜单的"我的班级"标记需覆盖全部身份，不能只取单个 class_obj。
+    """
+    admin_ids = set(ClassAdmin.objects.filter(user=user).values_list('class_obj_id', flat=True))
+    student_ids = set(Profile.objects.filter(
+        user=user, class_obj__isnull=False).values_list('class_obj_id', flat=True))
+    return admin_ids | student_ids
 
 
 @login_required
@@ -31,30 +35,31 @@ def class_list(request):
             unique_classes.append(cls)
             seen_ids.add(cls.id)
 
-    # 榜单入口摘要：我的班级当前在各榜的名次（榜单"总量排序 + 人均展示"口径）
-    my_class = _get_my_class(request.user)
-    my_class_ranks = []
-    if my_class:
-        my_class_ranks = [
-            {'icon': board['icon'], 'name': board['name'],
-             'rank': board['me']['rank'], 'value': board['me']['value']}
-            for board in get_class_leaderboards(my_class.id) if board['me']
-        ]
+    # 榜单入口摘要：我所属的每个班级在各榜的名次（一次查询取全部榜单，再按班级归集）
+    boards = get_class_leaderboards(_get_my_class_ids(request.user))
+    my_classes_ranks = []
+    for cls in unique_classes:
+        ranks = []
+        for board in boards:
+            entry = next((e for e in board['entries'] if e['class_id'] == cls.id), None)
+            if entry:
+                ranks.append({
+                    'icon': board['icon'], 'name': board['name'],
+                    'rank': entry['rank'], 'value': entry['value'],
+                })
+        my_classes_ranks.append({'class_obj': cls, 'ranks': ranks})
 
     return render(request, 'quiz/frontend/class_list.html', {
         'classes': unique_classes,
-        'my_class': my_class,
-        'my_class_ranks': my_class_ranks,
+        'my_classes_ranks': my_classes_ranks,
     })
 
 
 @login_required
 def class_leaderboard(request):
     """班级风云榜：班级之间按斩题榜 / 得分榜 / 正确率榜排名"""
-    my_class = _get_my_class(request.user)
     return render(request, 'quiz/frontend/class_leaderboard.html', {
-        'class_boards': get_class_leaderboards(my_class.id if my_class else None),
-        'my_class': my_class,
+        'class_boards': get_class_leaderboards(_get_my_class_ids(request.user)),
         'min_answers': MIN_ANSWERS_FOR_ACCURACY_RANK,
     })
 
@@ -77,14 +82,16 @@ def class_detail(request, class_id):
     # ===== P2-2 班级数据看板（仅管理员可见，annotate 避免 N+1）=====
     class_stats = None
     assignment_progress = []
+    progress_pages = []
     if is_admin:
         from django.db.models import Count as _Count, Q as _Q, Sum as _Sum
         student_count = students.count()
-        # 已发布作业 + 每个作业提交人数（一次 annotate 查询）
+        # 已发布作业 + 每个作业提交人数（一次 annotate 查询）。
+        # 不再限制条数：前端按每页5条轮播展示，页面占用高度恒定
         published_assignments = (ClassAssignment.objects.filter(class_obj=class_obj, status=1)
             .annotate(submitted_count=_Count('records', filter=_Q(records__is_submitted=True)))
             .select_related('test_paper')
-            .order_by('-published_at')[:8])
+            .order_by('-published_at'))
         for a in published_assignments:
             rate = round(a.submitted_count / student_count * 100) if student_count else 0
             assignment_progress.append({
@@ -93,6 +100,11 @@ def class_detail(request, class_id):
                 'total': student_count,
                 'rate': rate,
             })
+        # 进度条分页：每页5条，供前端轮播（自动播放 + 手动前后切换）
+        progress_pages = [
+            assignment_progress[i:i + 5]
+            for i in range(0, len(assignment_progress), 5)
+        ]
         # 班级平均得分率 = 已提交记录得分总和 / 试卷总分总和
         submitted = ClassAssignmentRecord.objects.filter(
             assignment__class_obj=class_obj, is_submitted=True, score__isnull=False
@@ -115,7 +127,7 @@ def class_detail(request, class_id):
         'pending_count': pending_applications.count(),
         'is_admin': is_admin,
         'class_stats': class_stats,
-        'assignment_progress': assignment_progress,
+        'progress_pages': progress_pages,
         # 班内个人榜：本班同学之间的斩题榜 / 得分榜 / 正确率榜（全班成员可见）
         'member_boards': get_class_member_leaderboards(class_obj, request.user),
         'min_answers': MIN_ANSWERS_FOR_ACCURACY_RANK,
@@ -870,27 +882,44 @@ def delete_class_assignment(request, class_id, assignment_id):
 @login_required
 def student_class_assignments(request):
     """学生班级作业/考试列表页面 - 显示每个作业的最高分记录"""
-    # 获取用户班级信息
+    # 获取用户信息
     try:
         profile = Profile.objects.get(user=request.user)
     except Profile.DoesNotExist:
         messages.error(request, '请先完善您的个人信息')
         return redirect('user_center')
-    
-    if not profile.class_obj:
-        messages.error(request, '您还没有加入任何班级')
-        return redirect('user_center')
-    
+
     # 获取类型参数（1=作业，2=考试）
     current_type = request.GET.get('type', '1')
     try:
         current_type = int(current_type)
     except ValueError:
         current_type = 1
-    
+
+    # 班级解析：优先使用入口显式传入的 class_id（从具体班级卡片进入对应班级），
+    # 并校验当前用户确为该班级管理员或学生；未传或非法时回退到默认所属班级。
+    # 修复：原实现无视入口班级，始终取 profile.class_obj，导致各班入口串到同一班
+    class_obj = None
+    requested_id = request.GET.get('class_id')
+    if requested_id:
+        candidate = Class.objects.filter(id=requested_id).first()
+        if candidate and (
+            ClassAdmin.objects.filter(class_obj=candidate, user=request.user).exists()
+            or profile.class_obj_id == candidate.id
+        ):
+            class_obj = candidate
+        else:
+            messages.error(request, '您不是该班级的管理员或学生')
+    if class_obj is None:
+        class_obj = profile.class_obj
+
+    if not class_obj:
+        messages.error(request, '您还没有加入任何班级')
+        return redirect('user_center')
+
     # 获取班级作业列表
     assignments = ClassAssignment.objects.filter(
-        class_obj=profile.class_obj,
+        class_obj=class_obj,
         status=1,
         type=current_type
     ).order_by('-published_at')
@@ -923,7 +952,7 @@ def student_class_assignments(request):
         })
     
     response = render(request, 'quiz/frontend/student_class_assignments.html', {
-        'class_obj': profile.class_obj,
+        'class_obj': class_obj,
         'assignment_list': assignment_list,
         'current_type': current_type,
         'now': now
@@ -940,16 +969,19 @@ def student_class_assignments(request):
 def do_class_assignment(request, assignment_id):
     """完成班级作业/考试页面"""
     assignment = get_object_or_404(ClassAssignment, pk=assignment_id)
-    
+    # 返回作业列表时保留班级与类型上下文，避免从非默认班级进入后被跳回默认班级
+    list_url = '{}?class_id={}&type={}'.format(
+        reverse('student_class_assignments'), assignment.class_obj_id, assignment.type)
+
     # 检查作业状态
     if assignment.status != 1:
         messages.error(request, '该作业尚未发布')
-        return redirect('student_class_assignments')
+        return redirect(list_url)
     
     # 考试模式：检查是否允许考试
     if assignment.type == 2 and not assignment.is_allow_exam:
         messages.error(request, '该考试已关闭')
-        return redirect('student_class_assignments')
+        return redirect(list_url)
     
     # 获取用户最新的答题记录
     latest_record = ClassAssignmentRecord.objects.filter(
@@ -964,7 +996,7 @@ def do_class_assignment(request, assignment_id):
     # 考试模式：只能有一次提交
     if assignment.type == 2 and latest_record and latest_record.is_submitted:
         messages.error(request, '您已经提交过该考试')
-        return redirect('student_class_assignments')
+        return redirect(list_url)
 
     # 记录本次答题起点（仅在可作答时进入答题页；提交时据此统计答题用时）
     if request.method == 'GET':
@@ -975,7 +1007,7 @@ def do_class_assignment(request, assignment_id):
         # 截止时间校验：过期后禁止提交（作业/考试统一生效）
         if assignment.deadline and timezone.now() > assignment.deadline:
             messages.error(request, '该作业/考试已过截止时间，无法提交')
-            return redirect('student_class_assignments')
+            return redirect(list_url)
         # 本次答题用时：考试模式可用答题记录 start_time 兜底（跨会话可靠），作业模式取 session 起点
         fallback_start = None
         if assignment.type == 2 and latest_record and not latest_record.is_submitted:
@@ -1027,7 +1059,8 @@ def do_class_assignment(request, assignment_id):
             draft.delete()
         
         # 重定向到作业列表，添加时间戳防止缓存
-        return redirect(f'{reverse("student_class_assignments")}?t={int(timezone.now().timestamp())}')
+        return redirect(f'{reverse("student_class_assignments")}?t={int(timezone.now().timestamp())}'
+                        f'&class_id={assignment.class_obj_id}&type={assignment.type}')
     
     # GET 请求：显示答题页面
     # 考试模式：自动创建或获取答题记录以启动计时器
@@ -1092,7 +1125,7 @@ def do_class_assignment(request, assignment_id):
                     draft.delete()
                 
                 messages.error(request, '考试已超时，系统已自动提交' + (f'（得分{score2}分）' if score2 else '（得0分）'))
-                return redirect('student_class_assignments')
+                return redirect(list_url)
     
     # 获取题目列表
     questions = []

@@ -742,14 +742,18 @@ def get_class_member_leaderboards(class_obj, user=None):
     return _build_personal_leaderboards(rankable, user, top_n=None)
 
 
-def get_class_leaderboards(my_class_id=None):
+def get_class_leaderboards(my_class_ids=None):
     """班级榜：把班级成员的数据聚合成班级分数，班级之间排名。
 
     仅统计审核通过的学生（教师与未审核用户不计入）。
     班级榜排序按累计总量，同时给出人均值，避免只看班级人数。
     正确率榜沿用个人榜门槛：班级累计作答题次达标才参与排名，未达标的班级单独列出。
+    my_class_ids：当前用户所属（管理员或学生身份）的全部班级ID集合，
+    一个用户可能同时属于多个班级，这些班级都会被标记为 is_mine。
     返回 [{'key', 'name', 'icon', 'entries', 'unranked', 'me'}]。
     """
+    # 归一化为集合：None/可迭代对象均可；is_mine 按成员归属判断（支持多班级）
+    my_class_ids = set(my_class_ids or [])
     rows = (Profile.objects.filter(
                 class_obj__isnull=False, approval_status=1, role__in=RANKABLE_ROLES)
             .values('class_obj_id')
@@ -787,7 +791,7 @@ def get_class_leaderboards(my_class_id=None):
         return {
             'rank': rank, 'class_id': item['class_id'], 'class_name': item['class_name'],
             'value': value, 'detail': detail, 'members': item['members'],
-            'is_mine': item['class_id'] == my_class_id,
+            'is_mine': item['class_id'] in my_class_ids,
         }
 
     def build(key, sort_key, cells, rankable_items):
