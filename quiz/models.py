@@ -408,7 +408,7 @@ class AnswerRecord(models.Model):
 MASTERY_STREAK_REQUIRED = 2
 
 # 正确率榜门槛：累计作答题次低于该值不上榜（否则答 1 题即 100% 霸榜）
-MIN_ANSWERS_FOR_ACCURACY_RANK = 100
+MIN_ANSWERS_FOR_ACCURACY_RANK = 300
 
 
 class WrongQuestion(models.Model):

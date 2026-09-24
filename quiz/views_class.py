@@ -83,6 +83,9 @@ def class_detail(request, class_id):
     class_stats = None
     assignment_progress = []
     progress_pages = []
+    # 班级错题汇总（仅管理员可见）：各成员错题数按复习状态透视
+    wrong_stats = None
+    wq_totals = None
     if is_admin:
         from django.db.models import Count as _Count, Q as _Q, Sum as _Sum
         student_count = students.count()
@@ -117,6 +120,29 @@ def class_detail(request, class_id):
             'published_count': ClassAssignment.objects.filter(class_obj=class_obj, status=1).count(),
             'avg_rate': class_avg_rate,
         }
+
+        # ===== 班级错题汇总：各成员错题本条目数按复习状态透视（一次分组查询，避免 N+1）=====
+        wq_status_keys = ('new', 'reviewing', 'difficult', 'mastered')
+        wq_rows = (WrongQuestion.objects.filter(user_id__in=[s.user_id for s in students])
+                   .values('user_id', 'review_status').annotate(cnt=_Count('id')))
+        wq_by_user = {}
+        for row in wq_rows:
+            entry = wq_by_user.setdefault(
+                row['user_id'], {k: 0 for k in ('total',) + wq_status_keys})
+            if row['review_status'] in wq_status_keys:
+                entry[row['review_status']] += row['cnt']
+            entry['total'] += row['cnt']
+        wrong_stats = []
+        for s in students:
+            counts = wq_by_user.get(
+                s.user_id, {k: 0 for k in ('total',) + wq_status_keys})
+            wrong_stats.append({
+                'name': s.name or s.user.first_name or s.user.username,
+                **counts,
+            })
+        # 错题总数降序，同学错题多的排前面便于管理员重点关注
+        wrong_stats.sort(key=lambda item: (-item['total'], item['name']))
+        wq_totals = {k: sum(item[k] for item in wrong_stats) for k in ('total',) + wq_status_keys}
     # ===== P2-2 END =====
 
     return render(request, 'quiz/frontend/class_detail.html', {
@@ -128,6 +154,8 @@ def class_detail(request, class_id):
         'is_admin': is_admin,
         'class_stats': class_stats,
         'progress_pages': progress_pages,
+        'wrong_stats': wrong_stats,
+        'wq_totals': wq_totals,
         # 班内个人榜：本班同学之间的斩题榜 / 得分榜 / 正确率榜（全班成员可见）
         'member_boards': get_class_member_leaderboards(class_obj, request.user),
         'min_answers': MIN_ANSWERS_FOR_ACCURACY_RANK,

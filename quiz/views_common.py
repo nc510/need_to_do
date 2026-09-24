@@ -660,8 +660,12 @@ def accuracy_percent(correct, total):
 
 
 def _display_name(profile):
-    """榜单展示名：优先 Profile.name，其次用户名"""
-    return (profile.name or profile.user.username or '').strip()
+    """榜单展示名：优先 Profile.name，其次注册时填写的姓名（User.first_name），最后用户名。
+
+    注册流程把「姓名」写入 User.first_name，Profile.name 多为空，
+    若只看 Profile.name 会大面积回退成用户名。
+    """
+    return (profile.name or profile.user.first_name or profile.user.username or '').strip()
 
 
 def _personal_cells(board_key, profile):
@@ -709,6 +713,7 @@ def _build_personal_leaderboards(rankable, user=None, top_n=LEADERBOARD_TOP_N):
         for index, profile in enumerate(entry_qs, start=1):
             value, sub = _personal_cells(key, profile)
             entries.append({'rank': index, 'name': _display_name(profile),
+                            'class_name': profile.class_obj.name if profile.class_obj else '',
                             'value': value, 'sub': sub, 'is_me': profile.user_id == my_user_id})
         # 名次取「自己在完整榜单中的位次」，与榜单行的显示顺序严格一致。
         # 不能用「胜过多人数 + 1」：并列时它忽略次级排序（作答题次），
@@ -727,7 +732,7 @@ def get_site_leaderboards(user=None, top_n=LEADERBOARD_TOP_N):
     """全站个人榜：三个榜单各取 Top N，并附带当前用户自己的排名。"""
     # 有作答记录的学生才参与排名（班级管理员若是学生角色同样参与）
     rankable = Profile.objects.filter(
-        role__in=RANKABLE_ROLES, answered_total__gt=0).select_related('user')
+        role__in=RANKABLE_ROLES, answered_total__gt=0).select_related('user', 'class_obj')
     return _build_personal_leaderboards(rankable, user, top_n)
 
 
@@ -738,7 +743,7 @@ def get_class_member_leaderboards(class_obj, user=None):
     """
     rankable = Profile.objects.filter(
         class_obj=class_obj, approval_status=1, role__in=RANKABLE_ROLES,
-        answered_total__gt=0).select_related('user')
+        answered_total__gt=0).select_related('user', 'class_obj')
     return _build_personal_leaderboards(rankable, user, top_n=None)
 
 

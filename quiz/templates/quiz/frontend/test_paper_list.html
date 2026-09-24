@@ -530,6 +530,17 @@
         font-weight: 400;
     }
 
+    /* 榜单成员的班级来源徽标 */
+    .lb-class-tag {
+        font-size: 11px;
+        font-weight: 600;
+        color: #0c63e4;
+        background: #e7f3ff;
+        border-radius: 20px;
+        padding: 2px 8px;
+        white-space: nowrap;
+    }
+
     .lb-value {
         text-align: right;
         font-size: 15px;
@@ -1072,7 +1083,7 @@
                 {% for row in board.entries %}
                 <div class="lb-row{% if row.is_me %} is-me{% endif %}">
                     <div class="lb-rank">{% rank_medal row.rank %}</div>
-                    <div class="lb-name">{{ row.name }}<span class="lb-detail">{{ row.sub }}</span></div>
+                    <div class="lb-name">{{ row.name }}{% if row.class_name %}<span class="lb-class-tag">🏫 {{ row.class_name }}</span>{% endif %}<span class="lb-detail">{{ row.sub }}</span></div>
                     <div class="lb-value">{{ row.value }}</div>
                 </div>
                 {% endfor %}

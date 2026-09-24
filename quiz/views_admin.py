@@ -257,7 +257,8 @@ def admin_online_users(request):
         rows.append({
             'user': user,
             'profile_id': profile.id if profile else None,
-            'name': profile.name if profile else '',
+            # 名字：优先注册时填写的姓名（User.first_name），回退 Profile.name
+            'name': (user.first_name or (profile.name if profile else '')),
             'role': profile.get_role_display() if profile else '',
             'approval': profile.get_approval_status_display() if profile else '',
             'member_code': profile.member_status_code if profile else 'none',

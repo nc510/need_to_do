@@ -1,0 +1,134 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* ===== 错题按成员汇总表 ===== */
+    .wq-summary {
+        margin: 0 20px 12px;
+        background: #fff;
+        border: 1px solid #e3e6f0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .wq-summary-head {
+        padding: 10px 16px;
+        background: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    .wq-summary-head span {
+        font-size: 12px;
+        color: #98a2b3;
+        font-weight: 400;
+        margin-left: 8px;
+    }
+    .wq-summary-body {
+        max-height: 320px;
+        overflow: auto;
+    }
+    .wq-summary table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .wq-summary th,
+    .wq-summary td {
+        padding: 8px 14px;
+        text-align: center;
+        border-bottom: 1px solid #f2f4f8;
+        white-space: nowrap;
+    }
+    .wq-summary th {
+        background: #f8f9fc;
+        color: #8a94a6;
+        font-size: 12px;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .wq-summary th:first-child,
+    .wq-summary td:first-child {
+        text-align: left;
+    }
+    .wq-summary tfoot td {
+        font-weight: 700;
+        color: #2c3e50;
+        background: #f8f9fc;
+        border-bottom: none;
+        position: sticky;
+        bottom: 0;
+    }
+    .wq-total { color: #dc3545; font-weight: 700; }
+    .wq-badge {
+        display: inline-block;
+        min-width: 26px;
+        padding: 1px 8px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .wq-new { background: #fdecea; color: #c0392b; }
+    .wq-reviewing { background: #fff8e1; color: #b7950b; }
+    .wq-difficult { background: #f3e5f5; color: #8e24aa; }
+    .wq-mastered { background: #e8f5e9; color: #2e7d32; }
+    .wq-zero { color: #c3cbd6; }
+    .wq-empty {
+        padding: 16px;
+        color: #98a2b3;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if wrong_summary %}
+<div class="wq-summary">
+    <div class="wq-summary-head">
+        📕 按成员汇总错题数
+        <span>跟随当前筛选条件统计，共 {{ wrong_summary|length }} 名成员；按错题总数降序</span>
+    </div>
+    <div class="wq-summary-body">
+        <table>
+            <thead>
+                <tr>
+                    <th>成员</th>
+                    <th>错题总数</th>
+                    <th>🆕 未复习</th>
+                    <th>📝 复习中</th>
+                    <th>🔥 顽固错题</th>
+                    <th>✅ 已掌握</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in wrong_summary %}
+                <tr>
+                    <td>{{ item.username }}</td>
+                    <td class="wq-total">{{ item.total }}</td>
+                    <td>{% if item.new %}<span class="wq-badge wq-new">{{ item.new }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                    <td>{% if item.reviewing %}<span class="wq-badge wq-reviewing">{{ item.reviewing }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                    <td>{% if item.difficult %}<span class="wq-badge wq-difficult">{{ item.difficult }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                    <td>{% if item.mastered %}<span class="wq-badge wq-mastered">{{ item.mastered }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td>合计</td>
+                    <td class="wq-total">{{ wrong_summary_totals.total }}</td>
+                    <td>{{ wrong_summary_totals.new }}</td>
+                    <td>{{ wrong_summary_totals.reviewing }}</td>
+                    <td>{{ wrong_summary_totals.difficult }}</td>
+                    <td>{{ wrong_summary_totals.mastered }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endif %}
+{{ block.super }}
+{% endblock %}

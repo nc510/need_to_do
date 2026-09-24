@@ -7,6 +7,7 @@ from django.utils.html import format_html
 from django.utils import timezone
 from django.http import HttpResponseRedirect
 from django import forms
+from django.db.models import Count
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, SiteConfig
 
 admin.site.site_header = '📚 来斩题 - 在线考试系统管理后台'
@@ -161,12 +162,13 @@ class CustomUserAdmin(UserAdmin):
                 pass
 
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'name', 'role', 'approval_status', 'phone_number', 'class_obj', 'member_start_time', 'member_expire_time', 'member_status', 'created_at', 'updated_at')
+    list_display = ('user', 'display_name', 'role', 'approval_status', 'phone_number', 'class_obj', 'member_start_time', 'member_expire_time', 'member_status', 'created_at', 'updated_at')
     list_filter = ('role', 'approval_status', 'class_obj', 'created_at')
     list_editable = ('role', 'approval_status')
-    search_fields = ('user__username', 'user__email', 'name', 'phone_number')
+    search_fields = ('user__username', 'user__email', 'user__first_name', 'name', 'phone_number')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at', 'member_status', 'last_seen_at')
+    list_select_related = ('user', 'class_obj')
     fieldsets = (
         ('账号信息', {'fields': ('user', 'name', 'role', 'approval_status', 'plain_password')}),
         ('联系方式', {'fields': ('phone_number', 'qq_number', 'class_obj')}),
@@ -177,6 +179,12 @@ class ProfileAdmin(admin.ModelAdmin):
         ('统计数据', {'fields': ('total_score', 'tests_taken', 'conquered_count', 'answered_total', 'answered_correct')}),
         ('其他', {'fields': ('session_key', 'last_seen_at', 'created_at', 'updated_at')}),
     )
+
+    def display_name(self, obj):
+        """名字：优先注册时填写的姓名（User.first_name），回退 Profile.name"""
+        return obj.user.first_name or obj.name or '-'
+    display_name.short_description = '名字'
+    display_name.admin_order_field = 'user__first_name'
 
     def member_status(self, obj):
         """会员状态：按开始/到期时间实时计算，仅用于展示"""
@@ -451,6 +459,37 @@ class WrongQuestionAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'question__content')
     ordering = ('-added_at',)
     list_editable = ('review_status',)
+    change_list_template = 'admin/quiz/wrongquestion/change_list.html'
+
+    # 汇总页签的状态列与 WrongQuestion.REVIEW_STATUS_CHOICES 保持一致
+    _summary_status_keys = ('new', 'reviewing', 'difficult', 'mastered')
+
+    def changelist_view(self, request, extra_context=None):
+        """列表页顶部追加「按成员汇总错题数」（含各复习状态分类）。
+
+        汇总基于当前筛选后的结果集（cl.queryset），跟随右侧过滤器/搜索联动；
+        一次分组聚合完成，避免按用户逐条统计的 N+1。
+        """
+        response = super().changelist_view(request, extra_context)
+        try:
+            cl = response.context_data['cl']
+        except (AttributeError, KeyError):
+            return response
+        per_user = {}
+        for row in (cl.queryset
+                    .values('user_id', 'user__username', 'review_status')
+                    .annotate(cnt=Count('id'))):
+            entry = per_user.setdefault(row['user_id'], {
+                'username': row['user__username'], 'total': 0,
+                'new': 0, 'reviewing': 0, 'difficult': 0, 'mastered': 0})
+            if row['review_status'] in self._summary_status_keys:
+                entry[row['review_status']] += row['cnt']
+            entry['total'] += row['cnt']
+        rows = sorted(per_user.values(), key=lambda r: (-r['total'], r['username']))
+        totals = {k: sum(r[k] for r in rows) for k in ('total',) + self._summary_status_keys}
+        response.context_data['wrong_summary'] = rows
+        response.context_data['wrong_summary_totals'] = totals
+        return response
 
     def correct_answer_display(self, obj):
         return format_html('<span style="color: #4caf50; font-weight: bold;">{}</span>', obj.question.correct_answer)

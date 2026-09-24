@@ -356,6 +356,86 @@
         display: block
     }
 
+    /* ===== 班级错题统计（仅管理员可见） ===== */
+    .wq-wrap {
+        overflow-x: auto
+    }
+
+    .wq-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        min-width: 560px
+    }
+
+    .wq-table th,
+    .wq-table td {
+        padding: 10px 12px;
+        text-align: center;
+        border-bottom: 1px solid #f2f4f8
+    }
+
+    .wq-table th {
+        background: #f8f9fc;
+        color: #8a94a6;
+        font-size: 12px;
+        font-weight: 600
+    }
+
+    .wq-table th:first-child,
+    .wq-table td:first-child {
+        text-align: left
+    }
+
+    .wq-table tbody tr:hover {
+        background: #fafbff
+    }
+
+    .wq-table tfoot td {
+        font-weight: 700;
+        color: #2c3e50;
+        background: #f8f9fc;
+        border-bottom: none
+    }
+
+    .wq-total {
+        color: #dc3545;
+        font-weight: 700
+    }
+
+    .wq-badge {
+        display: inline-block;
+        min-width: 28px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600
+    }
+
+    .wq-new {
+        background: #fdecea;
+        color: #c0392b
+    }
+
+    .wq-reviewing {
+        background: #fff8e1;
+        color: #b7950b
+    }
+
+    .wq-difficult {
+        background: #f3e5f5;
+        color: #8e24aa
+    }
+
+    .wq-mastered {
+        background: #e8f5e9;
+        color: #2e7d32
+    }
+
+    .wq-zero {
+        color: #c3cbd6
+    }
+
     @media(max-width:600px) {
 
         .mlb-head,
@@ -442,6 +522,56 @@
         </div>
         {% else %}
         <p style="color:#95a5a6;font-size:13px;margin-top:12px">暂无已发布作业</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if is_admin and wrong_stats is not None %}
+    <div class="section">
+        <h2 class="section-title">📕 班级错题统计
+            <span style="margin-left:auto;font-size:12px;color:#98a2b3;font-weight:400">仅管理员可见</span>
+        </h2>
+        {% if wrong_stats %}
+        <div class="wq-wrap">
+            <table class="wq-table">
+                <thead>
+                    <tr>
+                        <th>成员</th>
+                        <th>错题总数</th>
+                        <th>🆕 未复习</th>
+                        <th>📝 复习中</th>
+                        <th>🔥 顽固错题</th>
+                        <th>✅ 已掌握</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in wrong_stats %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td class="wq-total">{{ item.total }}</td>
+                        <td>{% if item.new %}<span class="wq-badge wq-new">{{ item.new }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                        <td>{% if item.reviewing %}<span class="wq-badge wq-reviewing">{{ item.reviewing }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                        <td>{% if item.difficult %}<span class="wq-badge wq-difficult">{{ item.difficult }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                        <td>{% if item.mastered %}<span class="wq-badge wq-mastered">{{ item.mastered }}</span>{% else %}<span class="wq-zero">0</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>全班合计</td>
+                        <td class="wq-total">{{ wq_totals.total }}</td>
+                        <td>{{ wq_totals.new }}</td>
+                        <td>{{ wq_totals.reviewing }}</td>
+                        <td>{{ wq_totals.difficult }}</td>
+                        <td>{{ wq_totals.mastered }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <div class="mlb-tip">💡 按错题总数降序排列；顽固错题多的同学建议重点跟进复习。</div>
+        {% else %}
+        <div class="empty-list"><span style="font-size:30px">✨</span>
+            <p>班级暂无学生</p>
+        </div>
         {% endif %}
     </div>
     {% endif %}
