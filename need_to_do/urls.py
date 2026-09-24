@@ -27,6 +27,7 @@ def favicon_view(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('quiz/membership/', include('membership.urls')),
+    path('quiz/star/', include('starcoin.urls')),
     path('quiz/', include('quiz.urls')),
     path('', RedirectView.as_view(url='/quiz/test_paper_list/')),
     path('favicon.ico', favicon_view),

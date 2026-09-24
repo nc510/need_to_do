@@ -2,14 +2,17 @@
 django==3.2.23
 
 # Database
-pymysql==1.1.1  # MySQL (±¾µØ¿ª·¢)
-psycopg2-binary==2.9.9  # PostgreSQL (Railway Éú²ú»·¾³)
+pymysql==1.1.1  # MySQL (ï¿½ï¿½ï¿½Ø¿ï¿½ï¿½ï¿½)
+psycopg2-binary==2.9.9  # PostgreSQL (Railway ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
 
 # Excel Processing
 openpyxl==3.1.2
 
 # Image Processing (for captcha)
 Pillow==10.2.0
+
+# QR Code (for leaderboard share images)
+qrcode>=7.4.2
 
 # Production Server
 waitress==2.1.2
@@ -23,7 +26,7 @@ django-simpleui==2026.1.13
 # Environment Variables
 python-dotenv==1.0.1
 
-# Alipay SDK£¨»áÔ±Ö§¸¶£©
+# Alipay SDKï¿½ï¿½ï¿½ï¿½Ô±Ö§ï¿½ï¿½ï¿½ï¿½
 python-alipay-sdk==3.4.0
 
 # Optional: For better performance in production

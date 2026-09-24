@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'quiz',
     'membership',
+    'starcoin',
 ]
 
 MIDDLEWARE = [
@@ -222,6 +223,52 @@ SIMPLEUI_CONFIG = {
                     'name': '⚙️ 注册默认会员设置',
                     'icon': 'fa-solid fa-user-gear',
                     'url': 'quiz/siteconfig/'
+                }
+            ]
+        },
+        {
+            'name': '⭐ 星币与商城',
+            'icon': 'fa-solid fa-star',
+            'models': [
+                {
+                    'name': '💰 星币账户',
+                    'icon': 'fa-solid fa-wallet',
+                    'url': 'starcoin/staraccount/'
+                },
+                {
+                    'name': '🎁 星币套餐',
+                    'icon': 'fa-solid fa-gift',
+                    'url': 'starcoin/starpackage/'
+                },
+                {
+                    'name': '🧾 充值订单',
+                    'icon': 'fa-solid fa-receipt',
+                    'url': 'starcoin/starrechargeorder/'
+                },
+                {
+                    'name': '📋 星币任务',
+                    'icon': 'fa-solid fa-list-check',
+                    'url': 'starcoin/startask/'
+                },
+                {
+                    'name': '🛍️ 星币道具',
+                    'icon': 'fa-solid fa-bag-shopping',
+                    'url': 'starcoin/staritem/'
+                },
+                {
+                    'name': '📦 兑换记录',
+                    'icon': 'fa-solid fa-box-open',
+                    'url': 'starcoin/starredemption/'
+                },
+                {
+                    'name': '📜 星币流水',
+                    'icon': 'fa-solid fa-scroll',
+                    'url': 'starcoin/startransaction/'
+                },
+                {
+                    'name': '🔥 连续登录',
+                    'icon': 'fa-solid fa-fire',
+                    'url': 'starcoin/starloginstreak/'
                 }
             ]
         },

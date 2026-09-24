@@ -1,0 +1,79 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}道具商城 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-header">
+    <h1>🛍️ 星币道具商城</h1>
+    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 兑换后由管理员核销发放</p>
+    {% if is_member %}
+    <p class="star-member-bar">💎 会员生效中，兑换带折扣道具自动按会员价扣星币</p>
+    {% else %}
+    <p class="star-member-bar star-member-bar-off">
+        💎 开通会员即享道具折扣，<a href="{% url 'membership:plans' %}">立即开通 ↗</a>
+    </p>
+    {% endif %}
+</div>
+
+<div class="star-grid">
+    {% for item in items %}
+    <div class="star-card">
+        <div class="star-card-icon">{{ item.icon }}</div>
+        <div class="star-card-name">{{ item.name }}</div>
+        <div class="star-card-desc">{{ item.description|default:"&nbsp;" }}</div>
+        <div class="star-price">
+            {{ item.unit_price_coins }}<small> 星币</small>
+            {% if is_member and item.is_member_discounted %}<span class="star-origin">{{ item.price_coins }}</span>{% endif %}
+        </div>
+        {% if item.is_member_discounted %}
+        <div class="star-member">
+            {% if is_member %}
+            💎 会员 {{ item.member_discount_label }} · 已省 {{ item.member_saved_coins }} 星币
+            {% else %}
+            💎 会员价 {{ item.member_price_coins }} 星币 · 开通立省 {{ item.member_saved_coins }} 星币
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="star-bonus">
+            {% if item.is_unlimited_stock %}库存不限{% elif item.is_sold_out %}已售罄{% else %}剩余 {{ item.stock }} 件{% endif %}
+            {% if item.per_user_limit %} · 每人限 {{ item.per_user_limit }} 件{% endif %}
+        </div>
+        {% if item.is_sold_out %}
+        <button class="star-btn disabled" disabled>已售罄</button>
+        {% elif account.balance < item.unit_price_coins %}
+        <button class="star-btn disabled" disabled>星币不足</button>
+        {% else %}
+        <button class="star-btn" type="button"
+                onclick="document.getElementById('redeem-{{ item.id }}').style.display='block'">立即兑换</button>
+        {% endif %}
+
+        <form id="redeem-{{ item.id }}" method="post" action="{% url 'starcoin:redeem' item.id %}"
+              style="display:none;text-align:left;margin-top:14px">
+            {% csrf_token %}
+            <label style="font-size:13px;color:#666">兑换数量
+                <input type="number" name="quantity" value="1" min="1" max="{% if item.is_unlimited_stock %}99{% else %}{{ item.stock }}{% endif %}"
+                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;margin-top:4px">
+            </label>
+            <label style="font-size:13px;color:#666;display:block;margin-top:8px">联系方式/收货信息（可选）
+                <input type="text" name="contact" maxlength="200"
+                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;margin-top:4px">
+            </label>
+            <label style="font-size:13px;color:#666;display:block;margin-top:8px">留言（可选）
+                <input type="text" name="user_remark" maxlength="200"
+                       style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;margin-top:4px">
+            </label>
+            <button class="star-btn" type="submit" style="margin-top:12px">确认兑换</button>
+        </form>
+    </div>
+    {% empty %}
+    <div class="star-empty" style="grid-column:1/-1">暂无可兑换道具，请等待管理员上架</div>
+    {% endfor %}
+</div>
+
+<div class="star-links" style="text-align:center;margin-top:22px">
+    <a href="{% url 'starcoin:center' %}">← 返回星币中心</a>
+    <a href="{% url 'starcoin:records' %}">我的兑换记录 →</a>
+</div>
+{% endblock %}

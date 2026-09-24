@@ -76,6 +76,33 @@
         display: block;
     }
 
+    .lb-share-bar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px;
+    }
+
+    .lb-share-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 15px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.28);
+        transition: all 0.25s ease;
+    }
+
+    .lb-share-btn:hover {
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.38);
+    }
+
     .lb-card {
         background: #fff;
         border-radius: 12px;
@@ -246,6 +273,10 @@
 
 {% for board in class_boards %}
 <div class="lb-panel{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+    <div class="lb-share-bar">
+        <a class="lb-share-btn" href="{% url 'class_leaderboard_share' %}?board={{ board.key }}"
+            target="_blank" rel="noopener noreferrer" title="新窗口打开分享图">📤 分享该榜单 ↗</a>
+    </div>
     <div class="lb-card">
         {% if board.entries %}
         <div class="lb-head">

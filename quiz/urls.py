@@ -11,6 +11,7 @@ urlpatterns = [
     path('admin/online_users/', views.admin_online_users, name='admin_online_users'),  # 后台在线用户与连接数
     
     path('test_paper_list/', views.test_paper_list, name='test_paper_list'),  # 试卷列表
+    path('leaderboard/site/share/', views.site_leaderboard_share, name='site_leaderboard_share'),  # 全站榜单分享图
     
     path('question/<int:question_id>/', views.question_detail, name='question_detail'),
     path('paper/<int:paper_id>/', views.test_paper_detail, name='test_paper_detail'),  # 试卷详情
@@ -45,7 +46,11 @@ urlpatterns = [
     # 班级管理
     path('class_list/', views.class_list, name='class_list'),  # 班级列表
     path('class_leaderboard/', views.class_leaderboard, name='class_leaderboard'),  # 班级榜单（班级之间排名）
+    path('class_leaderboard/share/', views.class_leaderboard_share, name='class_leaderboard_share'),  # 班级榜单分享图
     path('class/<int:class_id>/', views.class_detail, name='class_detail'),  # 班级详情
+    path('class/<int:class_id>/leaderboard/share/', views.class_member_leaderboard_share, name='class_member_leaderboard_share'),  # 班内榜单分享图
+    path('class/<int:class_id>/export/assignment_progress/', views.export_class_assignment_progress, name='export_class_assignment_progress'),  # 导出作业完成情况
+    path('class/<int:class_id>/export/wrong_stats/', views.export_class_wrong_stats, name='export_class_wrong_stats'),  # 导出班级错题统计
     path('class/create/', views.create_class, name='create_class'),  # 创建班级
     path('class/<int:class_id>/edit/', views.edit_class, name='edit_class'),  # 编辑班级
     path('class/<int:class_id>/delete/', views.delete_class, name='delete_class'),  # 删除班级

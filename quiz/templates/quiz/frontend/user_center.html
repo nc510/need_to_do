@@ -631,6 +631,13 @@
             <div class="value">{{ accuracy_rate|default:"0" }}%</div>
         </div>
     </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);">⭐</div>
+        <div class="stat-content">
+            <h3>星币余额</h3>
+            <div class="value">{{ star_account.balance|default:"0" }}</div>
+        </div>
+    </div>
 </div>
 
 {% if user.is_authenticated %}
@@ -713,6 +720,60 @@
     </div>
 </div>
 {% endif %}
+
+<div class="module-section">
+    <h2 class="section-title">⭐ 星币中心 <span style="font-size:12px;color:#95a5a6;font-weight:normal">当前余额 {{ star_account.balance|default:"0" }} 星币</span></h2>
+    <div class="quick-actions">
+        <a href="{% url 'starcoin:center' %}" class="action-card">
+            <span class="action-icon">⭐</span>
+            <div class="action-text">
+                <h4>星币中心</h4>
+                <p>查看余额、任务与流水</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'starcoin:mall' %}" class="action-card">
+            <span class="action-icon">🛍️</span>
+            <div class="action-text">
+                <h4>道具商城</h4>
+                <p>用星币兑换心仪道具</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'starcoin:tasks' %}" class="action-card">
+            <span class="action-icon">📋</span>
+            <div class="action-text">
+                <h4>星币任务</h4>
+                <p>完成任务自动领取星币</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'starcoin:leaderboard' %}" class="action-card">
+            <span class="action-icon">🏅</span>
+            <div class="action-text">
+                <h4>星耀榜</h4>
+                <p>星力榜 / 星富榜排名</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'starcoin:recharge' %}" class="action-card">
+            <span class="action-icon">💳</span>
+            <div class="action-text">
+                <h4>星币充值</h4>
+                <p>充值星币立即到账</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+        <a href="{% url 'starcoin:records' %}" class="action-card">
+            <span class="action-icon">🧾</span>
+            <div class="action-text">
+                <h4>我的记录</h4>
+                <p>兑换记录与星币流水</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
+    </div>
+</div>
 
 <div class="module-section">
     <h2 class="section-title">学习记录</h2>

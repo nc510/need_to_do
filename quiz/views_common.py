@@ -201,7 +201,7 @@ from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
 from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, ConqueredQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, SiteConfig, MASTERY_STREAK_REQUIRED, MIN_ANSWERS_FOR_ACCURACY_RANK, strip_sequence_prefix
-from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options
+from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options, share_site_url, render_leaderboard_share_image, leaderboard_share_response
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
 import json
@@ -594,7 +594,12 @@ def update_profile_leaderboard_stats(user, score, question_results):
         profile = Profile.objects.create(user=user)
     # 斩题榜：本次答对的题登记为「已斩获」（去重，同一道题重复答对只算 1 分）
     correct_question_ids = [r['question'].id for r in question_results if r['is_correct']]
+    new_conquered = 0
     if correct_question_ids:
+        # 先算出「本次新斩获」的题目数（去重后再计），供星币斩题奖励使用
+        existing_ids = set(ConqueredQuestion.objects.filter(
+            user=user, question_id__in=correct_question_ids).values_list('question_id', flat=True))
+        new_conquered = len(set(correct_question_ids) - existing_ids)
         ConqueredQuestion.objects.bulk_create(
             [ConqueredQuestion(user=user, question_id=qid) for qid in correct_question_ids],
             ignore_conflicts=True,
@@ -612,12 +617,18 @@ def update_profile_leaderboard_stats(user, score, question_results):
         # 斩题数直接取去重表条数，保证与 ConqueredQuestion 始终一致
         conquered_count=ConqueredQuestion.objects.filter(user=user).count(),
     )
+    # 星币斩题奖励（独立子系统，按本次新增斩获题数逐次发放；失败不影响主流程）
+    if new_conquered:
+        from starcoin import hooks as star_hooks
+        star_hooks.on_questions_conquered(user, new_conquered)
 
 
-def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False, duration_seconds=None):
+def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False,
+                         duration_seconds=None, event='paper'):
     """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
     公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
     duration_seconds 为本次答题用时（秒），透传给 TestRecord。
+    event 标识来源（'paper' 公开试卷 / 'assignment' 班级作业），用于星币活跃奖励分流。
     返回 (test_record, score, correct_count, wrong_count, question_results)。
     """
     score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
@@ -628,6 +639,14 @@ def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_pap
     update_wrong_question_notebook(user, question_results)
     # 榜单统计（得分 / 斩题数 / 作答题次）
     update_profile_leaderboard_stats(user, score, question_results)
+    # 星币活跃奖励（独立子系统，失败不影响主流程）
+    from starcoin import hooks as star_hooks
+    if event == 'assignment':
+        star_hooks.on_assignment_submitted(user)
+    else:
+        total = getattr(test_paper, 'total_score', 0) or 0
+        percent = round(score * 100.0 / total, 1) if total else None
+        star_hooks.on_paper_submitted(user, score_percent=percent)
     return test_record, score, correct_count, wrong_count, question_results
 
 
@@ -828,4 +847,53 @@ def get_class_leaderboards(my_class_ids=None):
         board['icon'] = icon
         boards.append(board)
     return boards
+
+
+# ===== 榜单分享图（服务端生成带网站二维码的图片）=====
+
+def pick_board(boards, board_key):
+    """从榜单列表中按 key 取榜单，缺失时回退到第一个"""
+    for board in boards:
+        if board['key'] == board_key:
+            return board
+    return boards[0]
+
+
+def _share_rows(entries):
+    """把榜单条目整理成分享图行数据（兼容个人榜与班级榜两种字段结构）
+
+    副信息优先级：班级榜的 detail（人均值）→ 个人榜的 class_name（班级）→ 兜底 sub。
+    """
+    rows = []
+    for entry in entries:
+        rows.append({
+            'rank': entry.get('rank'),
+            'name': entry.get('name') or entry.get('class_name') or '',
+            'sub': entry.get('detail') or entry.get('class_name') or entry.get('sub') or '',
+            'value': entry.get('value') or '',
+        })
+    return rows
+
+
+def leaderboard_share_view(request, board, title, subtitle, filename):
+    """统一的榜单分享图响应：渲染图片 + 发放「分享榜单」奖励（每日一次）。
+
+    注意：图片文字统一不含 emoji —— 内置中文字体不含彩色 emoji，会渲染成方框。
+    """
+    buffer = render_leaderboard_share_image(
+        title, subtitle, _share_rows(board['entries']), share_site_url(request))
+    if request.user.is_authenticated:
+        from starcoin import hooks as star_hooks
+        star_hooks.on_leaderboard_shared(request.user)
+    return leaderboard_share_response(buffer, filename)
+
+
+def site_leaderboard_share(request):
+    """全站个人榜分享图：?board=conquered|score|accuracy"""
+    board = pick_board(get_site_leaderboards(request.user), request.GET.get('board'))
+    return leaderboard_share_view(
+        request, board,
+        f"全站{board['name']} · 来斩题",
+        f"{timezone.localdate():%Y年%m月%d日} 全站排行榜 · 扫码一起来斩题",
+        f'site_{board["key"]}.png')
 

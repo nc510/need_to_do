@@ -1,0 +1,107 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}星币中心 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-header">
+    <h1>⭐ 星币中心</h1>
+    <p>充值或完成任务赚取星币，兑换心仪道具</p>
+</div>
+
+<div class="star-hero">
+    <div class="star-hero-label">我的星币余额</div>
+    <div class="star-hero-value">{{ account.balance }}<small>星币</small></div>
+    <div class="star-substats">
+        <div class="star-substat">
+            <span class="label">活跃奖励累计</span>
+            <span class="value">+{{ account.active_earned }}</span>
+        </div>
+        <div class="star-substat">
+            <span class="label">充值累计</span>
+            <span class="value">+{{ account.recharge_earned }}</span>
+        </div>
+        <div class="star-substat">
+            <span class="label">累计消耗</span>
+            <span class="value">-{{ account.total_spent }}</span>
+        </div>
+    </div>
+    <div class="star-hero-actions">
+        <a href="{% url 'starcoin:recharge' %}">💳 充值星币</a>
+        <a href="{% url 'starcoin:mall' %}">🛍️ 道具商城</a>
+        <a href="{% url 'starcoin:leaderboard' %}">🏅 星耀榜</a>
+    </div>
+</div>
+
+<div class="star-nav">
+    <a href="{% url 'starcoin:tasks' %}"><span class="ico">📋</span>任务中心</a>
+    <a href="{% url 'starcoin:mall' %}"><span class="ico">🛍️</span>道具商城</a>
+    <a href="{% url 'starcoin:leaderboard' %}"><span class="ico">🏅</span>星耀榜</a>
+    <a href="{% url 'starcoin:records' %}"><span class="ico">🧾</span>我的记录{% if pending_redemptions %}（{{ pending_redemptions }} 待发放）{% endif %}</a>
+</div>
+
+<h2 class="star-section-title">🎒 我的道具</h2>
+{% for owned in owned_items %}
+<div class="star-task">
+    <span class="ico">{{ owned.icon }}</span>
+    <div class="body">
+        <h4>{{ owned.name }}{% if owned.category %}<span style="font-size:12px;color:#b6bcc8;font-weight:400;margin-left:6px">{{ owned.category }}</span>{% endif %}</h4>
+        <p>{{ owned.description|default:"—" }}</p>
+    </div>
+    {% if owned.pending %}<span class="star-tag star-tag-orange">待发放 {{ owned.pending }}</span>{% endif %}
+    {% if owned.fulfilled %}<span class="star-tag star-tag-green">已发放 {{ owned.fulfilled }}</span>{% endif %}
+    <span class="reward">×{{ owned.total }}</span>
+</div>
+{% empty %}
+<div class="star-empty">还没有道具，去道具商城兑换吧</div>
+{% endfor %}
+
+<h2 class="star-section-title">今日任务</h2>
+{% for state in task_states %}
+<div class="star-task">
+    <span class="ico">{{ state.task.icon }}</span>
+    <div class="body">
+        <h4>{{ state.task.name }}</h4>
+        <p>{{ state.task.description|default:state.task.get_period_display }}</p>
+    </div>
+    {% if state.state == 'done' %}
+    <span class="star-tag star-tag-green">已完成</span>
+    {% elif state.state == 'auto' %}
+    <span class="star-tag star-tag-orange">今日已领 {{ state.today_count }} 次</span>
+    {% elif state.state == 'milestone' %}
+    <span class="star-tag star-tag-orange">连续 {{ state.streak_days }} 天{% if state.milestone_cycle %}{% if state.streak_days %}{% if state.milestone_left %} · 距下一轮 {{ state.milestone_left }} 天{% else %} · 本轮已达成{% endif %}{% else %} · 每满 {{ state.milestone_cycle }} 天发放{% endif %}{% endif %}</span>
+    {% else %}
+    <span class="star-tag star-tag-gray">未完成</span>
+    {% endif %}
+    <span class="reward">+{{ state.task.reward_coins }}</span>
+</div>
+{% empty %}
+<div class="star-empty">暂无星币任务，请等待管理员配置</div>
+{% endfor %}
+
+<h2 class="star-section-title">最近流水</h2>
+{% if recent_transactions %}
+<table class="star-table">
+    <thead>
+        <tr><th>时间</th><th>类型</th><th>说明</th><th>变动</th><th>余额</th></tr>
+    </thead>
+    <tbody>
+        {% for tx in recent_transactions %}
+        <tr>
+            <td>{{ tx.created_at|date:"m-d H:i" }}</td>
+            <td>{{ tx.get_kind_display }}</td>
+            <td>{{ tx.remark }}</td>
+            <td class="{% if tx.amount >= 0 %}amount-plus{% else %}amount-minus{% endif %}">
+                {% if tx.amount >= 0 %}+{% endif %}{{ tx.amount }}
+            </td>
+            <td>{{ tx.balance_after }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="star-links"><a href="{% url 'starcoin:records' %}">查看全部记录 →</a></div>
+{% else %}
+<div class="star-empty">暂无星币流水，去完成任务领取星币吧</div>
+{% endif %}
+{% endblock %}

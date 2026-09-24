@@ -1,0 +1,48 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}星耀榜 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-header">
+    <h1>🏅 星耀榜</h1>
+    <p>星力榜看活跃积累 · 星富榜看当前财富（仅统计学生）</p>
+</div>
+
+<div class="board-grid">
+    {% for board in boards %}
+    <div class="board">
+        <div class="board-head">
+            <span>{{ board.icon }} {{ board.title }}</span>
+            <a class="board-share" href="{% url 'starcoin:leaderboard_share' %}?board={{ board.key }}"
+                target="_blank" rel="noopener noreferrer" title="新窗口打开分享图">📤 分享 ↗</a>
+        </div>
+        {% if board.me %}
+        <div class="board-me">
+            我的排名：第 <strong>{{ board.me.rank }}</strong> 名 ·
+            {{ board.me.value }} 星币
+        </div>
+        {% else %}
+        <div class="board-me">我还未上榜，快去积累星币吧</div>
+        {% endif %}
+        {% for entry in board.entries %}
+        <div class="board-row {% if entry.is_me %}is-me{% endif %}">
+            <span class="board-rank {% if entry.rank == 1 %}top1{% elif entry.rank == 2 %}top2{% elif entry.rank == 3 %}top3{% endif %}">{{ entry.rank }}</span>
+            <span class="board-name">
+                {{ entry.name }}{% if entry.class_name %}<span class="cls">{{ entry.class_name }}</span>{% endif %}
+                {% if entry.is_me %}<span class="star-tag" style="margin-left:6px">我</span>{% endif %}
+            </span>
+            <span class="board-value">{{ entry.value }}</span>
+        </div>
+        {% empty %}
+        <div class="board-empty">暂无上榜用户</div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+
+<div class="star-links" style="text-align:center;margin-top:20px">
+    <a href="{% url 'starcoin:center' %}">← 返回星币中心</a>
+</div>
+{% endblock %}

@@ -156,6 +156,8 @@ def class_detail(request, class_id):
         'progress_pages': progress_pages,
         'wrong_stats': wrong_stats,
         'wq_totals': wq_totals,
+        # 「错题明细」导出仅教师账户 / 站点管理员可用（防止绕开会员权益导出题目）
+        'can_export_wrong_detail': can_export_wrong_detail(request.user),
         # 班内个人榜：本班同学之间的斩题榜 / 得分榜 / 正确率榜（全班成员可见）
         'member_boards': get_class_member_leaderboards(class_obj, request.user),
         'min_answers': MIN_ANSWERS_FOR_ACCURACY_RANK,
@@ -1063,7 +1065,8 @@ def do_class_assignment(request, assignment_id):
             
             # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
             test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-                request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds)
+                request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds,
+                event='assignment')
             
             # 更新作业记录
             record.score = score
@@ -1123,7 +1126,7 @@ def do_class_assignment(request, assignment_id):
                         # 有草稿：计分落库（含错题本与 Profile 统计，P2-2 公共函数）
                         test_record, score2, _cc, _wc, _qr = submit_paper_records(
                             request.user, test_paper2, questions2, draft.answers,
-                            duration_seconds=duration_seconds)
+                            duration_seconds=duration_seconds, event='assignment')
                     else:
                         test_record = TestRecord.objects.create(
                             user=request.user,
@@ -1239,7 +1242,8 @@ def submit_class_assignment(request, assignment_id):
             
             # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
             test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-                request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds)
+                request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds,
+                event='assignment')
             
             # 更新记录
             record.score = score
@@ -1315,5 +1319,235 @@ def save_assignment_draft(request, assignment_id):
         draft.mode = mode
     draft.save()
     return JsonResponse({'success': True, 'draft_id': draft.id, 'answered_count': len(answers)})
+
+
+# ===== 榜单分享（班级风云榜 / 班内个人榜）=====
+
+@login_required
+def class_leaderboard_share(request):
+    """班级风云榜分享图：?board=conquered|score|accuracy"""
+    board = pick_board(get_class_leaderboards(_get_my_class_ids(request.user)),
+                       request.GET.get('board'))
+    return leaderboard_share_view(
+        request, board,
+        f"班级风云榜 · {board['name']}",
+        f"{timezone.localdate():%Y年%m月%d日} 全校班级排名 · 扫码为你班打 call",
+        f'class_leaderboard_{board["key"]}.png')
+
+
+@login_required
+def class_member_leaderboard_share(request, class_id):
+    """班内个人榜分享图：?board=conquered|score|accuracy
+
+    访问范围与班级详情页一致：仅本班管理员或本班学生，避免班内成绩外泄。
+    """
+    class_obj = get_object_or_404(Class, pk=class_id)
+    is_member = (ClassAdmin.objects.filter(class_obj=class_obj, user=request.user).exists()
+                 or Class.objects.filter(id=class_id, profiles__user=request.user).exists())
+    if not is_member:
+        messages.error(request, '您不是该班级的管理员或学生')
+        return redirect('class_list')
+
+    board = pick_board(get_class_member_leaderboards(class_obj, request.user),
+                       request.GET.get('board'))
+    return leaderboard_share_view(
+        request, board,
+        f"{class_obj.name} · {board['name']}",
+        f"{timezone.localdate():%Y年%m月%d日} 班内排行榜 · 扫码一起来斩题",
+        f'class{class_id}_{board["key"]}.png')
+
+
+# ===== 班级数据导出（Excel，仅班级管理员）=====
+
+def _require_class_admin(request, class_id):
+    """校验当前用户是班级管理员；不通过时返回重定向响应，通过时返回 (class_obj, None)"""
+    class_obj = get_object_or_404(Class, pk=class_id)
+    if not ClassAdmin.objects.filter(class_obj=class_obj, user=request.user).exists():
+        messages.error(request, '只有班级管理员才能导出班级数据')
+        return class_obj, redirect('class_detail', class_id=class_id)
+    return class_obj, None
+
+
+def _student_display_name(student):
+    """学生展示名：姓名 → 用户名"""
+    return student.first_name or student.username
+
+
+def can_export_wrong_detail(user):
+    """能否导出「错题明细」（含题目内容与正确答案）。
+
+    明细属于可售卖的题库数据，随意导出会绕开会员权益、影响后期运营收益，
+    因此仅对教师账户开放；站点管理员（is_staff）本就拥有后台全量数据权限，
+    一并放行便于运营侧核对。
+    班级管理员只要不是教师账户，只能拿到不含题目与答案的统计表。
+    """
+    if user.is_staff:
+        return True
+    profile = getattr(user, 'profile', None)
+    return bool(profile and profile.role == 'teacher')
+
+
+@login_required
+def export_class_assignment_progress(request, class_id):
+    """导出班级作业完成情况：Sheet1「学生×作业」明细矩阵，Sheet2 按作业汇总。
+
+    口径与班级作业详情页一致：允许多次提交，每位学生每份作业取最高分。
+    """
+    from openpyxl import Workbook
+    from .utils import make_excel_sheet, xlsx_download_response
+
+    class_obj, denied = _require_class_admin(request, class_id)
+    if denied:
+        return denied
+
+    assignments = list(ClassAssignment.objects.filter(class_obj=class_obj)
+                       .select_related('test_paper').order_by('created_at', 'id'))
+    students = list(class_obj.get_students())
+
+    # 每位学生每份作业取最高分
+    best_records = {}
+    for record in ClassAssignmentRecord.objects.filter(
+            assignment__class_obj=class_obj, is_submitted=True):
+        key = (record.user_id, record.assignment_id)
+        current = best_records.get(key)
+        if current is None or (record.score or 0) > (current.score or 0):
+            best_records[key] = record
+
+    def _rate(part, whole):
+        return round(part * 100 / whole, 1) if whole else 0
+
+    workbook = Workbook()
+    # ---- Sheet1：学生 × 作业 明细矩阵 ----
+    sheet = workbook.active
+    sheet.title = '学生作业明细'
+    headers = ['学生'] + [f'{a.title}（{a.get_type_display()}）' for a in assignments] + ['已交', '完成率(%)']
+    rows = []
+    for student in students:
+        cells = [_student_display_name(student)]
+        submitted_count = 0
+        for assignment in assignments:
+            record = best_records.get((student.id, assignment.id))
+            if record is None:
+                cells.append('未提交')
+                continue
+            submitted_count += 1
+            if record.score is None:
+                cells.append('已提交')
+            else:
+                cells.append(f'{record.score}/{assignment.test_paper.total_score or 0}')
+        cells.append(submitted_count)
+        cells.append(_rate(submitted_count, len(assignments)))
+        rows.append(cells)
+    make_excel_sheet(sheet, headers, rows, [16] + [20] * len(assignments) + [8, 12])
+
+    # ---- Sheet2：按作业汇总 ----
+    sheet2 = workbook.create_sheet('作业汇总')
+    summary_rows = []
+    for assignment in assignments:
+        submitted = 0
+        rate_sum = 0.0
+        total_score = assignment.test_paper.total_score or 0
+        for student in students:
+            record = best_records.get((student.id, assignment.id))
+            if record is None:
+                continue
+            submitted += 1
+            if record.score is not None and total_score:
+                rate_sum += record.score * 100 / total_score
+        summary_rows.append([
+            assignment.title,
+            assignment.get_type_display(),
+            assignment.get_status_display(),
+            timezone.localtime(assignment.deadline).strftime('%Y-%m-%d %H:%M') if assignment.deadline else '',
+            len(students),
+            submitted,
+            len(students) - submitted,
+            _rate(submitted, len(students)),
+            round(rate_sum / submitted, 1) if submitted else None,
+        ])
+    make_excel_sheet(
+        sheet2,
+        ['作业标题', '类型', '状态', '截止时间', '应交人数', '已交人数', '未交人数', '提交率(%)', '平均得分率(%)'],
+        summary_rows, [28, 8, 9, 18, 10, 10, 10, 12, 14])
+
+    return xlsx_download_response(
+        workbook, f'{class_obj.name}_作业完成情况_{timezone.localdate():%Y%m%d}.xlsx')
+
+
+@login_required
+def export_class_wrong_stats(request, class_id):
+    """导出班级成员错题统计：Sheet1 各成员错题状态透视，Sheet2 错题明细。
+
+    Sheet2（含题目内容与正确答案）仅对教师账户 / 站点管理员导出，
+    其余班级管理员只导出不含题目与答案的统计表，避免绕开会员权益。
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from .utils import make_excel_sheet, xlsx_download_response
+
+    class_obj, denied = _require_class_admin(request, class_id)
+    if denied:
+        return denied
+
+    students = list(Profile.objects.filter(
+        class_obj=class_obj, approval_status=1).select_related('user'))
+    name_by_user = {s.user_id: (s.name or _student_display_name(s.user)) for s in students}
+
+    status_keys = ('new', 'reviewing', 'difficult', 'mastered')
+    wrong_questions = list(WrongQuestion.objects.filter(user_id__in=list(name_by_user))
+                           .select_related('question', 'user'))
+
+    counts = {}
+    for wrong in wrong_questions:
+        entry = counts.setdefault(wrong.user_id, {k: 0 for k in ('total',) + status_keys})
+        if wrong.review_status in status_keys:
+            entry[wrong.review_status] += 1
+        entry['total'] += 1
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = '成员错题统计'
+    rows = []
+    for student in students:
+        entry = counts.get(student.user_id, {k: 0 for k in ('total',) + status_keys})
+        rows.append([name_by_user[student.user_id], entry['total'], entry['new'],
+                     entry['reviewing'], entry['difficult'], entry['mastered']])
+    # 合计行：便于管理员一眼看到班级整体错题负担
+    rows.append(['全班合计'] + [sum(row[i] for row in rows) for i in range(1, 6)])
+    make_excel_sheet(sheet, ['成员', '错题总数', '未复习', '复习中', '顽固错题', '已掌握'],
+                     rows, [16, 10, 10, 10, 10, 10])
+
+    if not can_export_wrong_detail(request.user):
+        # 无明细权限时不生成「错题明细」，并在统计表下方注明原因
+        note = sheet.cell(
+            row=len(rows) + 3, column=1,
+            value='※ 「错题明细」（含题目内容与正确答案）仅对教师账户开放，'
+                  '如需明细请联系管理员将账户升级为教师账户。')
+        note.font = Font(color='B45309', italic=True)
+        return xlsx_download_response(
+            workbook, f'{class_obj.name}_错题统计_{timezone.localdate():%Y%m%d}.xlsx')
+
+    sheet2 = workbook.create_sheet('错题明细')
+    detail_rows = []
+    for wrong in wrong_questions:
+        question = wrong.question
+        detail_rows.append([
+            name_by_user.get(wrong.user_id, ''),
+            (question.content or '').strip(),
+            question.get_type_display(),
+            wrong.correct_answer or question.correct_answer or '',
+            wrong.user_answer or '',
+            wrong.get_review_status_display(),
+            wrong.review_count,
+            timezone.localtime(wrong.added_at).strftime('%Y-%m-%d %H:%M') if wrong.added_at else '',
+        ])
+    make_excel_sheet(
+        sheet2,
+        ['成员', '题目内容', '题型', '正确答案', '学生答案', '复习状态', '复习次数', '加入时间'],
+        detail_rows, [14, 46, 10, 12, 12, 10, 10, 18])
+
+    return xlsx_download_response(
+        workbook, f'{class_obj.name}_错题统计_{timezone.localdate():%Y%m%d}.xlsx')
+
 
 # 后台管理视图

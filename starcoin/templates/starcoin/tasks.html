@@ -1,0 +1,46 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}星币任务 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-header">
+    <h1>📋 星币任务</h1>
+    <p>完成任务自动发放星币，无需手动领取 · 当前余额 <strong>{{ account.balance }}</strong></p>
+</div>
+
+{% for state in task_states %}
+<div class="star-task">
+    <span class="ico">{{ state.task.icon }}</span>
+    <div class="body">
+        <h4>{{ state.task.name }}
+            <span class="star-tag star-tag-gray" style="margin-left:6px">{{ state.task.get_period_display }}</span>
+            {% if state.task.period == 'unlimited' and state.task.daily_limit %}
+            <span class="star-tag star-tag-orange" style="margin-left:4px">每日上限 {{ state.task.daily_limit }} 次</span>
+            {% endif %}
+            {% if state.task.threshold %}
+            <span class="star-tag star-tag-orange" style="margin-left:4px">得分率 ≥ {{ state.task.threshold }}%</span>
+            {% endif %}
+        </h4>
+        <p>{{ state.task.description|default:"完成任务即自动获得星币" }}</p>
+    </div>
+    {% if state.state == 'done' %}
+    <span class="star-tag star-tag-green">今日已完成</span>
+    {% elif state.state == 'auto' %}
+    <span class="star-tag star-tag-orange">今日已领 {{ state.today_count }} 次</span>
+    {% elif state.state == 'milestone' %}
+    <span class="star-tag star-tag-orange">当前连续 {{ state.streak_days }} 天{% if state.milestone_cycle and state.streak_days %}{% if state.milestone_left %} · 距下一轮 {{ state.milestone_left }} 天{% else %} · 本轮已达成{% endif %}{% endif %}</span>
+    {% else %}
+    <span class="star-tag star-tag-gray">待完成</span>
+    {% endif %}
+    <span class="reward">+{{ state.task.reward_coins }}</span>
+</div>
+{% empty %}
+<div class="star-empty">暂无星币任务，请等待管理员配置</div>
+{% endfor %}
+
+<div class="star-links" style="text-align:center;margin-top:20px">
+    <a href="{% url 'starcoin:center' %}">← 返回星币中心</a>
+</div>
+{% endblock %}

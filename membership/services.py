@@ -37,6 +37,19 @@ def amount_matches(expected, actual):
         return False
 
 
+def is_member_active(user):
+    """会员权益是否生效中（付费会员）。
+
+    口径复用 Profile.member_status_code：未设置 / 未开始 / 已到期一律不算会员。
+    这里直接查库取 Profile，不用 user.profile 反向缓存 —— 缓存可能是本请求早期
+    读到的旧值，会让会员状态判断滞后。
+    """
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return False
+    profile = Profile.objects.filter(user=user).first()
+    return bool(profile and profile.member_status_code == 'active')
+
+
 def grant_membership(user, plan):
     """开通/续期会员：写 Profile 的会员有效期。
 

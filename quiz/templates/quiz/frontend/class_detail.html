@@ -294,6 +294,40 @@
         color: #98a2b3
     }
 
+    /* ===== 榜单分享 / 数据导出按钮 ===== */
+    .mlb-share-bar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10px
+    }
+
+    .export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 15px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.28);
+        transition: all 0.25s ease
+    }
+
+    .export-btn:hover {
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.38)
+    }
+
+    .export-btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 500
+    }
+
     /* ===== 作业完成情况轮播（每页5条，自动播放+手动切换） ===== */
     .ap-carousel {
         margin-top: 18px
@@ -477,7 +511,10 @@
     </div>
     {% if is_admin and class_stats %}
     <div class="section">
-        <h2 class="section-title">📊 班级数据看板</h2>
+        <h2 class="section-title">📊 班级数据看板
+            <a class="export-btn export-btn-sm" style="margin-left:auto"
+                href="{% url 'export_class_assignment_progress' class_obj.id %}">📥 导出作业完成情况（Excel）</a>
+        </h2>
         <div class="dashboard-stats">
             <div class="stat-card">
                 <div class="stat-icon blue">👥</div>
@@ -528,8 +565,22 @@
     {% if is_admin and wrong_stats is not None %}
     <div class="section">
         <h2 class="section-title">📕 班级错题统计
-            <span style="margin-left:auto;font-size:12px;color:#98a2b3;font-weight:400">仅管理员可见</span>
+            {% if can_export_wrong_detail %}
+            <a class="export-btn export-btn-sm" style="margin-left:auto"
+                href="{% url 'export_class_wrong_stats' class_obj.id %}"
+                title="导出统计表 + 错题明细（含题目内容与正确答案）">📥 导出错题统计（含明细）</a>
+            {% else %}
+            <a class="export-btn export-btn-sm" style="margin-left:auto"
+                href="{% url 'export_class_wrong_stats' class_obj.id %}"
+                title="含题目内容与正确答案的明细仅教师账户可导出">📥 导出错题统计（不含明细）</a>
+            {% endif %}
+            <span style="font-size:12px;color:#98a2b3;font-weight:400">仅管理员可见</span>
         </h2>
+        {% if not can_export_wrong_detail %}
+        <p style="color:#b45309;font-size:12px;margin:8px 0 0">
+            ⓘ 「错题明细」（含题目内容与正确答案）仅教师账户可导出，当前导出仅含成员错题统计表。
+        </p>
+        {% endif %}
         {% if wrong_stats %}
         <div class="wq-wrap">
             <table class="wq-table">
@@ -588,6 +639,11 @@
         </div>
         {% for board in member_boards %}
         <div class="mlb-panel{% if forloop.first %} active{% endif %}" data-board="{{ board.key }}">
+            <div class="mlb-share-bar">
+                <a class="export-btn export-btn-sm"
+                    href="{% url 'class_member_leaderboard_share' class_obj.id %}?board={{ board.key }}"
+                    target="_blank" rel="noopener noreferrer" title="新窗口打开分享图">📤 分享该榜单 ↗</a>
+            </div>
             {% if board.entries %}
             <div class="mlb-card">
                 <div class="mlb-head">

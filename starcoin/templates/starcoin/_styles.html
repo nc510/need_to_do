@@ -1,0 +1,577 @@
+<style>
+    /* ===== 星币体系通用样式（紫色系 + 金色点缀）===== */
+    .star-header {
+        text-align: center;
+        margin-bottom: 22px;
+    }
+
+    .star-header h1 {
+        font-size: 26px;
+        margin: 0 0 8px;
+        color: #333;
+    }
+
+    .star-header p {
+        margin: 0;
+        color: #888;
+        font-size: 14px;
+    }
+
+    /* 会员折扣提示条 */
+    .star-member-bar {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 5px 14px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+        color: #7a4a00;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .star-member-bar-off {
+        background: #f4f5f8;
+        color: #7b8394;
+        font-weight: 500;
+    }
+
+    .star-member-bar-off a {
+        color: #6a11cb;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .star-member-bar-off a:hover {
+        text-decoration: underline;
+    }
+
+    /* 余额主卡 */
+    .star-hero {
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        color: #fff;
+        border-radius: 16px;
+        padding: 24px 26px;
+        margin-bottom: 22px;
+        box-shadow: 0 10px 26px rgba(106, 17, 203, 0.25);
+    }
+
+    .star-hero-label {
+        font-size: 13px;
+        opacity: 0.85;
+        margin-bottom: 6px;
+    }
+
+    .star-hero-value {
+        font-size: 40px;
+        font-weight: 800;
+        line-height: 1.1;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+
+    .star-hero-value small {
+        font-size: 15px;
+        font-weight: 400;
+        opacity: 0.9;
+    }
+
+    .star-substats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 22px;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .star-substat .label {
+        font-size: 12px;
+        opacity: 0.85;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .star-substat .value {
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .star-hero-actions {
+        margin-top: 18px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .star-hero-actions a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 14px;
+        padding: 8px 18px;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 22px;
+        transition: background 0.2s;
+    }
+
+    .star-hero-actions a:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 快捷入口 */
+    .star-nav {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 14px;
+        margin-bottom: 24px;
+    }
+
+    .star-nav a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px 18px;
+        text-decoration: none;
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 15px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+        transition: 0.2s;
+    }
+
+    .star-nav a:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 24px rgba(106, 17, 203, 0.18);
+    }
+
+    .star-nav .ico {
+        font-size: 22px;
+    }
+
+    /* 区块标题 */
+    .star-section-title {
+        font-size: 18px;
+        color: #2c3e50;
+        margin: 26px 0 14px;
+        padding-left: 12px;
+        border-left: 4px solid #6a11cb;
+    }
+
+    /* 卡片栅格 */
+    .star-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+    }
+
+    .star-card {
+        background: #fff;
+        border-radius: 14px;
+        padding: 22px 20px;
+        text-align: center;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
+        border: 2px solid transparent;
+        transition: 0.22s;
+    }
+
+    .star-card:hover {
+        transform: translateY(-4px);
+        border-color: #6a11cb;
+        box-shadow: 0 12px 26px rgba(106, 17, 203, 0.2);
+    }
+
+    .star-card-icon {
+        font-size: 34px;
+        margin-bottom: 8px;
+    }
+
+    .star-card-name {
+        font-size: 17px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .star-card-desc {
+        color: #888;
+        font-size: 13px;
+        min-height: 34px;
+        line-height: 1.5;
+        margin-bottom: 12px;
+    }
+
+    .star-price {
+        color: #6a11cb;
+        font-weight: 800;
+        font-size: 26px;
+        margin-bottom: 4px;
+    }
+
+    .star-price small {
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    /* 划线原价：会员价旁显示原价做对比 */
+    .star-origin {
+        margin-left: 8px;
+        color: #b6bcc8;
+        font-size: 15px;
+        font-weight: 500;
+        text-decoration: line-through;
+    }
+
+    /* 卡片内会员折扣文案 */
+    .star-member {
+        color: #c2410c;
+        background: #fff7ed;
+        border-radius: 8px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .star-bonus {
+        color: #e6a23c;
+        font-size: 13px;
+        font-weight: 600;
+        min-height: 18px;
+        margin-bottom: 12px;
+    }
+
+    .star-btn {
+        display: inline-block;
+        width: 100%;
+        padding: 11px 0;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+    }
+
+    .star-btn:hover {
+        opacity: 0.92;
+    }
+
+    .star-btn:disabled,
+    .star-btn.disabled {
+        background: #c9ccd6;
+        cursor: not-allowed;
+    }
+
+    .star-btn-ghost {
+        background: #f2f4f8;
+        color: #555;
+    }
+
+    /* 标签 */
+    .star-tag {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 2px 9px;
+        color: #fff;
+        background: #6a11cb;
+    }
+
+    .star-tag-green { background: #16a34a; }
+    .star-tag-gray { background: #b6bcc8; }
+    .star-tag-orange { background: #e6a23c; }
+    .star-tag-red { background: #e6503f; }
+
+    /* 任务列表 */
+    .star-task {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    }
+
+    .star-task .ico {
+        font-size: 26px;
+        flex-shrink: 0;
+    }
+
+    .star-task .body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .star-task .body h4 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        color: #2c3e50;
+    }
+
+    .star-task .body p {
+        margin: 0;
+        font-size: 12px;
+        color: #95a5a6;
+    }
+
+    .star-task .reward {
+        color: #6a11cb;
+        font-weight: 700;
+        font-size: 15px;
+        white-space: nowrap;
+    }
+
+    /* 榜单 */
+    .board-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+    }
+
+    .board {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .board-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 15px 20px;
+        font-size: 17px;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+    }
+
+    .board-share {
+        flex: 0 0 auto;
+        padding: 3px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #fff;
+        text-decoration: none;
+        opacity: 0.92;
+        transition: all 0.25s ease;
+    }
+
+    .board-share:hover {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+        opacity: 1;
+    }
+
+    .board-me {
+        padding: 12px 20px;
+        background: #f6f4ff;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+        color: #555;
+    }
+
+    .board-me strong {
+        color: #6a11cb;
+    }
+
+    .board-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        border-bottom: 1px solid #f2f2f2;
+        font-size: 14px;
+    }
+
+    .board-row:last-child {
+        border-bottom: none;
+    }
+
+    .board-row.is-me {
+        background: #faf7ff;
+    }
+
+    .board-rank {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        background: #eef0f6;
+        color: #666;
+        flex-shrink: 0;
+    }
+
+    .board-rank.top1 { background: #ffd76e; color: #7a5200; }
+    .board-rank.top2 { background: #d9dde6; color: #5a6473; }
+    .board-rank.top3 { background: #f0c39a; color: #7a4b17; }
+
+    .board-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #333;
+    }
+
+    .board-name .cls {
+        color: #b6bcc8;
+        font-size: 12px;
+        margin-left: 6px;
+    }
+
+    .board-value {
+        font-weight: 700;
+        color: #6a11cb;
+        white-space: nowrap;
+    }
+
+    .board-empty {
+        padding: 30px 20px;
+        text-align: center;
+        color: #b6bcc8;
+        font-size: 14px;
+    }
+
+    /* 表格 */
+    .star-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+        font-size: 14px;
+    }
+
+    .star-table th,
+    .star-table td {
+        padding: 12px 14px;
+        text-align: left;
+        border-bottom: 1px solid #f2f2f2;
+    }
+
+    .star-table th {
+        background: #f7f8fc;
+        color: #666;
+        font-weight: 600;
+        font-size: 13px;
+    }
+
+    .star-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .amount-plus { color: #16a34a; font-weight: 700; }
+    .amount-minus { color: #e6503f; font-weight: 700; }
+
+    /* 订单/支付 */
+    .star-order {
+        background: #fff;
+        border-radius: 14px;
+        padding: 8px 22px;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
+        max-width: 540px;
+        margin: 0 auto 22px;
+    }
+
+    .star-order-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 13px 0;
+        border-bottom: 1px dashed #eee;
+        font-size: 15px;
+        color: #555;
+    }
+
+    .star-order-row:last-child { border-bottom: none; }
+    .star-order-row strong { color: #333; }
+
+    .star-amount { color: #e6503f; font-size: 20px; font-weight: 800; }
+
+    .star-order-no {
+        font-family: Consolas, Monaco, monospace;
+        font-size: 13px;
+        color: #666;
+    }
+
+    .star-actions {
+        max-width: 540px;
+        margin: 0 auto;
+        text-align: center;
+    }
+
+    .star-btn-pay {
+        width: auto;
+        padding: 14px 46px;
+        font-size: 16px;
+        border-radius: 30px;
+    }
+
+    .star-tip {
+        color: #999;
+        font-size: 13px;
+        margin-top: 14px;
+        line-height: 1.7;
+    }
+
+    .star-links {
+        margin-top: 18px;
+    }
+
+    .star-links a {
+        color: #6a11cb;
+        text-decoration: none;
+        font-size: 14px;
+        margin: 0 8px;
+    }
+
+    .star-links a:hover { text-decoration: underline; }
+
+    /* 结果页 */
+    .star-result {
+        background: #fff;
+        border-radius: 14px;
+        padding: 34px 26px;
+        text-align: center;
+        box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
+        max-width: 540px;
+        margin: 0 auto 22px;
+    }
+
+    .star-result-icon { font-size: 46px; margin-bottom: 12px; }
+    .star-result-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+    .star-result.ok .star-result-title { color: #16a34a; }
+    .star-result.fail .star-result-title { color: #e6503f; }
+    .star-result-msg { color: #666; font-size: 15px; line-height: 1.7; }
+
+    .star-empty {
+        text-align: center;
+        color: #b6bcc8;
+        padding: 34px 0;
+        font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+        .star-hero-value { font-size: 32px; }
+        .board-grid { grid-template-columns: 1fr; }
+        .star-table { font-size: 13px; }
+        .star-table th, .star-table td { padding: 10px 10px; }
+    }
+</style>

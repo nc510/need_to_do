@@ -1,0 +1,52 @@
+{% extends 'quiz/frontend/base.html' %}
+{% load membership_extras %}
+
+{% block title %}充值结果 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-result {% if success %}ok{% else %}fail{% endif %}">
+    <div class="star-result-icon">{% if success %}✅{% else %}⚠️{% endif %}</div>
+    <div class="star-result-title">{% if success %}支付成功{% else %}支付未完成{% endif %}</div>
+    <div class="star-result-msg">{{ message }}</div>
+</div>
+
+{% if order %}
+<div class="star-order">
+    <div class="star-order-row">
+        <span>套餐</span>
+        <strong>{{ order.package.name }}</strong>
+    </div>
+    <div class="star-order-row">
+        <span>到账星币</span>
+        <span>{{ order.coins }}</span>
+    </div>
+    <div class="star-order-row">
+        <span>订单金额</span>
+        <span class="star-amount">￥{{ order.amount|money }}</span>
+    </div>
+    <div class="star-order-row">
+        <span>订单号</span>
+        <span class="star-order-no">{{ order.order_no }}</span>
+    </div>
+    <div class="star-order-row">
+        <span>订单状态</span>
+        <strong>{{ order.get_status_display }}</strong>
+    </div>
+    {% if order.trade_no %}
+    <div class="star-order-row">
+        <span>支付宝交易号</span>
+        <span class="star-order-no">{{ order.trade_no }}</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="star-actions">
+    <a href="{% url 'starcoin:center' %}" class="star-btn star-btn-pay">查看我的星币</a>
+    <div class="star-links">
+        <a href="{% url 'starcoin:recharge' %}">← 返回充值套餐</a>
+    </div>
+</div>
+{% endblock %}

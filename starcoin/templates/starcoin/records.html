@@ -1,0 +1,77 @@
+{% extends 'quiz/frontend/base.html' %}
+
+{% block title %}我的星币记录 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-header">
+    <h1>🧾 我的星币记录</h1>
+    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 活跃累计 {{ account.active_earned }} · 充值累计 {{ account.recharge_earned }}</p>
+</div>
+
+<h2 class="star-section-title">兑换记录</h2>
+{% if redemptions %}
+<table class="star-table">
+    <thead>
+        <tr><th>时间</th><th>道具</th><th>数量</th><th>消耗星币</th><th>会员折扣</th><th>状态</th><th>处理备注</th></tr>
+    </thead>
+    <tbody>
+        {% for r in redemptions %}
+        <tr>
+            <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ r.item.icon }} {{ r.item.name }}</td>
+            <td>{{ r.quantity }}</td>
+            <td class="amount-minus">
+                -{{ r.coins_cost }}
+                {% if r.is_discounted %}<span class="star-origin">{{ r.original_coins }}</span>{% endif %}
+            </td>
+            <td>
+                {% if r.is_discounted %}
+                <span class="star-tag star-tag-orange">{{ r.discount_label }}</span>
+                <span style="font-size:12px;color:#c2410c">省 {{ r.saved_coins }}</span>
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if r.status == 'fulfilled' %}<span class="star-tag star-tag-green">已发放</span>
+                {% elif r.status == 'cancelled' %}<span class="star-tag star-tag-gray">已取消</span>
+                {% else %}<span class="star-tag star-tag-orange">待发放</span>{% endif %}
+            </td>
+            <td>{{ r.admin_remark|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="star-empty">暂无兑换记录，去道具商城逛逛吧</div>
+{% endif %}
+
+<h2 class="star-section-title">星币流水</h2>
+{% if transactions %}
+<table class="star-table">
+    <thead>
+        <tr><th>时间</th><th>类型</th><th>说明</th><th>变动</th><th>余额</th></tr>
+    </thead>
+    <tbody>
+        {% for tx in transactions %}
+        <tr>
+            <td>{{ tx.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ tx.get_kind_display }}</td>
+            <td>{{ tx.remark }}</td>
+            <td class="{% if tx.amount >= 0 %}amount-plus{% else %}amount-minus{% endif %}">
+                {% if tx.amount >= 0 %}+{% endif %}{{ tx.amount }}
+            </td>
+            <td>{{ tx.balance_after }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="star-empty">暂无星币流水</div>
+{% endif %}
+
+<div class="star-links" style="text-align:center;margin-top:22px">
+    <a href="{% url 'starcoin:center' %}">← 返回星币中心</a>
+    <a href="{% url 'starcoin:mall' %}">前往道具商城 →</a>
+</div>
+{% endblock %}

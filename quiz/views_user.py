@@ -98,8 +98,13 @@ def user_center(request):
         }
     # ===== P2-2 END =====
 
+    # 星币账户（独立子系统，供用户中心展示余额与入口）
+    from starcoin.services import get_account
+    star_account = get_account(request.user)
+
     context = {
         'profile': profile,
+        'star_account': star_account,
         'recent_tests': recent_tests,
         'recent_wrong_questions': recent_wrong_questions,
         'is_admin': request.user.is_staff,

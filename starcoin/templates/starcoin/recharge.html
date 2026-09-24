@@ -1,0 +1,33 @@
+{% extends 'quiz/frontend/base.html' %}
+{% load membership_extras %}
+
+{% block title %}星币充值 - 来斩题{% endblock %}
+
+{% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
+
+{% block content %}
+<div class="star-header">
+    <h1>💳 星币充值</h1>
+    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 充值立即到账</p>
+</div>
+
+<div class="star-grid">
+    {% for package in packages %}
+    <div class="star-card">
+        <div class="star-card-icon">🪙</div>
+        <div class="star-card-name">{{ package.name }}</div>
+        <div class="star-price">￥{{ package.price|money }}</div>
+        <div class="star-bonus">
+            到账 {{ package.total_coins }} 星币{% if package.bonus_coins %}（含赠送 {{ package.bonus_coins }}）{% else %}&nbsp;{% endif %}
+        </div>
+        <a href="{% url 'starcoin:buy' package.id %}" class="star-btn">立即充值</a>
+    </div>
+    {% empty %}
+    <div class="star-empty" style="grid-column:1/-1">暂无可用充值套餐，请等待管理员配置</div>
+    {% endfor %}
+</div>
+
+<div class="star-links" style="text-align:center;margin-top:22px">
+    <a href="{% url 'starcoin:center' %}">← 返回星币中心</a>
+</div>
+{% endblock %}

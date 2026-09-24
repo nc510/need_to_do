@@ -1,10 +1,16 @@
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.http import HttpResponse
 from django.conf import settings
+from functools import lru_cache
+from openpyxl.utils import get_column_letter
+import logging
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils.exceptions import InvalidFileException
+import io
 import json
+
+logger = logging.getLogger(__name__)
 
 def parse_options(options_str):
     """解析选项字段，如果是字符串则尝试JSON解析"""
@@ -342,3 +348,199 @@ def import_questions_from_excel(file, subject_map=None, chapter_map=None, sectio
         return None, None, ['文件格式不正确，请上传 .xlsx 格式的 Excel 文件']
     except Exception as e:
         return None, None, [f'读取文件失败：{str(e)}']
+
+
+# ===== 榜单分享图片（服务端 PIL 绘制 + 网站二维码）=====
+
+def share_site_url(request):
+    """分享图二维码指向的网站地址：取当前访问域名，兼容 nginx 反向代理"""
+    return request.build_absolute_uri('/')
+
+
+SHARE_IMAGE_WIDTH = 880
+_SHARE_PAD = 36
+_SHARE_ROW_H = 62
+_SHARE_HEADER_H = 142
+_SHARE_FOOTER_H = 208
+
+# 中文字体候选（Windows 优先，Linux 兜底），与 quiz/captcha.py 的多路径探测保持一致
+_SHARE_FONT_CANDIDATES = (
+    ('C:/Windows/Fonts/msyh.ttc', 'C:/Windows/Fonts/msyhbd.ttc'),
+    ('C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/simhei.ttf'),
+    ('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+     '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'),
+    ('/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+     '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'),
+    ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+     '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+)
+
+_RANK_BADGE_COLORS = {1: ('#ffd76e', '#7a5200'), 2: ('#d9dde6', '#5a6473'), 3: ('#f0c39a', '#7a4b17')}
+
+
+@lru_cache(maxsize=64)
+def _share_font(size, bold=False):
+    """加载分享图字体（带缓存，找不到任何中文字体时退回 Pillow 默认字体）"""
+    from PIL import ImageFont
+    for regular, bold_path in _SHARE_FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(bold_path if bold else regular, size)
+        except (IOError, OSError):
+            continue
+    return ImageFont.load_default()
+
+
+def _gradient_color(ratio):
+    """标题区渐变色：紫 #6a11cb → 蓝 #2575fc"""
+    start, end = (0x6a, 0x11, 0xcb), (0x25, 0x75, 0xfc)
+    ratio = min(max(ratio, 0.0), 1.0)
+    return tuple(int(s + (e - s) * ratio) for s, e in zip(start, end))
+
+
+def _make_qr_image(url, box_size=6, border=1):
+    """生成网站二维码（依赖 qrcode 库）"""
+    import qrcode
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,
+                       box_size=box_size, border=border)
+    qr.add_data(url)
+    qr.make(fit=True)
+    return qr.make_image(fill_color='#1a1a1a', back_color='#ffffff').convert('RGB')
+
+
+def _draw_share_row(draw, top, row):
+    """绘制一行榜单：名次徽章 + 姓名/副信息 + 主数值"""
+    center_y = top + _SHARE_ROW_H / 2
+    badge_x = _SHARE_PAD + 18
+    badge_fill, badge_text = _RANK_BADGE_COLORS.get(row.get('rank'), ('#eef0f6', '#666666'))
+    draw.ellipse([badge_x - 17, center_y - 17, badge_x + 17, center_y + 17], fill=badge_fill)
+    draw.text((badge_x, center_y), str(row.get('rank') or '—'),
+              font=_share_font(16, bold=True), fill=badge_text, anchor='mm')
+
+    text_x = _SHARE_PAD + 52
+    # 名字/副信息右侧需给主数值留出空间，超长时截断，避免与数值重叠
+    name_width = SHARE_IMAGE_WIDTH - text_x - _SHARE_PAD - 180
+    name_font = _share_font(20, bold=True)
+    draw.text((text_x, center_y - 15),
+              _fit_text(draw, row.get('name') or '匿名用户', name_font, name_width),
+              font=name_font, fill='#2c3e50', anchor='lm')
+    if row.get('sub'):
+        sub_font = _share_font(13)
+        draw.text((text_x, center_y + 16), _fit_text(draw, row['sub'], sub_font, name_width),
+                  font=sub_font, fill='#95a5a6', anchor='lm')
+    draw.text((SHARE_IMAGE_WIDTH - _SHARE_PAD, center_y), str(row.get('value') or ''),
+              font=_share_font(22, bold=True), fill='#6a11cb', anchor='rm')
+    draw.line([(_SHARE_PAD, top + _SHARE_ROW_H), (SHARE_IMAGE_WIDTH - _SHARE_PAD, top + _SHARE_ROW_H)],
+              fill='#f0f2f6')
+
+
+def _draw_share_footer(draw, image, top, site_url):
+    """绘制底部二维码区"""
+    draw.line([(_SHARE_PAD, top), (SHARE_IMAGE_WIDTH - _SHARE_PAD, top)], fill='#e6e8ee')
+    qr_size, qr_left, qr_top = 132, _SHARE_PAD, top + 38
+    try:
+        qr_image = _make_qr_image(site_url)
+        image.paste(qr_image.resize((qr_size, qr_size)), (qr_left, qr_top))
+    except Exception:
+        logger.exception('榜单分享图二维码生成失败：%s', site_url)
+        draw.rectangle([qr_left, qr_top, qr_left + qr_size, qr_top + qr_size], outline='#e6e8ee')
+        draw.text((qr_left + qr_size / 2, qr_top + qr_size / 2), '二维码不可用',
+                  font=_share_font(13), fill='#b6bcc8', anchor='mm')
+
+    text_x = qr_left + qr_size + 28
+    draw.text((text_x, qr_top + 22), '扫码进入 来斩题',
+              font=_share_font(22, bold=True), fill='#2c3e50', anchor='lm')
+    draw.text((text_x, qr_top + 58), '和同学一起 PK 榜单',
+              font=_share_font(15), fill='#7f8c8d', anchor='lm')
+    draw.text((text_x, qr_top + 88), site_url,
+              font=_share_font(13), fill='#b6bcc8', anchor='lm')
+
+
+def _fit_text(draw, text, font, max_width):
+    """按像素宽度截断文本，避免过长的榜单标题溢出画布"""
+    text = str(text or '')
+    if draw.textlength(text, font=font) <= max_width:
+        return text
+    while text and draw.textlength(text + '…', font=font) > max_width:
+        text = text[:-1]
+    return text + '…'
+
+
+def render_leaderboard_share_image(title, subtitle, rows, site_url):
+    """把榜单渲染成一张带网站二维码的 PNG，返回 BytesIO。
+
+    rows: [{'rank': 1, 'name': '张三', 'sub': '初二3班', 'value': '128 题'}, ...]
+    """
+    from PIL import Image, ImageDraw
+
+    row_count = max(len(rows), 1)
+    height = _SHARE_HEADER_H + row_count * _SHARE_ROW_H + _SHARE_FOOTER_H
+    image = Image.new('RGB', (SHARE_IMAGE_WIDTH, height), '#ffffff')
+    draw = ImageDraw.Draw(image)
+
+    for offset in range(_SHARE_HEADER_H):
+        draw.line([(0, offset), (SHARE_IMAGE_WIDTH, offset)],
+                  fill=_gradient_color(offset / _SHARE_HEADER_H))
+    max_text_width = SHARE_IMAGE_WIDTH - _SHARE_PAD * 2
+    draw.text((_SHARE_PAD, 36), _fit_text(draw, title, _share_font(34, bold=True), max_text_width),
+              font=_share_font(34, bold=True), fill='#ffffff')
+    draw.text((_SHARE_PAD, 92), _fit_text(draw, subtitle, _share_font(16), max_text_width),
+              font=_share_font(16), fill='#e8e2ff')
+
+    top = _SHARE_HEADER_H
+    if not rows:
+        draw.text((SHARE_IMAGE_WIDTH / 2, top + _SHARE_ROW_H / 2), '暂无上榜数据',
+                  font=_share_font(18), fill='#b6bcc8', anchor='mm')
+    for row in rows:
+        _draw_share_row(draw, top, row)
+        top += _SHARE_ROW_H
+
+    _draw_share_footer(draw, image, top, site_url)
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    buffer.seek(0)
+    return buffer
+
+
+def leaderboard_share_response(buffer, filename='leaderboard.png'):
+    """榜单分享图响应：inline 便于浏览器直接展示 / 长按保存"""
+    response = HttpResponse(buffer.getvalue(), content_type='image/png')
+    response['Content-Disposition'] = f'inline; filename={filename}'
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+# ===== Excel 导出 =====
+
+def xlsx_download_response(workbook, filename):
+    """Excel 下载响应：按 RFC 5987 编码中文文件名，兼容各浏览器"""
+    from urllib.parse import quote
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    quoted = quote(filename)
+    response['Content-Disposition'] = (
+        f"attachment; filename={quoted}; filename*=UTF-8''{quoted}")
+    workbook.save(response)
+    return response
+
+
+def make_excel_sheet(ws, headers, rows, widths=None, freeze_panes='A2'):
+    """统一风格的 Excel 工作表填充：表头样式 + 全表边框 + 冻结首行"""
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='667EEA', end_color='764BA2', fill_type='solid')
+    thin = Border(left=Side(style='thin'), right=Side(style='thin'),
+                  top=Side(style='thin'), bottom=Side(style='thin'))
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin
+    for row_idx, row in enumerate(rows, start=2):
+        for col_idx, value in enumerate(row, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.alignment = Alignment(vertical='center', wrap_text=True)
+            cell.border = thin
+    for col_idx, width in enumerate(widths or []):
+        ws.column_dimensions[get_column_letter(col_idx + 1)].width = width
+    if freeze_panes:
+        ws.freeze_panes = freeze_panes
