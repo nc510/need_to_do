@@ -50,12 +50,16 @@ def is_member_active(user):
     return bool(profile and profile.member_status_code == 'active')
 
 
-def grant_membership(user, plan):
-    """开通/续期会员：写 Profile 的会员有效期。
+def grant_membership_days(user, days):
+    """按天数开通/续期会员：写 Profile 的会员有效期，返回新的到期时间。
 
     未过期则在原到期时间上顺延，已过期或首次开通则从现在起算。
-    返回新的到期时间。
+    充值订单履约（grant_membership）与道具「会员卡」共用本函数，保证续期口径一致。
     """
+    days = int(days)
+    if days <= 0:
+        raise ValueError('会员天数必须大于 0')
+
     profile, _created = Profile.objects.get_or_create(user=user)
     now = timezone.now()
     fields = ['member_expire_time', 'updated_at']
@@ -66,9 +70,14 @@ def grant_membership(user, plan):
         fields.append('member_start_time')
 
     base = profile.member_expire_time if profile.member_expire_time and profile.member_expire_time > now else now
-    profile.member_expire_time = base + timedelta(days=plan.duration_days)
+    profile.member_expire_time = base + timedelta(days=days)
     profile.save(update_fields=fields)
     return profile.member_expire_time
+
+
+def grant_membership(user, plan):
+    """按套餐时长开通/续期会员，返回新的到期时间。"""
+    return grant_membership_days(user, plan.duration_days)
 
 
 def raw_trade_response(order_no):

@@ -176,7 +176,8 @@ class ProfileAdmin(admin.ModelAdmin):
             'fields': ('member_start_time', 'member_expire_time', 'member_status'),
             'description': '会员开始与到期时间仅供记录/展示，不做登录限制。',
         }),
-        ('统计数据', {'fields': ('total_score', 'tests_taken', 'conquered_count', 'answered_total', 'answered_correct')}),
+        ('统计数据', {'fields': ('total_score', 'tests_taken', 'conquered_count', 'conquered_bonus', 'answered_total', 'answered_correct'),
+                      'description': '斩题数 = 答对去重题目数 + 斩题加成（道具「斩题卡」补记），榜单直接读斩题数。'}),
         ('其他', {'fields': ('session_key', 'last_seen_at', 'created_at', 'updated_at')}),
     )
 

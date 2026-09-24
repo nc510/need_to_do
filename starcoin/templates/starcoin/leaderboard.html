@@ -30,7 +30,7 @@
         <div class="board-row {% if entry.is_me %}is-me{% endif %}">
             <span class="board-rank {% if entry.rank == 1 %}top1{% elif entry.rank == 2 %}top2{% elif entry.rank == 3 %}top3{% endif %}">{{ entry.rank }}</span>
             <span class="board-name">
-                {{ entry.name }}{% if entry.class_name %}<span class="cls">{{ entry.class_name }}</span>{% endif %}
+                {% include "quiz/frontend/_avatar_chip.html" with name=entry.name frame=entry.avatar_frame %}{{ entry.name }}{% if entry.class_name %}<span class="cls">{{ entry.class_name }}</span>{% endif %}
                 {% if entry.is_me %}<span class="star-tag" style="margin-left:6px">我</span>{% endif %}
             </span>
             <span class="board-value">{{ entry.value }}</span>

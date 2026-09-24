@@ -1066,7 +1066,8 @@ def do_class_assignment(request, assignment_id):
             # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
             test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
                 request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds,
-                event='assignment')
+                event='assignment',
+                hinted_question_ids=pop_hinted_question_ids(request, 'assignment', assignment_id))
             
             # 更新作业记录
             record.score = score
@@ -1126,7 +1127,9 @@ def do_class_assignment(request, assignment_id):
                         # 有草稿：计分落库（含错题本与 Profile 统计，P2-2 公共函数）
                         test_record, score2, _cc, _wc, _qr = submit_paper_records(
                             request.user, test_paper2, questions2, draft.answers,
-                            duration_seconds=duration_seconds, event='assignment')
+                            duration_seconds=duration_seconds, event='assignment',
+                            hinted_question_ids=pop_hinted_question_ids(
+                                request, 'assignment', assignment_id))
                     else:
                         test_record = TestRecord.objects.create(
                             user=request.user,
@@ -1243,7 +1246,8 @@ def submit_class_assignment(request, assignment_id):
             # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
             test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
                 request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds,
-                event='assignment')
+                event='assignment',
+                hinted_question_ids=pop_hinted_question_ids(request, 'assignment', assignment_id))
             
             # 更新记录
             record.score = score

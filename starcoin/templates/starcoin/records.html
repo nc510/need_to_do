@@ -14,7 +14,7 @@
 {% if redemptions %}
 <table class="star-table">
     <thead>
-        <tr><th>时间</th><th>道具</th><th>数量</th><th>消耗星币</th><th>会员折扣</th><th>状态</th><th>处理备注</th></tr>
+        <tr><th>时间</th><th>道具</th><th>数量</th><th>使用情况</th><th>消耗星币</th><th>会员折扣</th><th>状态</th><th>处理备注</th></tr>
     </thead>
     <tbody>
         {% for r in redemptions %}
@@ -22,8 +22,11 @@
             <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
             <td>{{ r.item.icon }} {{ r.item.name }}</td>
             <td>{{ r.quantity }}</td>
+            <td>
+                {% if r.used_quantity %}已使用 {{ r.used_quantity }} / 共 {{ r.quantity }}{% else %}—{% endif %}
+            </td>
             <td class="amount-minus">
-                -{{ r.coins_cost }}
+                {% if r.coins_cost %}-{{ r.coins_cost }}{% else %}<span class="star-tag star-tag-green">赠</span>{% endif %}
                 {% if r.is_discounted %}<span class="star-origin">{{ r.original_coins }}</span>{% endif %}
             </td>
             <td>

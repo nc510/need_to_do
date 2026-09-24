@@ -202,6 +202,16 @@
         margin-bottom: 12px;
     }
 
+    .star-deliver {
+        font-size: 12px;
+        color: #8a6d3b;
+        background: #fff8e1;
+        border-radius: 6px;
+        padding: 4px 8px;
+        margin-bottom: 10px;
+        line-height: 1.4;
+    }
+
     .star-price {
         color: #6a11cb;
         font-weight: 800;
@@ -566,6 +576,122 @@
         color: #b6bcc8;
         padding: 34px 0;
         font-size: 14px;
+    }
+
+    /* 背包「使用」按钮与使用弹窗 */
+    .use-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 5px 14px;
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .use-btn:hover {
+        opacity: .92;
+    }
+
+    .use-modal-mask {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 1000;
+    }
+
+    .use-modal {
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border-radius: 14px;
+        padding: 22px;
+        box-sizing: border-box;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, .25);
+    }
+
+    .use-modal h3 {
+        margin: 0 0 16px;
+        font-size: 17px;
+        color: #2c3e50;
+    }
+
+    .use-field label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 8px;
+    }
+
+    .use-field input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        border: 1px solid #dcdfe6;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #2c3e50;
+    }
+
+    .use-tip {
+        margin: 8px 0 0;
+        font-size: 12px;
+        color: #95a5a6;
+    }
+
+    .use-frame-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .use-frame-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border: 1px solid #e6e8ef;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #2c3e50;
+    }
+
+    .use-frame-item:hover {
+        background: #fafbff;
+    }
+
+    .use-frame-current {
+        margin-left: auto;
+        font-size: 12px;
+        color: #6a11cb;
+        font-weight: 600;
+    }
+
+    .use-error {
+        margin: 12px 0 0;
+        padding: 9px 12px;
+        border-radius: 8px;
+        background: #fee2e2;
+        color: #b91c1c;
+        font-size: 13px;
+    }
+
+    .use-modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    .use-modal-actions .star-btn {
+        flex: 1;
     }
 
     @media (max-width: 640px) {

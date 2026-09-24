@@ -4,8 +4,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Sum
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -18,6 +19,7 @@ from membership.services import (
     amount_matches,
     is_member_active,
 )
+from quiz.models import ClassAssignment, Question, TestPaper
 from quiz.utils import (
     leaderboard_share_response,
     render_leaderboard_share_image,
@@ -26,6 +28,7 @@ from quiz.utils import (
 
 from . import hooks as star_hooks
 from .models import (
+    AVATAR_FRAMES,
     StarAccount,
     StarItem,
     StarLoginStreak,
@@ -37,12 +40,18 @@ from .models import (
     StarTransaction,
 )
 from .services import (
+    INVENTORY_EFFECT_HANDLERS,
     StarCoinError,
+    available_quantity,
+    build_hint_text,
+    consume_item,
     get_account,
+    get_active_item_by_effect,
     is_sync_due,
     mark_order_paid,
     redeem_item,
     sync_order,
+    use_inventory_item,
 )
 
 # 榜单展示条数
@@ -63,6 +72,7 @@ def center(request):
     return render(request, 'starcoin/center.html', {
         'account': account,
         'owned_items': _owned_items(request.user),
+        'avatar_frames': AVATAR_FRAMES,
         'task_states': task_states,
         'login_streak': streak,
         'recent_transactions': recent_transactions,
@@ -72,31 +82,43 @@ def center(request):
 
 
 def _owned_items(user):
-    """我的道具：把未取消的兑换按道具聚合，区分待发放 / 已发放数量。
+    """我的背包：把未取消的兑换按道具聚合，区分待发放 / 已发放，并给出可用张数。
 
-    道具功能后续再扩展，这里先只做「持有展示」，让用户看到自己已兑换了什么。
+    可用张数 = 已发放兑换的 (数量 - 已使用) 之和，即「还能用几张」。
+    即时生效型道具兑换时即已生效，不进入背包使用流程，只展示「已生效」；
+    人工核销型道具（effect_type 为空）没有使用概念，仍按待发放 / 已发放展示。
     """
     rows = (StarRedemption.objects
             .filter(user=user)
             .exclude(status=StarRedemption.STATUS_CANCELLED)
             .order_by()  # 清空 Meta 默认排序，避免 id 进入 GROUP BY 破坏聚合
             .values('item_id', 'item__icon', 'item__name', 'item__description',
-                    'item__category', 'item__sort_order', 'status')
-            .annotate(qty=Sum('quantity')))
+                    'item__category', 'item__sort_order', 'item__effect_type', 'status')
+            .annotate(qty=Sum('quantity'), used=Sum('used_quantity')))
     owned = {}
     for row in rows:
         entry = owned.setdefault(row['item_id'], {
+            'item_id': row['item_id'],
             'icon': row['item__icon'],
             'name': row['item__name'],
             'description': row['item__description'],
             'category': row['item__category'],
             'sort_order': row['item__sort_order'],
+            'effect_type': row['item__effect_type'],
+            'delivery_mode': StarItem.delivery_mode_for(row['item__effect_type']),
+            # 是否支持在背包里直接「使用」（改名卡 / 头像框）
+            'can_use': row['item__effect_type'] in INVENTORY_EFFECT_HANDLERS,
             'pending': 0,
             'fulfilled': 0,
+            'used': 0,
             'total': 0,
         })
         entry[row['status']] = row['qty']
         entry['total'] += row['qty']
+        if row['status'] == StarRedemption.STATUS_FULFILLED:
+            entry['used'] = row['used'] or 0
+    for entry in owned.values():
+        entry['avail'] = max(entry['fulfilled'] - entry['used'], 0)
     return sorted(owned.values(), key=lambda e: (e['sort_order'], e['name']))
 
 
@@ -170,10 +192,12 @@ def _build_board(key, title, icon, value_field, order_by, queryset, user, top_n=
     """构建单个榜单：Top N 条目 + 当前用户自己的名次"""
     entries = []
     for index, account in enumerate(queryset.order_by(*order_by)[:top_n], start=1):
+        profile = getattr(account.user, 'profile', None)
         entries.append({
             'rank': index,
             'name': _display_name(account),
-            'class_name': account.user.profile.class_obj.name if getattr(account.user, 'profile', None) and account.user.profile.class_obj else '',
+            'class_name': profile.class_obj.name if profile and profile.class_obj else '',
+            'avatar_frame': profile.avatar_frame if profile else '',
             'value': getattr(account, value_field),
             'is_me': user.is_authenticated and account.user_id == user.id,
         })
@@ -249,7 +273,7 @@ def mall(request):
 @login_required
 @require_POST
 def redeem(request, item_id):
-    """兑换道具（扣星币，生成待发放记录）"""
+    """兑换道具（扣星币，按道具发放方式自动发放或生成待发放记录）"""
     item = get_object_or_404(StarItem, pk=item_id, is_active=True)
     try:
         redemption = redeem_item(
@@ -262,16 +286,108 @@ def redeem(request, item_id):
         messages.error(request, str(exc))
         return redirect('starcoin:mall')
 
+    # 按发放方式给出不同后续说明，避免即时生效道具也被提示「等管理员发放」
+    suffix = {
+        StarItem.MODE_INSTANT: '道具已立即生效。',
+        StarItem.MODE_INVENTORY: '已放入背包，可在「星币中心 → 我的背包」使用。',
+        StarItem.MODE_MANUAL: '奖品将由管理员核销发放。',
+    }[item.delivery_mode]
+
     if redemption.is_discounted:
         messages.success(
             request,
             f'兑换成功！已享会员 {redemption.discount_label}，扣除 {redemption.coins_cost} 星币'
-            f'（原价 {redemption.original_coins} 星币，省 {redemption.saved_coins} 星币），'
-            f'奖品将由管理员核销发放。')
+            f'（原价 {redemption.original_coins} 星币，省 {redemption.saved_coins} 星币），{suffix}')
     else:
         messages.success(
-            request, f'兑换成功！已扣除 {redemption.coins_cost} 星币，奖品将由管理员核销发放。')
+            request, f'兑换成功！已扣除 {redemption.coins_cost} 星币，{suffix}')
     return redirect('starcoin:records')
+
+
+# ===== 道具使用 =====
+
+@login_required
+@require_POST
+def use_item(request, item_id):
+    """背包「使用」入口：改名卡（new_name）/ 头像框（frame）。
+
+    组卷卡与提示卡不在这里 —— 它们在各自场景（错题本组卷、答题页提示）被消耗。
+    """
+    item = get_object_or_404(StarItem, pk=item_id)
+    try:
+        detail = use_inventory_item(
+            request.user, item, payload=request.POST, context='backpack')
+    except StarCoinError as exc:
+        messages.error(request, str(exc))
+        return redirect('starcoin:center')
+
+    messages.success(request, f'「{item.name}」已使用：{detail} 🎉')
+    return redirect('starcoin:center')
+
+
+# 提示卡可用的答题场景
+HINT_SOURCES = ('paper', 'wrong', 'assignment')
+
+
+def _can_hint(user, question, source, ref_id):
+    """校验提示场景：题目必须属于所声明的试卷；班级作业还要求是本班学生。
+
+    服务端强制校验（前端传参可伪造），避免被用来给任意题目廉价取提示。
+    """
+    if not str(ref_id).isdigit():
+        return False
+    ref_id = int(ref_id)
+
+    if source == 'assignment':
+        assignment = ClassAssignment.objects.filter(pk=ref_id, status=1).first()
+        if assignment is None or assignment.test_paper is None:
+            return False
+        if not assignment.test_paper.questions.filter(pk=question.pk).exists():
+            return False
+        return assignment.class_obj.get_students().filter(pk=user.pk).exists()
+
+    paper_filter = {'pk': ref_id}
+    if source == 'wrong':
+        paper_filter['is_wrong_paper'] = True
+    paper = TestPaper.objects.filter(**paper_filter).first()
+    return bool(paper and paper.questions.filter(pk=question.pk).exists())
+
+
+@login_required
+@require_POST
+def use_hint_card(request):
+    """答题页 AJAX：消耗一张答案提示卡，返回本题提示（不泄露最终答案）"""
+    question = Question.objects.filter(pk=request.POST.get('question_id')).first()
+    if question is None:
+        return JsonResponse({'ok': False, 'message': '题目不存在'}, status=404)
+
+    source = request.POST.get('source', '')
+    if source not in HINT_SOURCES:
+        return JsonResponse({'ok': False, 'message': '答题场景无效'}, status=400)
+    if not _can_hint(request.user, question, source, request.POST.get('ref_id', '')):
+        return JsonResponse({'ok': False, 'message': '当前试卷无法使用提示卡'}, status=403)
+
+    item = get_active_item_by_effect(StarItem.EFFECT_HINT)
+    if item is None:
+        return JsonResponse({'ok': False, 'message': '提示卡暂未上架'})
+    if available_quantity(request.user, item) <= 0:
+        return JsonResponse({
+            'ok': False, 'no_card': True, 'mall_url': reverse('starcoin:mall'),
+            'message': '提示卡不足，可到道具商城兑换',
+        })
+
+    hint = build_hint_text(question)
+    consume_item(request.user, item, context=source, detail=f'题目 #{question.pk} 提示')
+    # 留痕到 session：本场答题中该题用过提示卡。提交时若该题答对，
+    # 会被记入错题本「已掌握」池（见 quiz.views_common.update_wrong_question_notebook），
+    # 避免「不会的题靠提示卡答对」在错题本里彻底消失。
+    # 延迟导入：quiz.views_common 属于视图模块，放到函数内导入避免应用加载期的交叉引用。
+    from quiz.views_common import mark_hint_used
+    mark_hint_used(request, source, int(request.POST['ref_id']), question.pk)
+    return JsonResponse({
+        'ok': True, 'hint': hint,
+        'left': available_quantity(request.user, item),
+    })
 
 
 # ===== 充值 =====

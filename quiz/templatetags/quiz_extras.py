@@ -80,3 +80,35 @@ def role_greeting(role):
     if role == 'teacher':
         return '，欢迎管理您的班级！'
     return '，欢迎回来管理员！'
+
+
+@register.simple_tag(takes_context=True)
+def hint_card_info(context):
+    """答题页提示卡状态：{'available': 剩余张数, 'name': 道具名, 'icon': 图标}。
+
+    供 _hint_card.html 在提示按钮上显示剩余张数、在确认气泡里显示道具名
+    （道具名从商品配置读取，后台改名后前台自动跟随），
+    让用户明确知道消耗的是哪件道具。
+
+    用法：
+        {% hint_card_info as hint_info %}
+    """
+    request = context.get('request')
+    user = getattr(request, 'user', None)
+    empty = {'available': 0, 'name': '', 'icon': ''}
+    if user is None or not user.is_authenticated:
+        return empty
+
+    # 延迟导入：本模块在建模板引擎阶段就被导入，此时应用注册表可能尚未就绪，
+    # 顶层导入 starcoin 会触发 AppRegistryNotReady。
+    from starcoin.models import StarItem
+    from starcoin.services import available_quantity, get_active_item_by_effect
+
+    item = get_active_item_by_effect(StarItem.EFFECT_HINT)
+    if item is None:
+        return empty
+    return {
+        'available': available_quantity(user, item),
+        'name': item.name,
+        'icon': item.icon or '',
+    }

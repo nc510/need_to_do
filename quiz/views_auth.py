@@ -71,9 +71,11 @@ def login_view(request):
             except Profile.DoesNotExist:
                 pass
 
-            # 星币每日登录奖励（独立子系统，失败不影响登录）
+            # 星币每日登录奖励 + 每日首次登录的道具赠礼（独立子系统，失败不影响登录）
             from starcoin import hooks as star_hooks
-            star_hooks.on_login(user)
+            gift_message = star_hooks.on_login(user)
+            if gift_message:
+                messages.success(request, gift_message)
 
             next_url = request.GET.get('next', 'user_center')
             return redirect(next_url)

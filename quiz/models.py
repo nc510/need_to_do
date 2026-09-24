@@ -286,10 +286,16 @@ class Profile(models.Model):
     # ===== 榜单统计（冗余计数，随答题提交累加，避免榜单每次扫 AnswerRecord 大表）=====
     # 斩题数：答对且去重的题目数（由 ConqueredQuestion 派生，此处冗余用于排名）
     conquered_count = models.PositiveIntegerField(default=0, verbose_name='斩题数')
+    # 斩题加成：道具「斩题卡」补记的斩题数。
+    # 口径：斩题数 = ConqueredQuestion 去重条数 + conquered_bonus，
+    # 因此重算斩题数时必须带上本加成，否则道具效果会被覆盖归零。
+    conquered_bonus = models.PositiveIntegerField(default=0, verbose_name='斩题加成')
     # 累计作答题次（未作答的题不计入）与其中答对题次；
     # 正确率统一口径 = answered_correct / answered_total，个人卡片与正确率榜共用
     answered_total = models.PositiveIntegerField(default=0, verbose_name='累计作答题次')
     answered_correct = models.PositiveIntegerField(default=0, verbose_name='累计答对题次')
+    # 头像框：道具「专属头像框」激活后写入预设样式 key，空串表示无边框
+    avatar_frame = models.CharField(max_length=30, default='', blank=True, verbose_name='头像框')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
 

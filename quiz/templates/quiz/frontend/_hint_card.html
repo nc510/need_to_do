@@ -1,0 +1,283 @@
+{# 答案提示卡（破晓·辉月）：为答题页每一题注入「💡 提示」按钮与提示气泡 #}
+{# 使用方式：答题表单加 data-hint-source（paper/wrong/assignment）与 data-hint-ref（试卷ID/作业ID） #}
+{% load quiz_extras %}
+{% hint_card_info as hint_info %}
+<style>
+    .hint-btn {
+        border: 1px solid #f0d9a0;
+        background: #fff8e1;
+        color: #8a6d3b;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    /* 题干为 flex 布局时靠右对齐 */
+    .hint-btn.hint-btn-flex {
+        margin-left: auto;
+    }
+
+    /* 题干为普通块级布局时浮动到右上角（插在题干文字之前，文字自动绕排） */
+    .hint-btn.hint-btn-float {
+        float: right;
+        margin-left: 12px;
+    }
+
+    .hint-btn:hover:not(:disabled) {
+        background: #ffefc2;
+    }
+
+    .hint-btn:disabled {
+        opacity: .6;
+        cursor: default;
+    }
+
+    .hint-bubble {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #fff8e1;
+        border-left: 4px solid #f0b429;
+        color: #7a5c1e;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .hint-bubble.error {
+        background: #fee2e2;
+        border-left-color: #ef4444;
+        color: #b91c1c;
+    }
+
+    .hint-bubble a {
+        color: inherit;
+        font-weight: 600;
+    }
+
+    /* 使用确认气泡：明确告知消耗的是哪件道具、还剩几张 */
+    .hint-bubble-confirm {
+        background: #fffdf5;
+    }
+
+    .hint-confirm-title {
+        margin: 0 0 4px 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #7a5c1e;
+    }
+
+    .hint-confirm-desc {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        color: #8a6d3b;
+    }
+
+    .hint-confirm-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .hint-btn-ok,
+    .hint-btn-cancel {
+        font-family: inherit;
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        cursor: pointer;
+        border: 1px solid transparent;
+    }
+
+    .hint-btn-ok {
+        background: #f0b429;
+        color: #4a3200;
+        font-weight: 600;
+    }
+
+    .hint-btn-ok:hover {
+        background: #e0a418;
+    }
+
+    .hint-btn-cancel {
+        background: #fff;
+        border-color: #e3d5a8;
+        color: #8a6d3b;
+    }
+
+    .hint-btn-cancel:hover {
+        background: #fdf6e3;
+    }
+
+    /* 提示成功后的消耗留痕 */
+    .hint-consume {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed #e8d9a8;
+        font-size: 12px;
+        color: #a08a5c;
+    }
+</style>
+<script>
+(function () {
+    var form = document.getElementById('test_paper_form');
+    if (!form || !form.dataset.hintSource || !form.dataset.hintRef) { return; }
+
+    var source = form.dataset.hintSource;
+    var refId = form.dataset.hintRef;
+    // 道具名/图标/剩余张数由服务端按商品配置渲染，后台改名后前台自动跟随
+    var itemName = '{{ hint_info.name|escapejs }}';
+    var itemIcon = '{{ hint_info.icon|escapejs }}';
+    var remaining = {{ hint_info.available }};
+    var hinted = {};    // 同一题只提示一次
+    var pending = {};   // 请求中的题，避免重复点击重复扣卡
+
+    function csrfToken() {
+        var input = form.querySelector('input[name="csrfmiddlewaretoken"]');
+        return input ? input.value : '';
+    }
+
+    function el(tag, cls, text) {
+        var node = document.createElement(tag);
+        if (cls) { node.className = cls; }
+        if (text !== undefined) { node.textContent = text; }
+        return node;
+    }
+
+    function bubbleOf(item) {
+        var bubble = item.querySelector('.hint-bubble');
+        if (!bubble) {
+            bubble = document.createElement('div');
+            bubble.className = 'hint-bubble';
+            item.appendChild(bubble);
+        }
+        return bubble;
+    }
+
+    function itemLabel() {
+        return (itemIcon ? itemIcon + ' ' : '') + '「' + (itemName || '提示卡') + '」';
+    }
+
+    function buttonText() {
+        return '💡 提示' + (itemName ? ' ×' + remaining : '');
+    }
+
+    function refreshButtons() {
+        document.querySelectorAll('.hint-btn').forEach(function (btn) {
+            if (!btn.disabled) { btn.textContent = buttonText(); }
+        });
+    }
+
+    // 无卡：引导去道具商城兑换
+    function showNoCard(item) {
+        var bubble = bubbleOf(item);
+        bubble.className = 'hint-bubble error';
+        bubble.textContent = '';
+        bubble.appendChild(document.createTextNode(itemLabel() + ' 不足，可到道具商城兑换 '));
+        var link = el('a', '', '去道具商城兑换 ↗');
+        link.href = '{% url "starcoin:mall" %}';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        bubble.appendChild(link);
+    }
+
+    // 点击提示按钮：先弹使用确认（亮明道具名与剩余张数），确认后才扣卡
+    function showConfirm(item) {
+        if (remaining <= 0) { showNoCard(item); return; }
+
+        var bubble = bubbleOf(item);
+        bubble.className = 'hint-bubble hint-bubble-confirm';
+        bubble.textContent = '';
+
+        var ok = el('button', 'hint-btn-ok', '确认使用（消耗 1 张）');
+        var cancel = el('button', 'hint-btn-cancel', '取消');
+        ok.type = 'button';
+        cancel.type = 'button';
+
+        var title = el('p', 'hint-confirm-title', '使用 ' + itemLabel() + ' 查看本题提示');
+        var desc = el('p', 'hint-confirm-desc',
+            '本次消耗 1 张，当前可用 ' + remaining + ' 张。只给提示，不会显示答案。');
+        var actions = el('div', 'hint-confirm-actions');
+        actions.appendChild(ok);
+        actions.appendChild(cancel);
+
+        bubble.appendChild(title);
+        bubble.appendChild(desc);
+        bubble.appendChild(actions);
+
+        ok.addEventListener('click', function () { requestHint(item); });
+        cancel.addEventListener('click', function () {
+            bubble.className = 'hint-bubble';
+            bubble.textContent = '已取消，未消耗道具。';
+        });
+    }
+
+    function requestHint(item) {
+        var questionId = item.dataset.questionId;
+        if (hinted[questionId] || pending[questionId]) { return; }
+        pending[questionId] = true;
+
+        var bubble = bubbleOf(item);
+        bubble.className = 'hint-bubble';
+        bubble.textContent = '⏳ 正在使用 ' + itemLabel() + ' 获取提示…';
+
+        var body = new URLSearchParams();
+        body.append('question_id', questionId);
+        body.append('source', source);
+        body.append('ref_id', refId);
+        body.append('csrfmiddlewaretoken', csrfToken());
+
+        fetch('{% url "starcoin:use_hint_card" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken(), 'X-Requested-With': 'XMLHttpRequest' },
+            body: body,
+            credentials: 'same-origin',
+        }).then(function (resp) {
+            return resp.json();
+        }).then(function (data) {
+            pending[questionId] = false;
+            if (data.ok) {
+                hinted[questionId] = true;
+                remaining = typeof data.left === 'number' ? data.left : Math.max(remaining - 1, 0);
+                bubble.className = 'hint-bubble';
+                bubble.textContent = data.hint;
+                bubble.appendChild(el('div', 'hint-consume',
+                    '已消耗 ' + itemLabel() + ' ×1，剩余 ' + remaining + ' 张'));
+                var btn = item.querySelector('.hint-btn');
+                if (btn) { btn.disabled = true; btn.textContent = '💡 已提示'; }
+                refreshButtons();
+            } else if (data.no_card) {
+                remaining = 0;
+                showNoCard(item);
+            } else {
+                bubble.className = 'hint-bubble error';
+                bubble.textContent = data.message || '提示获取失败，请稍后再试';
+            }
+        }).catch(function () {
+            pending[questionId] = false;
+            bubble.className = 'hint-bubble error';
+            bubble.textContent = '网络异常，提示获取失败，请稍后再试';
+        });
+    }
+
+    document.querySelectorAll('.question-item[data-question-id]').forEach(function (item) {
+        var header = item.querySelector('.question-header');
+        if (!header) { return; }
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'hint-btn';
+        btn.textContent = buttonText();
+        if (itemName) {
+            btn.title = '使用道具' + itemLabel() + '查看本题提示，每次消耗 1 张';
+        }
+        btn.addEventListener('click', function () { showConfirm(item); });
+        if (getComputedStyle(header).display.indexOf('flex') === 0) {
+            btn.className = 'hint-btn hint-btn-flex';
+            header.appendChild(btn);
+        } else {
+            btn.className = 'hint-btn hint-btn-float';
+            header.insertBefore(btn, header.firstChild);
+        }
+    });
+})();
+</script>

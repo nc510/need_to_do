@@ -18,6 +18,15 @@ from django.utils import timezone
 
 # 折扣率统一口径：10 折 = 原价（无折扣），数值越小越便宜
 NO_DISCOUNT_RATE = Decimal('10.00')
+
+# 头像框（道具「专属头像框」）预设样式：key -> 名称。
+# key 写入 quiz.Profile.avatar_frame，前端按 `avatar-frame-{key}` 加样式类（见 base.html）。
+AVATAR_FRAMES = (
+    ('gold', '🥇 黄金之环'),
+    ('silver', '🥈 白银之环'),
+    ('purple', '💜 紫钻之环'),
+    ('rainbow', '🌈 流光之环'),
+)
 MIN_DISCOUNT_RATE = Decimal('0.01')
 
 
@@ -281,6 +290,8 @@ class StarLoginStreak(models.Model):
     每天首次登录由 services.record_login 更新一次，断签则从 1 重新累计。
     streak_start_date 标记「本轮连续」的起始日期，用于给里程碑任务生成周期键，
     保证同一轮连续登录内每个里程碑只发一次，断签重来后可再次发放。
+    last_gift_date 记录每日登录赠礼的发放日期，保证「一天只发一次」——
+    赠礼既可能由登录动作触发，也可能由当天首次访问页面补发。
     """
 
     user = models.OneToOneField(
@@ -290,6 +301,9 @@ class StarLoginStreak(models.Model):
     longest_days = models.PositiveIntegerField('历史最长连续天数', default=0)
     streak_start_date = models.DateField('本轮起始日期', null=True, blank=True)
     last_login_date = models.DateField('最后登录日期', null=True, blank=True)
+    last_gift_date = models.DateField(
+        '赠礼发放日期', null=True, blank=True,
+        help_text='每日登录赠礼的发放日期（当天已发过一次就不再发）')
     updated_at = models.DateTimeField('更新时间', auto_now=True)
 
     class Meta:
@@ -302,7 +316,41 @@ class StarLoginStreak(models.Model):
 
 
 class StarItem(models.Model):
-    """星币道具：用户以星币兑换的奖品"""
+    """星币道具：用户以星币兑换的奖品。
+
+    道具效果（effect_type）决定兑换后的发放方式，见 delivery_mode：
+    - 即时生效型（会员卡/正确率重置卡/斩题卡）：兑换当次即生效，无需后台核销；
+    - 背包使用型（改名卡/组卷卡/提示卡/头像框）：兑换后入背包，到具体场景使用时消耗；
+    - 留空：沿用人工核销流程（待发放 → 后台核销）。
+    """
+
+    EFFECT_NONE = ''
+    EFFECT_RENAME = 'rename_card'
+    EFFECT_WRONG_PAPER = 'wrong_paper_card'
+    EFFECT_ACCURACY_RESET = 'accuracy_reset'
+    EFFECT_HINT = 'hint_card'
+    EFFECT_AVATAR_FRAME = 'avatar_frame'
+    EFFECT_CONQUER = 'conquer_card'
+    EFFECT_MEMBER = 'member_card'
+    EFFECT_CHOICES = [
+        (EFFECT_NONE, '无（人工核销发放）'),
+        (EFFECT_RENAME, '改名卡'),
+        (EFFECT_WRONG_PAPER, '错题组卷卡'),
+        (EFFECT_ACCURACY_RESET, '正确率重置卡'),
+        (EFFECT_HINT, '答案提示卡'),
+        (EFFECT_AVATAR_FRAME, '头像框'),
+        (EFFECT_CONQUER, '斩题卡'),
+        (EFFECT_MEMBER, '会员卡'),
+    ]
+
+    # 兑换即生效的效果
+    INSTANT_EFFECTS = (EFFECT_MEMBER, EFFECT_ACCURACY_RESET, EFFECT_CONQUER)
+    # 兑换入背包、需在具体场景使用才生效的效果
+    INVENTORY_EFFECTS = (EFFECT_RENAME, EFFECT_WRONG_PAPER, EFFECT_HINT, EFFECT_AVATAR_FRAME)
+
+    MODE_INSTANT = 'instant'
+    MODE_INVENTORY = 'inventory'
+    MODE_MANUAL = 'manual'
 
     name = models.CharField('道具名称', max_length=50)
     description = models.CharField('道具说明', max_length=200, blank=True, default='')
@@ -313,13 +361,20 @@ class StarItem(models.Model):
     member_discount_rate = models.DecimalField(
         '会员折扣（折）', max_digits=4, decimal_places=2, default=NO_DISCOUNT_RATE,
         validators=[MinValueValidator(MIN_DISCOUNT_RATE), MaxValueValidator(NO_DISCOUNT_RATE)],
-        help_text='仅会员生效中的用户享受；10 表示无折扣，9 表示会员 9 折。取值范围 0.01～10。')
+        help_text='仅会员生效中的用户享受；10 表示无折扣，9 表示会员 9 折。取值范围 0.01～10。'
+                  '会员卡类道具会被强制锁定为 10（无折扣）。')
     # -1 表示不限库存
     stock = models.IntegerField('库存', default=-1, help_text='-1 表示不限库存')
     # 0 表示不限购
     per_user_limit = models.PositiveIntegerField('每人限购', default=0, help_text='0 表示不限购')
     is_active = models.BooleanField('是否上架', default=True)
     sort_order = models.IntegerField('排序', default=0)
+    effect_type = models.CharField(
+        '道具效果', max_length=20, blank=True, default='', choices=EFFECT_CHOICES,
+        help_text='留空 = 人工核销发放；选择后由系统自动发放（即时生效或入背包）')
+    effect_payload = models.JSONField(
+        '效果参数', default=dict, blank=True,
+        help_text='会员卡示例 {"days": 30}；斩题卡示例 {"count": 1}；头像框示例 {"frame": "gold"}')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
 
     class Meta:
@@ -330,6 +385,12 @@ class StarItem(models.Model):
     def __str__(self):
         return f'{self.name}（{self.price_coins} 星币）'
 
+    def save(self, *args, **kwargs):
+        # 会员类道具强制无折扣：否则会员可用折扣价兑换会员卡自我续期，形成套利
+        if self.effect_type == self.EFFECT_MEMBER:
+            self.member_discount_rate = NO_DISCOUNT_RATE
+        super().save(*args, **kwargs)
+
     @property
     def is_unlimited_stock(self):
         return self.stock < 0
@@ -337,6 +398,43 @@ class StarItem(models.Model):
     @property
     def is_sold_out(self):
         return self.stock == 0
+
+    @staticmethod
+    def delivery_mode_for(effect_type):
+        """按效果类型判定发放方式（供聚合查询等无实例场景复用）"""
+        if not effect_type:
+            return StarItem.MODE_MANUAL
+        if effect_type in StarItem.INSTANT_EFFECTS:
+            return StarItem.MODE_INSTANT
+        return StarItem.MODE_INVENTORY
+
+    @property
+    def delivery_mode(self):
+        """发放方式：instant（兑换即生效）/ inventory（入背包待使用）/ manual（人工核销）"""
+        return StarItem.delivery_mode_for(self.effect_type)
+
+    @property
+    def needs_manual_fulfill(self):
+        """是否仍需后台人工核销"""
+        return self.delivery_mode == self.MODE_MANUAL
+
+    @property
+    def delivery_mode_label(self):
+        return {
+            self.MODE_INSTANT: '兑换后立即生效',
+            self.MODE_INVENTORY: '兑换后进背包',
+            self.MODE_MANUAL: '后台人工发放',
+        }[self.delivery_mode]
+
+    @property
+    def delivery_badge(self):
+        """商城卡片角标：发放方式 + 关键参数（会员卡显示天数）"""
+        if self.delivery_mode == self.MODE_INSTANT:
+            days = self.effect_payload.get('days') if self.effect_type == self.EFFECT_MEMBER else None
+            return f'⚡ 兑换后立即生效 · 会员 +{days} 天' if days else '⚡ 兑换后立即生效'
+        if self.delivery_mode == self.MODE_INVENTORY:
+            return '🎒 兑换后入背包，需要时再使用'
+        return '📦 兑换后由管理员核销发放'
 
     @property
     def effective_discount_rate(self):
@@ -373,6 +471,71 @@ class StarItem(models.Model):
         return self.member_price_coins if is_member else self.price_coins
 
 
+class StarLoginGift(models.Model):
+    """每日登录赠礼：每天首次登录时按用户身份（免费 / 会员）赠送道具。
+
+    一行 = 一件道具在免费档 / 会员档各赠几张（0 表示该档不赠）。
+    只允许配置「入背包」类道具：即时生效型道具走背包没有使用入口，
+    而人工核销型道具本就由管理员发放，都不适合作为自动赠礼。
+    """
+
+    item = models.ForeignKey(
+        StarItem, on_delete=models.CASCADE, related_name='login_gifts',
+        verbose_name='赠送道具',
+        limit_choices_to={'effect_type__in': StarItem.INVENTORY_EFFECTS})
+    quantity_free = models.PositiveIntegerField('免费用户张数', default=1)
+    quantity_member = models.PositiveIntegerField('会员张数', default=2)
+    is_active = models.BooleanField('是否启用', default=True)
+    sort_order = models.IntegerField('排序', default=0)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '每日登录赠礼'
+        verbose_name_plural = '每日登录赠礼'
+        ordering = ['sort_order', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['item'], name='uniq_login_gift_item'),
+        ]
+
+    def __str__(self):
+        return (f'{self.item.name}（免费 {self.quantity_free} / '
+                f'会员 {self.quantity_member}）')
+
+    def quantity_for(self, is_member):
+        """按身份取本次赠送张数（0 表示该档不赠）"""
+        return self.quantity_member if is_member else self.quantity_free
+
+
+class StarWrongPaperConfig(models.Model):
+    """错题组卷额度（单例）：免费用户每天可不消耗组卷卡免费组卷的次数。
+
+    组卷卡（回响之杖）的价值锚点：免费额度用完后，每次组卷消耗 1 张；
+    任何用户单次超过 10 题也必须用卡（用卡当次不限题量）；会员组卷不限次数。
+    """
+
+    free_daily_limit = models.PositiveIntegerField(
+        '免费用户每日免费组卷次数', default=1,
+        help_text='免费用户每天可不消耗组卷卡组卷的次数（每次最多 10 题）；'
+                  '0 表示关闭免费额度（每次组卷都要用卡）。会员不受此限制。')
+
+    class Meta:
+        verbose_name = '错题组卷额度'
+        verbose_name_plural = '错题组卷额度'
+
+    def __str__(self):
+        return f'免费用户每日免费组卷 {self.free_daily_limit} 次'
+
+    def save(self, *args, **kwargs):
+        # 单例：固定主键为 1，避免后台出现多条配置
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        """获取（不存在则创建）错题组卷额度配置单例"""
+        return cls.objects.get_or_create(pk=1)[0]
+
+
 class StarRedemption(models.Model):
     """道具兑换记录：兑换即扣星币，奖品由后台人工核销发放。"""
 
@@ -391,6 +554,8 @@ class StarRedemption(models.Model):
     item = models.ForeignKey(
         StarItem, on_delete=models.PROTECT, related_name='redemptions', verbose_name='道具')
     quantity = models.PositiveIntegerField('兑换数量', default=1)
+    # 背包使用型道具：本条兑换记录已被用掉的张数，剩余可用 = quantity - used_quantity
+    used_quantity = models.PositiveIntegerField('已使用数量', default=0)
     # 兑换时的星币花费快照（已含会员折扣）
     coins_cost = models.PositiveIntegerField('消耗星币')
     # 兑换时快照原价与折扣率，后台事后改价/改折扣都不影响历史记录展示
@@ -432,3 +597,37 @@ class StarRedemption(models.Model):
     def saved_coins(self):
         """本单优惠星币（原价 - 实付）；历史数据未记原价时按 0 处理"""
         return max((self.original_coins or 0) - self.coins_cost, 0)
+
+    @property
+    def avail_quantity(self):
+        """本条兑换记录剩余可用张数（仅背包使用型道具有意义）"""
+        return max((self.quantity or 0) - (self.used_quantity or 0), 0)
+
+
+class StarItemUsage(models.Model):
+    """道具使用流水：记录道具在何时、因何被使用（即时生效）或消耗一张（背包使用）。
+
+    与 StarTransaction（星币流水）分开：这里只记「道具张数」的消耗与生效留痕，
+    用于审计与「可用数量 = 已发放 - 已使用」口径对账。
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='star_item_usages', verbose_name='用户')
+    item = models.ForeignKey(
+        StarItem, on_delete=models.PROTECT, related_name='usages', verbose_name='道具')
+    redemption = models.ForeignKey(
+        StarRedemption, on_delete=models.PROTECT, related_name='usages',
+        verbose_name='来源兑换记录')
+    effect_type = models.CharField('效果类型', max_length=20, blank=True, default='')
+    detail = models.CharField('使用明细', max_length=200, blank=True, default='')
+    context = models.CharField('使用场景', max_length=50, blank=True, default='')
+    created_at = models.DateTimeField('使用时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '道具使用流水'
+        verbose_name_plural = '道具使用流水'
+        ordering = ['-id']
+
+    def __str__(self):
+        return f'{self.user.username} 使用 {self.item.name}'

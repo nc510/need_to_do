@@ -65,6 +65,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'quiz.middleware.AntiSpiderMiddleware',
     'quiz.middleware.OnlineActivityMiddleware',
+    'starcoin.middleware.DailyGiftMiddleware',
 ]
 
 LOGIN_URL = '/quiz/login/'
@@ -256,9 +257,24 @@ SIMPLEUI_CONFIG = {
                     'url': 'starcoin/staritem/'
                 },
                 {
+                    'name': '🎁 登录赠礼',
+                    'icon': 'fa-solid fa-gift',
+                    'url': 'starcoin/starlogingift/'
+                },
+                {
+                    'name': '📐 组卷额度',
+                    'icon': 'fa-solid fa-ruler',
+                    'url': 'starcoin/starwrongpaperconfig/'
+                },
+                {
                     'name': '📦 兑换记录',
                     'icon': 'fa-solid fa-box-open',
                     'url': 'starcoin/starredemption/'
+                },
+                {
+                    'name': '🧩 道具使用流水',
+                    'icon': 'fa-solid fa-screwdriver-wrench',
+                    'url': 'starcoin/staritemusage/'
                 },
                 {
                     'name': '📜 星币流水',

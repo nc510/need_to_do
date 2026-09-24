@@ -1,0 +1,3 @@
+{# 首字母头像 + 头像框（道具「专属头像框」）。样式见 base.html 的 .avatar-chip / .avatar-frame-* #}
+{# 用法：{% include "quiz/frontend/_avatar_chip.html" with name=row.name frame=row.avatar_frame %} #}
+<span class="avatar-chip{% if frame %} avatar-frame-{{ frame }}{% endif %}">{{ name|slice:":1"|upper }}</span>

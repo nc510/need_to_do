@@ -428,7 +428,8 @@
     <label><input type="radio" name="test_mode" value="single"> 逐题答题</label>
 </div>
 
-<form id="test_paper_form" method="POST" action="{% url 'submit_wrong_question_paper' test_paper.id %}">
+<form id="test_paper_form" method="POST" action="{% url 'submit_wrong_question_paper' test_paper.id %}"
+      data-hint-source="wrong" data-hint-ref="{{ test_paper.id }}">
     {% csrf_token %}
     <div class="question-list">
         {% for question in questions %}
@@ -541,6 +542,8 @@
         <button type="submit" class="submit-btn">📤 提交答案</button>
     </div>
 </form>
+
+{% include "quiz/frontend/_hint_card.html" %}
 
 <div class="submit-modal-mask" id="submitModal" style="display:none;">
     <div class="submit-modal">

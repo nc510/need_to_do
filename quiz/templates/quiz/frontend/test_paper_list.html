@@ -1026,7 +1026,7 @@
 {% if user.is_authenticated %}
 {% with role=user.profile.role|default:'student' %}
 <section class="dashboard-section">
-    <p class="dashboard-greeting">👋 你好，<span>{{ user.username }}</span>
+    <p class="dashboard-greeting">👋 你好，<span>{{ user.profile.name|default:user.first_name|default:user.username }}</span>
         {% role_greeting role %}</p>
     <div class="quick-stats">
         <div class="quick-stat">
@@ -1114,7 +1114,7 @@
                 {% for row in board.entries %}
                 <div class="lb-row{% if row.is_me %} is-me{% endif %}">
                     <div class="lb-rank">{% rank_medal row.rank %}</div>
-                    <div class="lb-name">{{ row.name }}{% if row.class_name %}<span class="lb-class-tag">🏫 {{ row.class_name }}</span>{% endif %}<span class="lb-detail">{{ row.sub }}</span></div>
+                    <div class="lb-name">{% include "quiz/frontend/_avatar_chip.html" with name=row.name frame=row.avatar_frame %}{{ row.name }}{% if row.class_name %}<span class="lb-class-tag">🏫 {{ row.class_name }}</span>{% endif %}<span class="lb-detail">{{ row.sub }}</span></div>
                     <div class="lb-value">{{ row.value }}</div>
                 </div>
                 {% endfor %}

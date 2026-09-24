@@ -41,7 +41,7 @@
     <a href="{% url 'starcoin:records' %}"><span class="ico">🧾</span>我的记录{% if pending_redemptions %}（{{ pending_redemptions }} 待发放）{% endif %}</a>
 </div>
 
-<h2 class="star-section-title">🎒 我的道具</h2>
+<h2 class="star-section-title" id="backpack">🎒 我的背包</h2>
 {% for owned in owned_items %}
 <div class="star-task">
     <span class="ico">{{ owned.icon }}</span>
@@ -49,12 +49,26 @@
         <h4>{{ owned.name }}{% if owned.category %}<span style="font-size:12px;color:#b6bcc8;font-weight:400;margin-left:6px">{{ owned.category }}</span>{% endif %}</h4>
         <p>{{ owned.description|default:"—" }}</p>
     </div>
+    {% if owned.delivery_mode == 'instant' %}
+    <span class="star-tag star-tag-green">已生效 ×{{ owned.fulfilled }}</span>
+    {% if owned.pending %}<span class="star-tag star-tag-orange">待发放 ×{{ owned.pending }}</span>{% endif %}
+    {% else %}
+    {% if owned.effect_type %}
+    <span class="star-tag star-tag-green">可用 {{ owned.avail }}</span>
+    {% if owned.used %}<span class="star-tag star-tag-orange">已用 {{ owned.used }}</span>{% endif %}
+    {% if owned.can_use and owned.avail > 0 %}
+    <button type="button" class="use-btn" data-url="{% url 'starcoin:use_item' owned.item_id %}"
+        data-effect="{{ owned.effect_type }}" data-name="{{ owned.name }}">使用</button>
+    {% endif %}
+    {% else %}
     {% if owned.pending %}<span class="star-tag star-tag-orange">待发放 {{ owned.pending }}</span>{% endif %}
     {% if owned.fulfilled %}<span class="star-tag star-tag-green">已发放 {{ owned.fulfilled }}</span>{% endif %}
+    {% endif %}
     <span class="reward">×{{ owned.total }}</span>
+    {% endif %}
 </div>
 {% empty %}
-<div class="star-empty">还没有道具，去道具商城兑换吧</div>
+<div class="star-empty">背包还是空的，去道具商城兑换吧</div>
 {% endfor %}
 
 <h2 class="star-section-title">今日任务</h2>
@@ -104,4 +118,112 @@
 {% else %}
 <div class="star-empty">暂无星币流水，去完成任务领取星币吧</div>
 {% endif %}
+
+{# 背包道具「使用」弹窗：改名卡填新昵称、头像框选样式 #}
+<div class="use-modal-mask" id="useModal" style="display:none;">
+    <div class="use-modal">
+        <h3 id="useModalTitle">使用道具</h3>
+        <form id="useModalForm" method="post" action="">
+            {% csrf_token %}
+            <div class="use-field" id="useFieldRename" style="display:none;">
+                <label for="useNewName">新的显示昵称</label>
+                <input type="text" id="useNewName" name="new_name" maxlength="12" placeholder="2~12 个字，不含空格与特殊符号">
+                <p class="use-tip">当前昵称：{{ user.profile.name|default:user.first_name|default:user.username }}</p>
+            </div>
+            <div class="use-field" id="useFieldFrame" style="display:none;">
+                <label>选择头像框样式</label>
+                <div class="use-frame-list">
+                    {% for key, label in avatar_frames %}
+                    <label class="use-frame-item">
+                        <input type="radio" name="frame" value="{{ key }}">
+                        <span class="avatar-chip avatar-frame-{{ key }}">{{ user.username|slice:":1"|upper }}</span>
+                        <span class="use-frame-label">{{ label }}</span>
+                        {% if user.profile.avatar_frame == key %}<span class="use-frame-current">当前</span>{% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <p class="use-error" id="useModalError" style="display:none;"></p>
+            <div class="use-modal-actions">
+                <button type="button" class="star-btn star-btn-ghost use-btn-cancel" id="useModalCancel">取消</button>
+                <button type="submit" class="star-btn use-btn-ok">确认使用（消耗 1 张）</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function () {
+        var modal = document.getElementById('useModal');
+        var form = document.getElementById('useModalForm');
+        var title = document.getElementById('useModalTitle');
+        var renameField = document.getElementById('useFieldRename');
+        var frameField = document.getElementById('useFieldFrame');
+        var nameInput = document.getElementById('useNewName');
+        var errorBox = document.getElementById('useModalError');
+        var okBtn = form.querySelector('.use-btn-ok');
+        var currentEffect = '';
+        // 提交中标记：防止提交期间重复点击造成重复扣卡（同一张卡被消耗两次）
+        var submitting = false;
+
+        function showError(text) {
+            errorBox.textContent = text;
+            errorBox.style.display = 'block';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+            errorBox.style.display = 'none';
+        }
+
+        function resetSubmitState() {
+            submitting = false;
+            okBtn.disabled = false;
+            okBtn.textContent = '确认使用（消耗 1 张）';
+        }
+
+        document.querySelectorAll('.use-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                resetSubmitState();
+                currentEffect = btn.dataset.effect;
+                form.action = btn.dataset.url;
+                title.textContent = '使用「' + btn.dataset.name + '」';
+                errorBox.style.display = 'none';
+                renameField.style.display = currentEffect === 'rename_card' ? 'block' : 'none';
+                frameField.style.display = currentEffect === 'avatar_frame' ? 'block' : 'none';
+                if (currentEffect === 'rename_card') { nameInput.value = ''; }
+                modal.style.display = 'flex';
+            });
+        });
+
+        document.getElementById('useModalCancel').addEventListener('click', closeModal);
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) { closeModal(); }
+        });
+
+        form.addEventListener('submit', function (event) {
+            if (submitting) {
+                event.preventDefault();
+                return;
+            }
+            if (currentEffect === 'rename_card') {
+                var value = nameInput.value.trim();
+                if (value.length < 2 || value.length > 12) {
+                    event.preventDefault();
+                    showError('昵称需 2~12 个字');
+                    return;
+                }
+            } else if (currentEffect === 'avatar_frame') {
+                if (!form.querySelector('input[name="frame"]:checked')) {
+                    event.preventDefault();
+                    showError('请选择一个头像框样式');
+                    return;
+                }
+            }
+            // 校验通过：锁定按钮，避免提交期间被重复点击
+            submitting = true;
+            okBtn.disabled = true;
+            okBtn.textContent = '处理中…';
+        });
+    })();
+</script>
 {% endblock %}

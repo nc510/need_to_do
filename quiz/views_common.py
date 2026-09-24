@@ -439,24 +439,29 @@ def create_test_and_answer_records(user, test_paper, questions, score, question_
     return test_record, wrong_questions
 
 
-def update_wrong_question_notebook(user, question_results, kept_question_ids=frozenset()):
+def update_wrong_question_notebook(user, question_results, kept_question_ids=frozenset(),
+                                   hinted_question_ids=frozenset()):
     """按本次答题结果维护错题本（消除机制）：
     - 答错：连续答对次数 -1（最低 0），题目留在错题本；已掌握的题答错则退回错题本；
     - 答对且本次勾选「保留」：连对次数归零（视为还没掌握），题目保留；
     - 答对：连对次数 +1，累计到 MASTERY_STREAK_REQUIRED 次才标记「已掌握」移出错题本，防止蒙对假掌握；
+    - 答对且本题本轮用过提示卡（hinted_question_ids）：视为并非真正掌握，
+      直接以「已掌握」状态记入错题本留痕（不计入当前错题本），避免不会的题被漏掉；
     - 未作答：既不算对也不算错，不新增错题，也不扣已有错题的连对进度。
     kept_question_ids 为本次答题页手动勾选「保留」的题目 id 集合（仅本次有效）。
-    返回 summary：{'mastered': [...], 'kept': [...], 'streak_up': [...], 're_added': [...]}，
+    hinted_question_ids 为本轮答题中使用过提示卡的题目 id 集合（仅本轮有效）。
+    返回 summary：{'mastered': [...], 'hinted': [...], 'kept': [...], 'streak_up': [...], 're_added': [...]}，
     mastered 供结果页弹框展示并提供一键恢复。
     """
     kept_question_ids = set(kept_question_ids or ())
+    hinted_question_ids = set(hinted_question_ids or ())
     question_ids = [r['question'].id for r in question_results]
     existing = {
         wq.question_id: wq
         for wq in WrongQuestion.objects.filter(user=user, question_id__in=question_ids)
     }
     now = timezone.now()
-    summary = {'mastered': [], 'kept': [], 'streak_up': [], 're_added': []}
+    summary = {'mastered': [], 'hinted': [], 'kept': [], 'streak_up': [], 're_added': []}
 
     for result in question_results:
         question = result['question']
@@ -491,6 +496,19 @@ def update_wrong_question_notebook(user, question_results, kept_question_ids=fro
 
         # 答对：只有已在错题本中的题才需要更新掌握进度
         if wq is None:
+            # 本轮用过提示卡的题：答对也不代表真会，以「已掌握」状态入库留痕
+            # （已掌握不计入当前错题本，但可在错题本「已掌握」Tab 里查到，不会凭空消失）
+            if question.id in hinted_question_ids:
+                wq = WrongQuestion.objects.create(
+                    user=user,
+                    question=question,
+                    user_answer=result.get('user_answer') or '',
+                    correct_answer=result['correct_answer'],
+                    review_status='mastered',
+                    correct_streak=MASTERY_STREAK_REQUIRED,
+                    last_reviewed_at=now,
+                )
+                summary['hinted'].append(wq)
             continue
 
         if question.id in kept_question_ids:
@@ -565,6 +583,33 @@ def resolve_duration_seconds(request, key, fallback_start=None):
     return int(elapsed)
 
 
+# ===== 提示卡使用留痕（仅本轮答题有效） =====
+# 提示卡在答题页被使用后，把题目 id 记入 session；提交时取出并清除。
+# 用途：本轮用过提示卡且答对的题，说明并非真正掌握，直接记入错题本「已掌握」池留痕，
+# 否则「不会的题靠提示卡答对」会从错题本里彻底消失（既不算错题、也不留任何记录）。
+# 按 source + ref 隔离，避免同一用户的多份试卷/作业之间串用。
+_HINTED_QUESTIONS_PREFIX = 'hinted_questions_'
+
+
+def _hinted_session_key(source, ref_id):
+    return f'{_HINTED_QUESTIONS_PREFIX}{source}_{ref_id}'
+
+
+def mark_hint_used(request, source, ref_id, question_id):
+    """记录「本场答题中该题用过提示卡」（session 内按题目去重）"""
+    key = _hinted_session_key(source, ref_id)
+    ids = request.session.get(key) or []
+    if question_id not in ids:
+        ids.append(question_id)
+        request.session[key] = ids
+        request.session.modified = True
+
+
+def pop_hinted_question_ids(request, source, ref_id):
+    """取出并清除本场答题用过提示卡的题目 id 集合（提交时调用一次）"""
+    return set(request.session.pop(_hinted_session_key(source, ref_id), None) or [])
+
+
 def format_duration(seconds):
     """秒 → 可读用时文案（如 95 → '1分35秒'，120 → '2分'）；无效值返回 None。"""
     if seconds is None:
@@ -614,8 +659,9 @@ def update_profile_leaderboard_stats(user, score, question_results):
         tests_taken=F('tests_taken') + 1,
         answered_total=F('answered_total') + attempted_count,
         answered_correct=F('answered_correct') + correct_count,
-        # 斩题数直接取去重表条数，保证与 ConqueredQuestion 始终一致
-        conquered_count=ConqueredQuestion.objects.filter(user=user).count(),
+        # 斩题数口径 = 去重表条数 + 斩题卡加成；必须带上加成，否则道具效果会被本次覆盖归零
+        conquered_count=(ConqueredQuestion.objects.filter(user=user).count()
+                         + profile.conquered_bonus),
     )
     # 星币斩题奖励（独立子系统，按本次新增斩获题数逐次发放；失败不影响主流程）
     if new_conquered:
@@ -624,11 +670,12 @@ def update_profile_leaderboard_stats(user, score, question_results):
 
 
 def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_paper=False,
-                         duration_seconds=None, event='paper'):
+                         duration_seconds=None, event='paper', hinted_question_ids=frozenset()):
     """提交答案并落库：计算得分 → 创建 TestRecord/AnswerRecord → 错题本 → Profile 统计。
     公开试卷手动提交与限时到期自动提交共用，避免两处重复逻辑。
     duration_seconds 为本次答题用时（秒），透传给 TestRecord。
     event 标识来源（'paper' 公开试卷 / 'assignment' 班级作业），用于星币活跃奖励分流。
+    hinted_question_ids 为本轮答题中使用过提示卡的题目 id 集合（由调用方从 session 取出）。
     返回 (test_record, score, correct_count, wrong_count, question_results)。
     """
     score, correct_count, wrong_count, total_count, question_results = calculate_score(questions, user_answers)
@@ -636,7 +683,8 @@ def submit_paper_records(user, test_paper, questions, user_answers, is_wrong_pap
         user, test_paper, questions, score, question_results,
         is_wrong_paper=is_wrong_paper, duration_seconds=duration_seconds)
     # 错题本消除机制：答错入库/扣连对次数，答对累计连对次数（达 2 次消除）
-    update_wrong_question_notebook(user, question_results)
+    update_wrong_question_notebook(user, question_results,
+                                   hinted_question_ids=hinted_question_ids)
     # 榜单统计（得分 / 斩题数 / 作答题次）
     update_profile_leaderboard_stats(user, score, question_results)
     # 星币活跃奖励（独立子系统，失败不影响主流程）
@@ -733,6 +781,7 @@ def _build_personal_leaderboards(rankable, user=None, top_n=LEADERBOARD_TOP_N):
             value, sub = _personal_cells(key, profile)
             entries.append({'rank': index, 'name': _display_name(profile),
                             'class_name': profile.class_obj.name if profile.class_obj else '',
+                            'avatar_frame': profile.avatar_frame,
                             'value': value, 'sub': sub, 'is_me': profile.user_id == my_user_id})
         # 名次取「自己在完整榜单中的位次」，与榜单行的显示顺序严格一致。
         # 不能用「胜过多人数 + 1」：并列时它忽略次级排序（作答题次），

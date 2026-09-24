@@ -752,6 +752,56 @@
             box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.9);
         }
     </style>
+    <style>
+        /* ===== 头像框（道具「专属头像框」）：用户中心与各榜单共用 ===== */
+        .avatar-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            flex-shrink: 0;
+            vertical-align: middle;
+            border: 2px solid transparent;
+            box-sizing: border-box;
+        }
+
+        .avatar-frame-gold {
+            border-color: #f0b429;
+            box-shadow: 0 0 0 2px rgba(240, 180, 41, .28);
+        }
+
+        .avatar-frame-silver {
+            border-color: #b6c2cf;
+            box-shadow: 0 0 0 2px rgba(182, 194, 207, .32);
+        }
+
+        .avatar-frame-purple {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, .32);
+        }
+
+        .avatar-frame-rainbow {
+            border-color: transparent;
+            background:
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) padding-box,
+                conic-gradient(#ff4d4f, #ffb300, #4ade80, #38bdf8, #a855f7, #ff4d4f) border-box;
+        }
+
+        /* 用户中心大头像：框线随样式放大到 3px */
+        .user-avatar.avatar-frame-gold,
+        .user-avatar.avatar-frame-silver,
+        .user-avatar.avatar-frame-purple,
+        .user-avatar.avatar-frame-rainbow {
+            border-width: 3px;
+        }
+    </style>
     {% block extra_styles %}{% endblock %}
 </head>
 
@@ -791,7 +841,7 @@
                                 {% endif %}
                             </a>
                         </li>
-                        <li class="welcome"><span class="welcome-icon">👋</span>{{ user.username }}</li>
+                        <li class="welcome"><span class="welcome-icon">👋</span>{{ user.profile.name|default:user.first_name|default:user.username }}</li>
                         <li><a href="{% url 'logout' %}">🚪 退出</a></li>
                         {% else %}
                         <li class="nav-divider nav-divider-group"></li>

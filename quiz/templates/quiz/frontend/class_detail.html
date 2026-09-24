@@ -657,7 +657,7 @@
                     <div class="mlb-rank">
                         {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}{{ row.rank }}{% endif %}
                     </div>
-                    <div class="mlb-name">{{ row.name }}{% if row.is_me %}<span class="me-tag">我</span>{% endif %}</div>
+                    <div class="mlb-name">{% include "quiz/frontend/_avatar_chip.html" with name=row.name frame=row.avatar_frame %}{{ row.name }}{% if row.is_me %}<span class="me-tag">我</span>{% endif %}</div>
                     <div class="mlb-value">{{ row.value }}</div>
                     <div class="mlb-detail">{{ row.sub }}</div>
                 </div>

@@ -7,7 +7,7 @@
 {% block content %}
 <div class="star-header">
     <h1>🛍️ 星币道具商城</h1>
-    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 兑换后由管理员核销发放</p>
+    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 兑换后按道具类型自动发放</p>
     {% if is_member %}
     <p class="star-member-bar">💎 会员生效中，兑换带折扣道具自动按会员价扣星币</p>
     {% else %}
@@ -23,6 +23,7 @@
         <div class="star-card-icon">{{ item.icon }}</div>
         <div class="star-card-name">{{ item.name }}</div>
         <div class="star-card-desc">{{ item.description|default:"&nbsp;" }}</div>
+        <div class="star-deliver">{{ item.delivery_badge }}</div>
         <div class="star-price">
             {{ item.unit_price_coins }}<small> 星币</small>
             {% if is_member and item.is_member_discounted %}<span class="star-origin">{{ item.price_coins }}</span>{% endif %}
@@ -50,10 +51,11 @@
         {% endif %}
 
         <form id="redeem-{{ item.id }}" method="post" action="{% url 'starcoin:redeem' item.id %}"
+              {% if item.effect_type == 'accuracy_reset' %}onsubmit="return confirm('确认兑换并立即重置正确率？\n\n只清空累计正确率统计（答对/作答题次），错题本、斩题数、总分不受影响。\n注意：正确率榜有最低作答题次门槛，重置后会暂时掉出正确率榜，需重新作答累积。')"{% endif %}
               style="display:none;text-align:left;margin-top:14px">
             {% csrf_token %}
             <label style="font-size:13px;color:#666">兑换数量
-                <input type="number" name="quantity" value="1" min="1" max="{% if item.is_unlimited_stock %}99{% else %}{{ item.stock }}{% endif %}"
+                <input type="number" name="quantity" value="1" min="1" max="{% if item.effect_type == 'accuracy_reset' %}1{% elif item.is_unlimited_stock %}99{% else %}{{ item.stock }}{% endif %}"
                        style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;margin-top:4px">
             </label>
             <label style="font-size:13px;color:#666;display:block;margin-top:8px">联系方式/收货信息（可选）

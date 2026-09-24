@@ -312,7 +312,8 @@
         }
     </style>
 
-    <form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}">
+    <form id="test_paper_form" method="POST" action="{% url 'submit_class_assignment' assignment_id=assignment.id %}"
+        data-hint-source="assignment" data-hint-ref="{{ assignment.id }}">
         {% csrf_token %}
         <div class="question-list">
             {% for question in test_paper.questions.all %}
@@ -428,6 +429,7 @@
         <button type="submit" class="submit-btn">📤 提交{% if assignment.type == 1 %}作业{% else %}考试{% endif %}</button>
     </form>
 
+    {% include "quiz/frontend/_hint_card.html" %}
     {% include "quiz/frontend/_draft_save_script.html" %}
 </div>
 

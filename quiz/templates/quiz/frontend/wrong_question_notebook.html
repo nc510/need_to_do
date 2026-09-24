@@ -40,6 +40,27 @@
         gap: 15px;
     }
 
+    .paper-limit-hint {
+        flex: 1;
+        min-width: 220px;
+        text-align: center;
+        font-size: 13px;
+        color: #8a6d3b;
+        background: #fff8e1;
+        border-radius: 8px;
+        padding: 8px 12px;
+    }
+
+    .paper-limit-hint.over-limit {
+        color: #b91c1c;
+        background: #fee2e2;
+    }
+
+    .paper-limit-hint a {
+        color: inherit;
+        font-weight: 600;
+    }
+
     .select-all-wrapper input[type="checkbox"] {
         width: 20px;
         height: 20px;
@@ -707,13 +728,29 @@
     </span>
 </form>
 
-<form method="post" action="{% url 'create_wrong_question_paper' %}">
+<form method="post" action="{% url 'create_wrong_question_paper' %}" id="paper-form">
     {% csrf_token %}
     <div class="action-bar">
         <div class="select-all-wrapper">
             <input type="checkbox" id="select-all">
             <label for="select-all" class="select-all-label">全选</label>
             <span class="selected-count">已选 <span id="selected-count">0</span> / {{ wrong_questions|length }} 题</span>
+        </div>
+        <div class="paper-limit-hint" id="paper-limit-hint"
+             data-free-limit="{{ wrong_paper_free_limit }}" data-card-count="{{ wrong_paper_card_count }}"
+             data-card-name="{{ wrong_paper_card.name|default:'组卷卡' }}"
+             data-remaining-free="{{ wrong_paper_remaining_free }}"
+             data-free-daily-limit="{{ wrong_paper_free_daily_limit }}">
+            {% if wrong_paper_is_member %}
+            👑 会员不限组卷次数 · 单次最多 {{ wrong_paper_free_limit }} 题
+            {% else %}
+            🎟️ 今日免费组卷剩余 {{ wrong_paper_remaining_free }}/{{ wrong_paper_free_daily_limit }} 次 · 单次最多 {{ wrong_paper_free_limit }} 题
+            {% endif %}
+            {% if wrong_paper_card_count %}
+            · {{ wrong_paper_card.icon }}「{{ wrong_paper_card.name }}」 ×{{ wrong_paper_card_count }}（用卡当次不限题量）
+            {% else %}
+            · <a href="{% url 'starcoin:mall' %}">用「{{ wrong_paper_card.name|default:'组卷卡' }}」不限题量 ↗</a>
+            {% endif %}
         </div>
         <button type="submit" class="action-btn" id="retry-btn" disabled>
             🔄 组卷重做
@@ -933,9 +970,66 @@
 
     function updateSelectedCount() {
         var checkboxes = document.querySelectorAll('input[name="selected_questions"]:checked');
-        document.getElementById('selected-count').textContent = checkboxes.length;
-        document.getElementById('retry-btn').disabled = checkboxes.length === 0;
+        var count = checkboxes.length;
+        document.getElementById('selected-count').textContent = count;
+        document.getElementById('retry-btn').disabled = count === 0;
+        updatePaperLimitHint(count);
     }
+
+    // 组卷额度提示：需要用卡时说明原因与消耗（无卡则提示减少选题或去商城）
+    var limitHint = document.getElementById('paper-limit-hint');
+    var freeLimit = parseInt(limitHint.dataset.freeLimit, 10) || 0;
+    var cardCount = parseInt(limitHint.dataset.cardCount, 10) || 0;
+    // 今日剩余免费次数：-1 表示会员不限次数
+    var remainingFree = parseInt(limitHint.dataset.remainingFree, 10);
+    var unlimitedFree = remainingFree < 0;
+    var freeDailyLimit = parseInt(limitHint.dataset.freeDailyLimit, 10) || 0;
+    var limitHintDefault = limitHint.innerHTML;
+    // 道具本名（服务端按商品配置渲染，后台改名后前台自动跟随）
+    var cardLabel = '「' + (limitHint.dataset.cardName || '组卷卡') + '」';
+
+    // 需要用卡：单次超过题量上限，或免费用户今日免费次数已用完
+    function needCard(count) {
+        return count > freeLimit || (!unlimitedFree && remainingFree <= 0);
+    }
+
+    function cardReason(count) {
+        var reasons = [];
+        if (!unlimitedFree && remainingFree <= 0) {
+            reasons.push('今日免费组卷次数已用完（免费用户每天 ' + freeDailyLimit + ' 次）');
+        }
+        if (count > freeLimit) {
+            reasons.push('已选 ' + count + ' 题 · 超出单次上限 ' + freeLimit + ' 题');
+        }
+        return reasons.join('；');
+    }
+
+    function updatePaperLimitHint(count) {
+        if (!needCard(count)) {
+            limitHint.classList.remove('over-limit');
+            limitHint.innerHTML = limitHintDefault;
+            return;
+        }
+        limitHint.classList.add('over-limit');
+        limitHint.textContent = cardCount > 0
+            ? cardReason(count) + '，本次将消耗 1 张' + cardLabel + '（剩 ' + cardCount + ' 张，当次不限题量）'
+            : cardReason(count) + '，且没有' + cardLabel + '，可到道具商城兑换';
+    }
+
+    document.getElementById('paper-form').addEventListener('submit', function (e) {
+        var count = document.querySelectorAll('input[name="selected_questions"]:checked').length;
+        if (!needCard(count)) {
+            return;
+        }
+        if (cardCount <= 0) {
+            e.preventDefault();
+            alert(cardReason(count) + '。\n可减少选题，或到道具商城兑换' + cardLabel + '后继续组卷。');
+            return;
+        }
+        if (!confirm('本次将组 ' + count + ' 题，会消耗 1 张' + cardLabel + '（剩余 ' + cardCount + ' 张），确定继续？')) {
+            e.preventDefault();
+        }
+    });
 
     updateSelectedCount();
 </script>

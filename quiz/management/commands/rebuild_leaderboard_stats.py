@@ -24,7 +24,7 @@ class Command(BaseCommand):
                 correct=Count('id', filter=Q(is_correct=True)),
             )
         }
-        # 斩题数：答对且去重的题目数
+        # 斩题数：答对且去重的题目数 + 斩题卡加成（加成不经源表，必须原样保留）
         conquered = {
             row['user_id']: row['cnt']
             for row in ConqueredQuestion.objects.order_by()
@@ -45,7 +45,9 @@ class Command(BaseCommand):
             test_row = tests.get(profile.user_id) or {}
             profile.answered_total = row.get('total', 0)
             profile.answered_correct = row.get('correct', 0)
-            profile.conquered_count = conquered.get(profile.user_id, 0)
+            # 斩题数 = 去重条数 + 斩题卡加成；conquered_bonus 不经源表，不在 STATS_FIELDS 内，
+            # bulk_update 不会动它，这里直接把它加回去
+            profile.conquered_count = conquered.get(profile.user_id, 0) + profile.conquered_bonus
             profile.tests_taken = test_row.get('cnt', 0)
             profile.total_score = test_row.get('total') or 0
             updates.append(profile)

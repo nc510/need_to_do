@@ -740,6 +740,14 @@
             </div>
             <span class="arrow">→</span>
         </a>
+        <a href="{% url 'starcoin:center' %}#backpack" class="action-card">
+            <span class="action-icon">🎒</span>
+            <div class="action-text">
+                <h4>我的背包</h4>
+                <p>查看已兑换道具与可用数量</p>
+            </div>
+            <span class="arrow">→</span>
+        </a>
         <a href="{% url 'starcoin:tasks' %}" class="action-card">
             <span class="action-icon">📋</span>
             <div class="action-text">
@@ -892,7 +900,7 @@
 
 <div class="user-info-card">
     <div class="user-info-header">
-        <div class="user-avatar">{{ user.username|slice:":1"|upper }}</div>
+        <div class="user-avatar{% if user.profile.avatar_frame %} avatar-frame-{{ user.profile.avatar_frame }}{% endif %}">{{ user.username|slice:":1"|upper }}</div>
         <div>
             <h3>{{ user.username }}</h3>
             <p>来斩题用户</p>

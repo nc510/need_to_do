@@ -2,6 +2,64 @@
 from .views_common import *  # noqa: F401,F403
 from django.template.loader import render_to_string
 
+# 错题组卷：单次题量上限（持「回响之杖（组卷卡）」时当次不限题量）
+WRONG_PAPER_FREE_LIMIT = 10
+
+
+def _wrong_paper_card_state(user):
+    """返回 (组卷卡道具, 可用张数)；道具未上架时返回 (None, 0)。
+
+    单独抽函数供错题本页面提示与组卷校验共用，保证两处口径一致。
+    """
+    from starcoin.models import StarItem
+    from starcoin.services import available_quantity, get_active_item_by_effect
+    card = get_active_item_by_effect(StarItem.EFFECT_WRONG_PAPER)
+    return card, available_quantity(user, card) if card else 0
+
+
+def _local_day_range():
+    """本地自然日的 [起, 止) 时间区间。
+
+    不用 created_at__date：该查询会走 MySQL CONVERT_TZ，本库未安装时区表时
+    会静默匹配不到任何记录（返回 0），导致额度统计永久失效。
+    """
+    start = timezone.localtime(timezone.now()).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    return start, start + timedelta(days=1)
+
+
+def _wrong_paper_free_used_today(user):
+    """免费用户今日已用的免费组卷次数。
+
+    口径 = 今日生成的错题组卷试卷数 - 今日用掉的组卷卡张数：
+    组卷被拦截/失败不会留下试卷，天然不计数；用卡的那几次也不算免费额度。
+    """
+    from starcoin.models import StarItem, StarItemUsage
+    start, end = _local_day_range()
+    papers = TestPaper.objects.filter(
+        created_by=user.username, is_wrong_paper=True,
+        created_at__gte=start, created_at__lt=end).count()
+    if not papers:
+        return 0
+    card_uses = StarItemUsage.objects.filter(
+        user=user, effect_type=StarItem.EFFECT_WRONG_PAPER,
+        created_at__gte=start, created_at__lt=end).count()
+    return max(papers - card_uses, 0)
+
+
+def _wrong_paper_quota_state(user):
+    """返回 (是否会员, 每日免费次数上限, 今日剩余免费次数)。
+
+    会员组卷不限次数，剩余次数用 -1 表示「不限」；上限来自后台「错题组卷额度」。
+    """
+    from starcoin.models import StarWrongPaperConfig
+    from starcoin.services import is_member_active
+    if is_member_active(user):
+        return True, 0, -1
+    limit = StarWrongPaperConfig.get_solo().free_daily_limit
+    return False, limit, max(limit - _wrong_paper_free_used_today(user), 0)
+
+
 # 答题视图
 def question_detail(request, question_id):
     question = get_object_or_404(Question, pk=question_id)
@@ -530,7 +588,8 @@ def _auto_submit_expired_draft(request, test_paper, draft):
     duration_seconds = resolve_duration_seconds(
         request, 'paper_{}'.format(test_paper.id), fallback_start=draft.start_time)
     test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-        request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds)
+        request.user, test_paper, questions, user_answers, duration_seconds=duration_seconds,
+        hinted_question_ids=pop_hinted_question_ids(request, 'paper', test_paper.id))
     draft.delete()
     messages.info(request, '答题时间已到，已自动为您提交临时保存的答案')
     return render(request, 'quiz/frontend/test_paper_result.html', {
@@ -602,7 +661,8 @@ def submit_test_paper(request, paper_id):
         # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
         test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
             request.user, test_paper, questions, user_answers,
-            duration_seconds=duration_seconds)
+            duration_seconds=duration_seconds,
+            hinted_question_ids=pop_hinted_question_ids(request, 'paper', paper_id))
 
         # 提交成功，删除答题草稿
         if draft:
@@ -842,6 +902,11 @@ def wrong_question_notebook(request):
     )
     review_stats = {k: (v or 0) for k, v in review_stats.items()}
 
+    # 组卷额度：会员不限次数；免费用户每天有限次免费额度（后台「错题组卷额度」配置）
+    # 单次超过 10 题一律需要用卡，用卡当次不限题量（与 create_wrong_question_paper 同口径）
+    _paper_card, _paper_card_count = _wrong_paper_card_state(request.user)
+    _is_member, _free_limit, _remaining_free = _wrong_paper_quota_state(request.user)
+
     return render(request, 'quiz/frontend/wrong_question_notebook.html', {
         'wrong_questions': paginated_wrong_questions,
         'status': status,
@@ -850,6 +915,14 @@ def wrong_question_notebook(request):
         'mastery_streak_required': MASTERY_STREAK_REQUIRED,
         # 列表里的连对进度圆点：range(2) -> [0, 1]
         'mastery_streak_range': range(MASTERY_STREAK_REQUIRED),
+        'wrong_paper_free_limit': WRONG_PAPER_FREE_LIMIT,
+        'wrong_paper_card_count': _paper_card_count,
+        # 组卷卡道具本体：前台按道具本名/图标展示（后台改名后自动跟随）
+        'wrong_paper_card': _paper_card,
+        # 组卷额度：会员不限次数；免费用户显示今日剩余/每日上限（剩余 -1 = 不限）
+        'wrong_paper_is_member': _is_member,
+        'wrong_paper_free_daily_limit': _free_limit,
+        'wrong_paper_remaining_free': _remaining_free,
     })
 
 @login_required
@@ -897,7 +970,29 @@ def create_wrong_question_paper(request):
         if not selected_ids:
             messages.error(request, '请至少选择一道题目')
             return redirect('wrong_question_notebook')
-        
+
+        # 需要用卡的两种情形（服务端校验，防构造请求绕过）：
+        # 1) 单次选题超过 10 题；2) 免费用户的每日免费次数已用完
+        card, card_count = _wrong_paper_card_state(request.user)
+        # 文案用道具本名（如「回响之杖」）而非功能名，后台改名后前台自动跟随
+        card_label = f'「{card.name}」' if card else '组卷卡'
+        is_member, free_limit, remaining_free = _wrong_paper_quota_state(request.user)
+        no_free_quota_left = (not is_member) and remaining_free <= 0
+        need_card = len(selected_ids) > WRONG_PAPER_FREE_LIMIT or no_free_quota_left
+        use_card = False
+        if need_card:
+            if card is None or card_count <= 0:
+                reasons = []
+                if no_free_quota_left:
+                    reasons.append(f'今日免费组卷次数已用完（免费用户每天 {free_limit} 次）')
+                if len(selected_ids) > WRONG_PAPER_FREE_LIMIT:
+                    reasons.append(f'组卷单次最多 {WRONG_PAPER_FREE_LIMIT} 题')
+                messages.error(
+                    request,
+                    f'{"；".join(reasons)}，使用{card_label}可继续组卷且当次不限题量，可在道具商城兑换。')
+                return redirect('wrong_question_notebook')
+            use_card = True
+
         # 创建试卷
         test_paper = TestPaper.objects.create(
             title='错题巩固试卷',
@@ -911,6 +1006,11 @@ def create_wrong_question_paper(request):
         # 一次查询所有题目（原逐题 get，N+1）；m2m_changed 自动更新 total_score，无需手动算
         questions = list(Question.objects.filter(id__in=selected_ids))
         test_paper.questions.set(questions)
+
+        if use_card:
+            from starcoin.services import consume_item
+            consume_item(request.user, card, context='wrong_paper',
+                         detail=f'错题组卷 {len(questions)} 题')
 
         return redirect('submit_wrong_question_paper', paper_id=test_paper.id)
     
@@ -952,7 +1052,9 @@ def submit_wrong_question_paper(request, paper_id):
             is_wrong_paper=True, duration_seconds=duration_seconds)
 
         # 错题本消除机制：连对 2 次才消除（答错 -1），手动保留的题本次不消除
-        summary = update_wrong_question_notebook(request.user, question_results, kept_question_ids)
+        summary = update_wrong_question_notebook(
+            request.user, question_results, kept_question_ids,
+            hinted_question_ids=pop_hinted_question_ids(request, 'wrong', paper_id))
 
         # 榜单统计（得分 / 斩题数 / 作答题次）：错题巩固同样是刷题，必须与试卷口径一致累加
         update_profile_leaderboard_stats(request.user, score, question_results)
