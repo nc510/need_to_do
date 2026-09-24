@@ -115,7 +115,7 @@
             本次赠送：{% if result.coins %}<b>{{ result.coins }}</b> 星币{% endif %}{% if result.coins and result.item %} ＋ {% endif %}{% if result.item %}<b>{{ result.item.name }}</b> × {{ result.quantity }}{% endif %}{% if result.reason %}（原因：{{ result.reason }}）{% endif %}
         </p>
         <p class="gift-summary">
-            成功 <b class="gift-ok">{{ result.success|length }}</b> 人{% if result.failed %}，失败 <b class="gift-bad">{{ result.failed|length }}</b> 人{% endif %}
+            成功 <b class="gift-ok">{{ result.success|length }}</b> 人{% if result.failed %}，失败 <b class="gift-bad">{{ result.failed|length }}</b> 人{% endif %}{% if result.notified %}，已给这些用户发送站内通知 🔔{% endif %}
         </p>
     {% else %}
         <p class="gift-summary gift-bad">没有解析到任何有效的接收用户，未做任何发放。</p>
@@ -157,7 +157,8 @@
 
         <div class="gift-tip">
             用于针对性奖励与补偿：单人只需填一个用户名；批量可以粘贴多行名单，或直接勾选班级。<br>
-            星币与道具可同时赠送（填其中一项即可）。发放记录会写入星币流水与兑换记录，可随时对账。
+            星币与道具可同时赠送（填其中一项即可）。发放记录会写入星币流水与兑换记录，可随时对账。<br>
+            发放成功后会自动给受赠用户发送站内通知（用户登录后在「我的通知 🔔」里可见，含赠送内容与原因）。
         </div>
 
         {{ form.non_field_errors }}

@@ -20,7 +20,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 
-from quiz.models import Class
+from quiz.models import Class, Notification
 
 from .models import (
     StarAccount,
@@ -130,6 +130,29 @@ def _resolve_gift_users(raw_text, classes):
             users.append(matches[0])
 
     return users, problems
+
+
+# 赠送通知里道具入账的说法（按发放方式区分）
+GIFT_ITEM_DELIVERY_TEXT = {
+    StarItem.MODE_INSTANT: '已立即生效',
+    StarItem.MODE_INVENTORY: '已放入背包，可在需要时使用',
+    StarItem.MODE_MANUAL: '已发放',
+}
+
+
+def _gift_notification_text(coins, item, quantity, reason):
+    """赠送通知的标题与内容，如「🎁 收到管理员赠送：50 星币 + 回响之杖 ×2」"""
+    summary = []
+    lines = []
+    if coins:
+        summary.append(f'{coins} 星币')
+        lines.append(f'星币 {coins} 已到账，可在星币中心查看余额与明细。')
+    if item:
+        summary.append(f'{item.name} ×{quantity}')
+        lines.append(f'道具「{item.name}」×{quantity} {GIFT_ITEM_DELIVERY_TEXT[item.delivery_mode]}。')
+    if reason:
+        lines.append(f'赠送原因：{reason}')
+    return f'🎁 收到管理员赠送：{" + ".join(summary)}', '\n'.join(lines)
 
 
 # ===== 星币 / 道具统计汇总 =====
@@ -393,11 +416,32 @@ class StarAccountAdmin(admin.ModelAdmin):
             else:
                 success.append(user)
 
+        notified = self._notify_gift_sent(success, coins, item, quantity, reason, operator)
+
         return {
             'executed': bool(users),
             'coins': coins, 'item': item, 'quantity': quantity, 'reason': reason,
             'success': success, 'failed': failed, 'problems': problems,
+            'notified': notified,
         }
+
+    @staticmethod
+    def _notify_gift_sent(users, coins, item, quantity, reason, operator):
+        """给受赠用户发站内通知，返回是否发送成功。
+
+        发送放在各用户的发放事务之外：通知失败只记日志，不影响已经到账的星币/道具。
+        """
+        if not users:
+            return False
+        title, content = _gift_notification_text(coins, item, quantity, reason)
+        try:
+            Notification.notify_many(
+                recipients=users, sender=operator, ntype='system',
+                title=title, content=content, link=reverse('starcoin:center'))
+        except Exception:
+            logger.exception('后台赠送站内通知发送失败（受赠 %s 人）', len(users))
+            return False
+        return True
 
 
 @admin.register(StarTransaction)
