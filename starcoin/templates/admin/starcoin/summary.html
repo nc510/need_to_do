@@ -1,0 +1,218 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}星币道具统计汇总 | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .sum-wrap { max-width: 1500px; }
+    .sum-toolbar { margin-bottom: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .sum-btn {
+        display: inline-block; padding: 7px 16px; font-size: 13px;
+        color: #2c3e50; background: #fff; text-decoration: none;
+        border: 1px solid #d5dae3; border-radius: 4px;
+    }
+    .sum-btn:hover { background: #f3f5f9; border-color: #b9c0cc; }
+    .sum-filter {
+        background: #fff; border: 1px solid #e3e6f0; border-radius: 6px;
+        padding: 14px 18px; margin-bottom: 16px;
+    }
+    .sum-filter form { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; }
+    .sum-field { display: flex; flex-direction: column; gap: 5px; }
+    .sum-field > label { font-size: 12px; color: #5a6474; font-weight: 600; }
+    .sum-field input[type="text"], .sum-field select {
+        padding: 6px 8px; font-size: 13px; background: #fff;
+        border: 1px solid #d5dae3; border-radius: 4px;
+    }
+    .sum-field input[type="text"] { width: 220px; }
+    .sum-submit {
+        padding: 7px 20px; font-size: 13px; color: #fff; cursor: pointer;
+        background: #417690; border: none; border-radius: 4px;
+    }
+    .sum-submit:hover { background: #35657a; }
+    .sum-check {
+        display: flex; align-items: center; gap: 6px; cursor: pointer;
+        font-size: 13px; font-weight: 400; color: #2c3e50; padding-bottom: 7px;
+    }
+    .sum-totals {
+        background: #f8f9fc; border-left: 3px solid #667eea; padding: 10px 14px;
+        color: #5a6474; font-size: 13px; line-height: 1.8;
+        border-radius: 0 4px 4px 0; margin-bottom: 14px;
+    }
+    .sum-totals b { color: #2c3e50; }
+    .sum-scroll {
+        overflow-x: auto; background: #fff;
+        border: 1px solid #e3e6f0; border-radius: 6px;
+    }
+    table.sum-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.sum-table th, table.sum-table td {
+        padding: 9px 12px; border-bottom: 1px solid #f0f2f6;
+        text-align: left; white-space: nowrap;
+    }
+    table.sum-table thead th { background: #f7f8fb; color: #5a6474; font-weight: 600; }
+    table.sum-table tbody tr:last-child td { border-bottom: none; }
+    table.sum-table tbody tr:hover { background: #fafbfe; }
+    table.sum-table td a { color: #417690; text-decoration: none; }
+    table.sum-table td a:hover { text-decoration: underline; }
+    .sum-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .sum-sub { color: #8a94a6; font-size: 12px; }
+    .sum-chip {
+        display: inline-block; padding: 1px 8px; margin: 2px 4px 2px 0;
+        font-size: 12px; color: #3b556e; background: #eef3f8; border-radius: 10px;
+    }
+    .sum-zero, .sum-empty { color: #c0c6d0; }
+    .sum-pager { margin-top: 14px; font-size: 13px; }
+    .sum-pager a, .sum-pager span.current {
+        display: inline-block; padding: 5px 12px; margin-right: 6px;
+        border: 1px solid #d5dae3; border-radius: 4px; background: #fff;
+        color: #2c3e50; text-decoration: none;
+    }
+    .sum-pager span.current { background: #417690; border-color: #417690; color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sum-wrap">
+
+<div class="sum-toolbar">
+    <a class="sum-btn" href="{% url 'admin:starcoin_staraccount_changelist' %}">← 返回星币账户列表</a>
+    <a class="sum-btn" href="{% url 'admin:starcoin_gift' %}">🎁 赠送星币 / 道具</a>
+</div>
+
+<div class="sum-filter">
+    <form method="get">
+        <div class="sum-field">
+            <label for="q">搜索</label>
+            <input type="text" id="q" name="q" value="{{ keyword }}"
+                   placeholder="用户名 / 姓名 / 手机号">
+        </div>
+        <div class="sum-field">
+            <label for="class_id">班级</label>
+            <select id="class_id" name="class_id">
+                <option value="">全部班级</option>
+                {% for class in classes %}
+                    <option value="{{ class.pk }}"
+                            {% if class_id == class.pk|stringformat:"s" %}selected{% endif %}>{{ class }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="sum-field">
+            <label for="sort">排序</label>
+            <select id="sort" name="sort" onchange="this.form.submit()">
+                {% for value, label in sort_choices %}
+                    <option value="{{ value }}" {% if sort_key == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="sum-field">
+            <label>统计范围</label>
+            <label class="sum-check">
+                <input type="checkbox" name="include_empty" value="1"
+                       {% if include_empty %}checked{% endif %}>
+                包含无星币 / 道具记录的用户
+            </label>
+        </div>
+        <div class="sum-field">
+            <button type="submit" class="sum-submit">查询</button>
+        </div>
+        <div class="sum-field">
+            <a class="sum-btn" href="{% url 'admin:starcoin_summary' %}">重置</a>
+        </div>
+    </form>
+</div>
+
+<div class="sum-totals">
+    当前筛选共 <b>{{ totals.users }}</b> 人 ·
+    星币余额合计 <b>{{ totals.balance }}</b> ·
+    累计获得 <b>{{ totals.earned }}</b> ·
+    累计消耗 <b>{{ totals.spent }}</b> ·
+    道具可用 <b>{{ totals.item_avail }}</b> 件 ·
+    待发放 <b>{{ totals.pending }}</b> 件
+</div>
+
+<div class="sum-scroll">
+    <table class="sum-table">
+        <thead>
+            <tr>
+                <th>用户</th>
+                <th>姓名</th>
+                <th>班级</th>
+                <th class="sum-num">星币余额</th>
+                <th class="sum-num">累计获得</th>
+                <th class="sum-num">累计消耗</th>
+                <th class="sum-num">道具可用</th>
+                <th class="sum-num">道具已用</th>
+                <th class="sum-num">待发放</th>
+                <th class="sum-num">兑换花费</th>
+                <th>道具明细（可用）</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+                <tr>
+                    <td>
+                        <a href="{% url 'admin:starcoin_startransaction_changelist' %}?q={{ row.username|urlencode }}"
+                           title="查看该用户的星币流水">{{ row.username }}</a>
+                    </td>
+                    <td>{{ row.name|default:"—" }}</td>
+                    <td>{{ row.class_name|default:"—" }}</td>
+                    <td class="sum-num">{{ row.balance }}</td>
+                    <td class="sum-num">
+                        {{ row.earned }}
+                        {% if row.earned %}
+                            <span class="sum-sub">（活跃 {{ row.active_earned }} / 充值 {{ row.recharge_earned }}）</span>
+                        {% endif %}
+                    </td>
+                    <td class="sum-num">{{ row.spent }}</td>
+                    <td class="sum-num">
+                        {% if row.item_avail %}{{ row.item_avail }}{% else %}<span class="sum-zero">0</span>{% endif %}
+                    </td>
+                    <td class="sum-num">
+                        {% if row.item_used %}{{ row.item_used }}{% else %}<span class="sum-zero">0</span>{% endif %}
+                    </td>
+                    <td class="sum-num">
+                        {% if row.pending %}{{ row.pending }}{% else %}<span class="sum-zero">0</span>{% endif %}
+                    </td>
+                    <td class="sum-num">
+                        {% if row.exchange_coins %}{{ row.exchange_coins }}{% else %}<span class="sum-zero">0</span>{% endif %}
+                    </td>
+                    <td>
+                        {% for item in row.items %}
+                            {% if item.avail %}
+                                <span class="sum-chip">{{ item.icon }} {{ item.name }} ×{{ item.avail }}</span>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not row.item_avail %}
+                            <a href="{% url 'admin:starcoin_starredemption_changelist' %}?q={{ row.username|urlencode }}"
+                               class="sum-empty" title="查看该用户的兑换记录">
+                                {% if row.items %}已用完{% else %}—{% endif %}
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="11" style="text-align:center; color:#8a94a6; padding:26px;">
+                        没有符合条件的记录
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page_obj.paginator.num_pages > 1 %}
+    <div class="sum-pager">
+        {% if page_obj.has_previous %}
+            <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">上一页</a>
+        {% endif %}
+        <span class="current">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</span>
+        {% if page_obj.has_next %}
+            <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}">下一页</a>
+        {% endif %}
+    </div>
+{% endif %}
+
+</div>
+{% endblock %}

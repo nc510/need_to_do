@@ -6,13 +6,16 @@
 
 import logging
 import re
+from collections import defaultdict
+from urllib.parse import urlencode
 
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Max, Q, Sum
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -61,8 +64,8 @@ class StarGiftForm(forms.Form):
         help_text='每行一个（也可用逗号、空格分隔），支持用户名、姓名、手机号；重复的自动去重。')
     classes = forms.ModelMultipleChoiceField(
         label='按班级批量', queryset=Class.objects.all(), required=False,
-        widget=forms.SelectMultiple(attrs={'size': 8}),
-        help_text='可多选班级，所选班级的全部成员都会收到本次赠送（与上方名单合并）。')
+        widget=forms.CheckboxSelectMultiple,
+        help_text='勾选即选中、取消勾选即移除；所选班级的全部成员都会收到本次赠送（与上方名单合并）。')
     coins = forms.IntegerField(
         label='赠送星币', required=False, min_value=1, max_value=1000000,
         help_text='正整数，留空表示不赠星币；赠送星币不计入星力榜（活跃奖励）。')
@@ -129,6 +132,128 @@ def _resolve_gift_users(raw_text, classes):
     return users, problems
 
 
+# ===== 星币 / 道具统计汇总 =====
+
+# 汇总表每页条数
+SUMMARY_PAGE_SIZE = 50
+
+# 汇总表排序方式：key -> 文案（排序键见 _sort_summary_rows）
+SUMMARY_SORT_CHOICES = [
+    ('balance', '星币余额（多 → 少）'),
+    ('balance_asc', '星币余额（少 → 多）'),
+    ('earned', '累计获得（多 → 少）'),
+    ('items', '道具可用（多 → 少）'),
+    ('class', '按班级'),
+    ('username', '按用户名'),
+]
+
+
+def _collect_coin_item_rows(keyword='', class_id='', include_empty=False):
+    """汇总每个人的星币与道具数据，返回 (rows, totals)。
+
+    口径：
+    - 星币取账户上的累计字段（余额 = 流水累加，见 services.earn / spend）；
+    - 道具「可用」= Σ(兑换数 - 已用数)，只统计「已发放」记录，与
+      services.available_quantity 同源；「待发放」为人工核销类尚未处理的张数；
+    - 兑换「花费星币」含赠送记录（赠送成本为 0），已取消的记录不计。
+    """
+    users = User.objects.all()
+    if not include_empty:
+        users = users.filter(Q(star_account__isnull=False) | Q(star_redemptions__isnull=False))
+    if keyword:
+        users = users.filter(Q(username__icontains=keyword)
+                             | Q(first_name__icontains=keyword)
+                             | Q(profile__name__icontains=keyword)
+                             | Q(profile__phone_number__icontains=keyword))
+    if class_id:
+        users = users.filter(profile__class_obj_id=class_id)
+
+    accounts = {row['user_id']: row for row in StarAccount.objects.values(
+        'user_id', 'balance', 'active_earned', 'recharge_earned', 'total_spent')}
+
+    items_by_user = defaultdict(list)
+    pending_by_user = defaultdict(int)
+    # 注意：必须 order_by() 清掉模型默认排序（StarRedemption.Meta.ordering = ['-id']），
+    # 否则 Django 会把 id 并进 GROUP BY，导致每条兑换记录各自成组、聚合失效。
+    for row in (StarRedemption.objects
+                .values('user_id', 'item_id', 'item__name', 'item__icon',
+                        'item__sort_order', 'status')
+                .annotate(total=Sum('quantity'), used=Sum('used_quantity'))
+                .order_by()):
+        if row['status'] == StarRedemption.STATUS_PENDING:
+            pending_by_user[row['user_id']] += row['total'] or 0
+        elif row['status'] == StarRedemption.STATUS_FULFILLED:
+            items_by_user[row['user_id']].append({
+                'id': row['item_id'],
+                'name': row['item__name'],
+                'icon': row['item__icon'],
+                'sort': row['item__sort_order'] or 0,
+                'avail': (row['total'] or 0) - (row['used'] or 0),
+                'used': row['used'] or 0,
+            })
+
+    exchange_by_user = {row['user_id']: row for row in (
+        StarRedemption.objects.exclude(status=StarRedemption.STATUS_CANCELLED)
+        .values('user_id')
+        .annotate(times=Count('id'), coins=Sum('coins_cost'), last_at=Max('created_at'))
+        .order_by())}
+
+    rows = []
+    for user in users.select_related('profile', 'profile__class_obj').distinct():
+        account = accounts.get(user.pk) or {}
+        items = sorted(items_by_user.get(user.pk, []), key=lambda item: (item['sort'], item['id']))
+        exchange = exchange_by_user.get(user.pk) or {}
+        active_earned = account.get('active_earned') or 0
+        recharge_earned = account.get('recharge_earned') or 0
+        profile = getattr(user, 'profile', None)
+        class_obj = getattr(profile, 'class_obj', None)
+        rows.append({
+            'user_id': user.pk,
+            'username': user.username,
+            'name': (getattr(profile, 'name', '') or user.first_name or ''),
+            'class_name': str(class_obj) if class_obj else '',
+            'balance': account.get('balance') or 0,
+            'active_earned': active_earned,
+            'recharge_earned': recharge_earned,
+            'earned': active_earned + recharge_earned,
+            'spent': account.get('total_spent') or 0,
+            'item_avail': sum(item['avail'] for item in items),
+            'item_used': sum(item['used'] for item in items),
+            'pending': pending_by_user.get(user.pk, 0),
+            'exchange_times': exchange.get('times') or 0,
+            'exchange_coins': exchange.get('coins') or 0,
+            'last_exchange_at': exchange.get('last_at'),
+            'items': items,
+        })
+
+    totals = {
+        'users': len(rows),
+        'balance': sum(row['balance'] for row in rows),
+        'earned': sum(row['earned'] for row in rows),
+        'spent': sum(row['spent'] for row in rows),
+        'item_avail': sum(row['item_avail'] for row in rows),
+        'pending': sum(row['pending'] for row in rows),
+    }
+    return rows, totals
+
+
+def _sort_summary_rows(rows, sort_key):
+    """按所选方式排序（星币与道具口径不同，统一在内存里排）"""
+    if sort_key == 'class':
+        # 没有班级的排在最后
+        return sorted(rows, key=lambda row: (not row['class_name'], row['class_name'],
+                                             row['username'].lower()))
+    if sort_key == 'username':
+        return sorted(rows, key=lambda row: row['username'].lower())
+    key = {
+        'balance': lambda row: -row['balance'],
+        'balance_asc': lambda row: row['balance'],
+        'earned': lambda row: -row['earned'],
+        'items': lambda row: -row['item_avail'],
+    }.get(sort_key, lambda row: -row['balance'])
+    return sorted(rows, key=lambda row: (key(row), row['username'].lower()))
+
+
 @admin.register(StarAccount)
 class StarAccountAdmin(admin.ModelAdmin):
     list_display = ('user', 'balance', 'active_earned', 'recharge_earned', 'total_spent', 'updated_at')
@@ -144,9 +269,11 @@ class StarAccountAdmin(admin.ModelAdmin):
         return obj.total_earned
 
     def get_urls(self):
-        """追加「赠送星币 / 道具」页面（列表页按钮与批量动作都跳到它）"""
+        """追加「赠送星币 / 道具」与「统计汇总」页面（列表页按钮与批量动作都跳到它们）"""
         custom_urls = [
             path('gift/', self.admin_site.admin_view(self.gift_view), name='starcoin_gift'),
+            path('summary/', self.admin_site.admin_view(self.summary_view),
+                 name='starcoin_summary'),
         ]
         return custom_urls + super().get_urls()
 
@@ -155,6 +282,44 @@ class StarAccountAdmin(admin.ModelAdmin):
         """把勾选的账户带到赠送页预填名单，避免逐个手输用户名"""
         user_ids = ','.join(str(pk) for pk in queryset.values_list('user_id', flat=True))
         return HttpResponseRedirect(f'{reverse("admin:starcoin_gift")}?users={user_ids}')
+
+    def summary_view(self, request):
+        """个人星币 / 道具统计汇总：每人一行，可搜索、按班级与排序查看"""
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+
+        keyword = (request.GET.get('q') or '').strip()
+        class_id = (request.GET.get('class_id') or '').strip()
+        sort_key = request.GET.get('sort') or SUMMARY_SORT_CHOICES[0][0]
+        include_empty = request.GET.get('include_empty') == '1'
+
+        rows, totals = _collect_coin_item_rows(keyword, class_id, include_empty)
+        rows = _sort_summary_rows(rows, sort_key)
+        page = Paginator(rows, SUMMARY_PAGE_SIZE).get_page(request.GET.get('page'))
+
+        query = {'sort': sort_key}
+        if keyword:
+            query['q'] = keyword
+        if class_id:
+            query['class_id'] = class_id
+        if include_empty:
+            query['include_empty'] = '1'
+
+        return render(request, 'admin/starcoin/summary.html', {
+            **self.admin_site.each_context(request),
+            'title': '星币道具统计汇总',
+            'opts': self.model._meta,
+            'rows': page.object_list,
+            'page_obj': page,
+            'totals': totals,
+            'classes': Class.objects.all(),
+            'keyword': keyword,
+            'class_id': class_id,
+            'sort_key': sort_key,
+            'include_empty': include_empty,
+            'sort_choices': SUMMARY_SORT_CHOICES,
+            'base_query': urlencode(query),
+        })
 
     def gift_view(self, request):
         """赠送星币 / 道具：一次给一名或多名用户发放（针对性奖励与补偿）"""

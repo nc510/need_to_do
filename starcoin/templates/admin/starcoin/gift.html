@@ -34,6 +34,27 @@
         font-size: 13px; box-sizing: border-box; background: #fff;
     }
     .gift-row select[multiple] { padding: 4px; }
+    /* 班级多选：用复选框列表，勾选/取消勾选都是点击一下，不需要按住 Ctrl */
+    #id_classes {
+        max-width: 560px; max-height: 220px; overflow: auto;
+        margin: 0; padding: 10px 12px; list-style: none;
+        border: 1px solid #d5dae3; border-radius: 4px; background: #fff;
+    }
+    #id_classes li { margin: 0 0 6px; }
+    #id_classes li:last-child { margin-bottom: 0; }
+    #id_classes label {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin: 0; font-size: 13px; font-weight: 400;
+        color: #2c3e50; cursor: pointer;
+    }
+    #id_classes input[type="checkbox"] { margin: 0; cursor: pointer; }
+    .gift-toolbar { margin-bottom: 14px; }
+    .gift-back {
+        display: inline-block; padding: 7px 16px; font-size: 13px;
+        color: #2c3e50; background: #fff; text-decoration: none;
+        border: 1px solid #d5dae3; border-radius: 4px;
+    }
+    .gift-back:hover { background: #f3f5f9; border-color: #b9c0cc; }
     .gift-row .help {
         color: #8a94a6; font-size: 12px; margin-top: 5px; line-height: 1.6;
         max-width: 640px;
@@ -80,6 +101,10 @@
 
 {% block content %}
 <div class="gift-wrap">
+
+<div class="gift-toolbar">
+    <a class="gift-back" href="{% url 'admin:starcoin_staraccount_changelist' %}">← 返回星币账户列表</a>
+</div>
 
 {% if result %}
 <div class="gift-card">
