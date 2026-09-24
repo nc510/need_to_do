@@ -9,6 +9,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils.exceptions import InvalidFileException
 import io
 import json
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -353,8 +354,25 @@ def import_questions_from_excel(file, subject_map=None, chapter_map=None, sectio
 # ===== 榜单分享图片（服务端 PIL 绘制 + 网站二维码）=====
 
 def share_site_url(request):
-    """分享图二维码指向的网站地址：取当前访问域名，兼容 nginx 反向代理"""
-    return request.build_absolute_uri('/')
+    """分享图二维码指向的网站地址：取当前访问域名，兼容 nginx 反向代理。
+
+    nginx 默认 `proxy_set_header Host $host` 转发时不带端口，Django 拼出来的地址会缺端口，
+    扫码后落到 80 端口打不开 —— 这里按 PUBLIC_SITE_PORT 补回对外端口（已经是带端口的
+    访问地址，如本地直连 8000，则原样返回）。
+    """
+    url = request.build_absolute_uri('/')
+    port = str(getattr(settings, 'PUBLIC_SITE_PORT', '') or '').strip()
+    if not port:
+        return url
+    parsed = urlsplit(url)
+    try:
+        has_port = parsed.port is not None
+    except ValueError:  # Host 头端口异常时不改写，避免影响出图
+        return url
+    if has_port:
+        return url
+    return urlunsplit((parsed.scheme, f'{parsed.netloc}:{port}',
+                       parsed.path, parsed.query, parsed.fragment))
 
 
 SHARE_IMAGE_WIDTH = 880

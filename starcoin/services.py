@@ -451,11 +451,12 @@ def get_active_item_by_effect(effect_type):
 # ===== 系统赠送道具 / 每日登录赠礼 =====
 
 @transaction.atomic
-def grant_item(user, item, quantity=1, *, remark=''):
+def grant_item(user, item, quantity=1, *, remark='', admin_remark='系统赠送', operator=None):
     """系统赠送道具：直接入背包，不扣星币、不扣库存、不受限购。
 
     生成一条「已发放」的兑换记录，与星币兑换所得完全同源 ——
     背包余量、答题页张数、available_quantity 都按同一口径统计。
+    后台赠送（operator 非空）时一并留下操作人与备注，便于审计。
     """
     quantity = int(quantity)
     if quantity <= 0:
@@ -464,8 +465,8 @@ def grant_item(user, item, quantity=1, *, remark=''):
         user=user, item=item, quantity=quantity,
         coins_cost=0, original_coins=0, discount_rate=NO_DISCOUNT_RATE,
         status=StarRedemption.STATUS_FULFILLED,
-        user_remark=remark[:200], admin_remark='系统赠送',
-        fulfilled_at=timezone.now())
+        user_remark=remark[:200], admin_remark=admin_remark[:200],
+        fulfilled_by=operator, fulfilled_at=timezone.now())
 
 
 def grant_login_gift(user):

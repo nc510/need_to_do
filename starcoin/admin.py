@@ -4,9 +4,20 @@
 当前数据库未安装时区定义会导致 500，时间筛选统一走 list_filter。
 """
 
+import logging
+import re
+
+from django import forms
 from django.contrib import admin
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponseRedirect
-from django.urls import reverse
+from django.shortcuts import render
+from django.urls import path, reverse
+
+from quiz.models import Class
 
 from .models import (
     StarAccount,
@@ -22,7 +33,100 @@ from .models import (
     StarTransaction,
     StarWrongPaperConfig,
 )
-from .services import StarCoinError, cancel_redemption, fulfill_redemption
+from .services import (
+    StarCoinError,
+    apply_instant_effect,
+    cancel_redemption,
+    earn,
+    fulfill_redemption,
+    grant_item,
+)
+
+logger = logging.getLogger(__name__)
+
+# 后台赠送的流水来源标识（StarTransaction.ref_type）
+GIFT_REF_TYPE = 'admin_gift'
+
+
+class StarGiftForm(forms.Form):
+    """后台赠送表单：一次给一名或多名用户赠送星币 / 道具。
+
+    单人即只填一个用户；批量可粘贴多行名单，或直接勾选班级。
+    """
+
+    users = forms.CharField(
+        label='接收用户', required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 6, 'placeholder': '每行一个：用户名 / 姓名 / 手机号'}),
+        help_text='每行一个（也可用逗号、空格分隔），支持用户名、姓名、手机号；重复的自动去重。')
+    classes = forms.ModelMultipleChoiceField(
+        label='按班级批量', queryset=Class.objects.all(), required=False,
+        widget=forms.SelectMultiple(attrs={'size': 8}),
+        help_text='可多选班级，所选班级的全部成员都会收到本次赠送（与上方名单合并）。')
+    coins = forms.IntegerField(
+        label='赠送星币', required=False, min_value=1, max_value=1000000,
+        help_text='正整数，留空表示不赠星币；赠送星币不计入星力榜（活跃奖励）。')
+    item = forms.ModelChoiceField(
+        label='赠送道具', queryset=StarItem.objects.filter(is_active=True),
+        required=False, empty_label='— 不赠送道具 —',
+        help_text='仅列出上架中的道具。即时生效型（会员卡 / 斩题卡 / 正确率重置卡）赠送后立即生效；'
+                  '背包使用型进入用户背包；人工核销型直接记为「已发放」。')
+    quantity = forms.IntegerField(
+        label='道具数量', required=False, min_value=1, max_value=100, initial=1,
+        help_text='每人获赠的道具张数，默认 1。')
+    reason = forms.CharField(
+        label='赠送原因', required=False, max_length=80,
+        widget=forms.TextInput(attrs={'size': 60}),
+        help_text='记录到星币流水与兑换记录中，便于事后对账，例如「月考进步奖励」。')
+
+    def clean(self):
+        cleaned = super().clean()
+        coins = cleaned.get('coins')
+        item = cleaned.get('item')
+        quantity = cleaned.get('quantity') or 1
+        if not coins and not item:
+            raise ValidationError('请至少填写「赠送星币」或选择「赠送道具」其中一项。')
+        if item is not None:
+            cleaned['quantity'] = quantity
+            if item.effect_type == StarItem.EFFECT_ACCURACY_RESET and quantity != 1:
+                self.add_error('quantity', f'「{item.name}」一次只能赠送 1 张。')
+        return cleaned
+
+
+# 名单分隔符：换行、空格、中英文逗号、顿号、分号
+_GIFT_NAME_SPLIT_RE = re.compile(r'[\s,，、;；]+')
+
+
+def _resolve_gift_users(raw_text, classes):
+    """把「名单文本 + 班级」解析成待赠送用户列表，返回 (users, problems)。
+
+    只有用户名/姓名/手机号能唯一定位到一个用户时才计入：命中 0 个或命中多个都记入
+    problems 而不发放 —— 赠送（尤其是补偿）发错人的代价比漏发更大。
+    """
+    users, problems, seen = [], [], set()
+
+    for class_obj in classes:
+        for user in User.objects.filter(profile__class_obj=class_obj).distinct():
+            if user.pk not in seen:
+                seen.add(user.pk)
+                users.append(user)
+
+    for token in dict.fromkeys(_GIFT_NAME_SPLIT_RE.split(raw_text or '')):
+        token = token.strip()
+        if not token:
+            continue
+        matches = list(User.objects.filter(
+            Q(username=token) | Q(first_name=token)
+            | Q(profile__name=token) | Q(profile__phone_number=token)).distinct())
+        if not matches:
+            problems.append(f'「{token}」未找到对应用户')
+        elif len(matches) > 1:
+            problems.append(f'「{token}」匹配到 {len(matches)} 个用户，无法确定，请改用用户名或手机号')
+        elif matches[0].pk not in seen:
+            seen.add(matches[0].pk)
+            users.append(matches[0])
+
+    return users, problems
 
 
 @admin.register(StarAccount)
@@ -32,10 +136,103 @@ class StarAccountAdmin(admin.ModelAdmin):
     readonly_fields = ('balance', 'active_earned', 'recharge_earned', 'total_spent',
                        'created_at', 'updated_at')
     ordering = ('-balance', 'user_id')
+    actions = ('action_gift',)
+    change_list_template = 'admin/starcoin/staraccount/change_list.html'
 
     @admin.display(description='累计获得')
     def total_earned_display(self, obj):
         return obj.total_earned
+
+    def get_urls(self):
+        """追加「赠送星币 / 道具」页面（列表页按钮与批量动作都跳到它）"""
+        custom_urls = [
+            path('gift/', self.admin_site.admin_view(self.gift_view), name='starcoin_gift'),
+        ]
+        return custom_urls + super().get_urls()
+
+    @admin.action(description='🎁 赠送星币 / 道具')
+    def action_gift(self, request, queryset):
+        """把勾选的账户带到赠送页预填名单，避免逐个手输用户名"""
+        user_ids = ','.join(str(pk) for pk in queryset.values_list('user_id', flat=True))
+        return HttpResponseRedirect(f'{reverse("admin:starcoin_gift")}?users={user_ids}')
+
+    def gift_view(self, request):
+        """赠送星币 / 道具：一次给一名或多名用户发放（针对性奖励与补偿）"""
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+
+        if request.method == 'POST':
+            form = StarGiftForm(request.POST)
+            if form.is_valid():
+                result = self._run_gift(form.cleaned_data, request.user)
+                form = StarGiftForm()  # 清空表单，便于连续赠送
+            else:
+                result = None
+        else:
+            form = StarGiftForm(initial=self._gift_initial(request))
+            result = None
+
+        return render(request, 'admin/starcoin/gift.html', {
+            **self.admin_site.each_context(request),
+            'title': '赠送星币 / 道具',
+            'form': form,
+            'result': result,
+            'opts': self.model._meta,
+        })
+
+    @staticmethod
+    def _gift_initial(request):
+        """从「星币账户」列表勾选跳转过来时预填名单"""
+        raw = request.GET.get('users', '')
+        ids = [int(value) for value in raw.split(',') if value.strip().isdigit()]
+        if not ids:
+            return {}
+        usernames = User.objects.filter(pk__in=ids).values_list('username', flat=True)
+        return {'users': '\n'.join(usernames)}
+
+    def _run_gift(self, cleaned, operator):
+        """逐个用户发放并返回结果明细：单个用户失败不影响其他用户。
+
+        每个用户一个事务：星币与道具要么都到账，要么都不动（例如即时生效型道具
+        配置有误时会整体回滚，不会出现「扣了记录却没生效」）。
+        """
+        users, problems = _resolve_gift_users(cleaned['users'], cleaned['classes'])
+        coins = cleaned.get('coins') or 0
+        item = cleaned.get('item')
+        quantity = cleaned.get('quantity') or 1
+        reason = (cleaned.get('reason') or '').strip()
+
+        remark = f'后台赠送：{reason}' if reason else '后台赠送'
+        admin_remark = f'后台赠送（操作人：{operator.get_username()}）'
+        if reason:
+            admin_remark += f' 原因：{reason}'
+
+        success, failed = [], []
+        for user in users:
+            try:
+                with transaction.atomic():
+                    if coins:
+                        earn(user, coins, StarTransaction.KIND_ADMIN,
+                             ref_type=GIFT_REF_TYPE, remark=remark)
+                    if item:
+                        redemption = grant_item(user, item, quantity, remark=remark,
+                                                admin_remark=admin_remark, operator=operator)
+                        if item.delivery_mode == StarItem.MODE_INSTANT:
+                            apply_instant_effect(user, item, redemption, quantity=quantity)
+            except StarCoinError as exc:
+                failed.append((user, str(exc)))
+            except Exception:
+                logger.exception('后台赠送失败：user=%s item=%s',
+                                 user.pk, getattr(item, 'pk', None))
+                failed.append((user, '系统异常，请查看服务器日志'))
+            else:
+                success.append(user)
+
+        return {
+            'executed': bool(users),
+            'coins': coins, 'item': item, 'quantity': quantity, 'reason': reason,
+            'success': success, 'failed': failed, 'problems': problems,
+        }
 
 
 @admin.register(StarTransaction)

@@ -485,3 +485,9 @@ ORDER_SYNC_MIN_AGE_SECONDS = int(os.getenv('ORDER_SYNC_MIN_AGE_SECONDS', '60'))
 
 # 位于 nginx 等反向代理之后时，据此识别客户端的原始协议（https）
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# 对外访问端口（nginx 监听端口）
+# nginx 默认 `proxy_set_header Host $host` 不会带上端口，Django 拼出的绝对地址会缺端口
+# （扫码/点链接都会落到 80 端口打不开），分享二维码等对外链接按此补回端口。
+# 若对外走 80/443（域名直连），设为空字符串即可不补端口。
+PUBLIC_SITE_PORT = os.getenv('PUBLIC_SITE_PORT', '8090').strip()
