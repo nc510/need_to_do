@@ -1,0 +1,191 @@
+{% load static %}
+{# 系统公告展示片段：滚动条（scroll）+ 公告板（static），由 context processor 注入 #}
+{% if site_announcements.scroll or site_announcements.static %}
+<style>
+    /* ===== 系统公告：滚动条 ===== */
+    .ann-ticker {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        padding: 10px 14px;
+        margin-bottom: 18px;
+        overflow: hidden;
+    }
+
+    .ann-ticker-label {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 999px;
+        padding: 4px 12px;
+        white-space: nowrap;
+    }
+
+    .ann-ticker-viewport {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+        mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+    }
+
+    .ann-ticker-track {
+        display: flex;
+        width: max-content;
+        animation: ann-scroll 36s linear infinite;
+    }
+
+    .ann-ticker:hover .ann-ticker-track {
+        animation-play-state: paused;
+    }
+
+    .ann-ticker-group {
+        display: flex;
+        align-items: center;
+        gap: 56px;
+        padding-right: 56px;
+        white-space: nowrap;
+    }
+
+    .ann-ticker-item {
+        font-size: 14px;
+        color: #2c3e50;
+    }
+
+    @keyframes ann-scroll {
+        from {
+            transform: translateX(0);
+        }
+
+        to {
+            transform: translateX(-50%);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .ann-ticker-track {
+            animation: none;
+        }
+    }
+
+    /* ===== 系统公告：公告板 ===== */
+    .ann-board {
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        padding: 14px 18px 6px;
+        margin-bottom: 18px;
+    }
+
+    .ann-board-head {
+        font-size: 15px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+
+    .ann-board-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .ann-board-item {
+        border-left: 3px solid #667eea;
+        background: #f8f9fc;
+        border-radius: 0 8px 8px 0;
+        padding: 10px 14px;
+        margin-bottom: 10px;
+    }
+
+    .ann-board-item.ann-level-success {
+        border-left-color: #27ae60;
+    }
+
+    .ann-board-item.ann-level-warning {
+        border-left-color: #e67e22;
+    }
+
+    .ann-board-item.ann-level-danger {
+        border-left-color: #e74c3c;
+    }
+
+    .ann-board-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .ann-board-content {
+        font-size: 13px;
+        color: #5b6b7c;
+        line-height: 1.6;
+        margin-top: 4px;
+        white-space: pre-line;
+    }
+
+    .ann-board-date {
+        font-size: 12px;
+        color: #a0aab5;
+        margin-top: 4px;
+    }
+
+    @media (max-width: 600px) {
+        .ann-ticker {
+            padding: 8px 10px;
+        }
+
+        .ann-ticker-item {
+            font-size: 13px;
+        }
+
+        .ann-ticker-group {
+            gap: 36px;
+            padding-right: 36px;
+        }
+    }
+</style>
+
+{% if site_announcements.scroll %}
+<div class="ann-ticker" role="region" aria-label="系统公告滚动条">
+    <span class="ann-ticker-label">📢 公告</span>
+    <div class="ann-ticker-viewport">
+        <div class="ann-ticker-track">
+            <div class="ann-ticker-group">
+                {% for a in site_announcements.scroll %}
+                <span class="ann-ticker-item">{{ a.icon }} {{ a.brief }}</span>
+                {% endfor %}
+            </div>
+            <div class="ann-ticker-group" aria-hidden="true">
+                {% for a in site_announcements.scroll %}
+                <span class="ann-ticker-item">{{ a.icon }} {{ a.brief }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if site_announcements.static %}
+<div class="ann-board" role="region" aria-label="系统公告板">
+    <div class="ann-board-head">📢 系统公告</div>
+    <ul class="ann-board-list">
+        {% for a in site_announcements.static %}
+        <li class="ann-board-item ann-level-{{ a.level }}">
+            <div class="ann-board-title">{{ a.icon }} {{ a.title }}</div>
+            {% if a.content %}<div class="ann-board-content">{{ a.content }}</div>{% endif %}
+            <div class="ann-board-date">{{ a.created_at|date:"Y-m-d" }}</div>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endif %}

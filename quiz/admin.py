@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.http import HttpResponseRedirect
 from django import forms
 from django.db.models import Count
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, SiteConfig
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, SiteConfig, Announcement
 
 admin.site.site_header = '📚 来斩题 - 在线考试系统管理后台'
 admin.site.site_title = '来斩题 - 在线考试系统'
@@ -514,6 +514,71 @@ class NotificationAdmin(admin.ModelAdmin):
     mark_unread.short_description = '标记为未读'
 
 
+class AnnouncementAdmin(admin.ModelAdmin):
+    """系统公告：滚动条 / 公告板两种前台展示形态，按生效时间自动上下架"""
+    list_display = ('title', 'level_badge', 'display_mode', 'is_active',
+                    'sort_order', 'start_at', 'end_at', 'status_badge', 'updated_at')
+    list_filter = ('level', 'display_mode', 'is_active')
+    search_fields = ('title', 'content')
+    list_editable = ('is_active', 'sort_order')
+    ordering = ('sort_order', '-created_at')
+    readonly_fields = ('created_at', 'updated_at', 'status_badge')
+    actions = ['action_enable', 'action_disable']
+    fieldsets = (
+        ('公告内容', {
+            'fields': ('title', 'content', 'level'),
+            'description': '滚动条只展示「标题 + 内容摘要」，适合一句话提示；'
+                           '篇幅较长的公告建议选「公告板」，内容支持换行。',
+        }),
+        ('展示设置', {
+            'fields': ('display_mode', 'is_active', 'sort_order'),
+            'description': '排序数值越小越靠前；停用后前台立即不再展示。',
+        }),
+        ('生效时间（可留空）', {
+            'fields': ('start_at', 'end_at', 'status_badge'),
+            'description': '留空即立即生效 / 长期有效；到达失效时间后前台自动隐藏，无需人工下架。',
+        }),
+        ('记录', {'fields': ('created_at', 'updated_at')}),
+    )
+
+    def level_badge(self, obj):
+        color = {
+            Announcement.LEVEL_INFO: '#667eea',
+            Announcement.LEVEL_SUCCESS: '#27ae60',
+            Announcement.LEVEL_WARNING: '#e67e22',
+            Announcement.LEVEL_DANGER: '#e74c3c',
+        }[obj.level]
+        return format_html(
+            '<span style="background:{};color:#fff;padding:3px 8px;border-radius:4px;">{}</span>',
+            color, obj.get_level_display())
+    level_badge.short_description = '级别'
+    level_badge.admin_order_field = 'level'
+
+    def status_badge(self, obj):
+        """前台是否正在展示：启用 + 在生效时间窗内"""
+        now = timezone.now()
+        if not obj.is_active:
+            state = ('#9e9e9e', '⏸️ 已停用')
+        elif obj.start_at and now < obj.start_at:
+            state = ('#ff9800', '⏳ 未开始')
+        elif obj.end_at and now > obj.end_at:
+            state = ('#f44336', '❌ 已失效')
+        else:
+            state = ('#4caf50', '✅ 展示中')
+        return format_html(
+            '<span style="background:{};color:#fff;padding:3px 8px;border-radius:4px;">{}</span>',
+            state[0], state[1])
+    status_badge.short_description = '前台状态'
+
+    def action_enable(self, request, queryset):
+        queryset.update(is_active=True)
+    action_enable.short_description = '启用所选公告'
+
+    def action_disable(self, request, queryset):
+        queryset.update(is_active=False)
+    action_disable.short_description = '停用所选公告'
+
+
 class ClassAdminAdmin(admin.ModelAdmin):
     list_display = ('class_obj', 'user', 'get_user_email', 'get_user_profile')
     list_filter = ('class_obj',)
@@ -666,3 +731,4 @@ admin.site.register(Chapter, ChapterAdmin)
 admin.site.register(Section, SectionAdmin)
 admin.site.register(KnowledgePoint, KnowledgePointAdmin)
 admin.site.register(Notification, NotificationAdmin)
+admin.site.register(Announcement, AnnouncementAdmin)

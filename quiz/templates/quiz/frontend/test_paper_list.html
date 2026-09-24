@@ -182,6 +182,59 @@
         color: #7f8c8d;
     }
 
+    /* ========== 首页状态条：星币余额 / 会员状态 ========== */
+    .quick-stat-link {
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .quick-stat-link:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.18);
+    }
+
+    .quick-stat-star {
+        border-left-color: #f0b429;
+        background: linear-gradient(135deg, #fffbf0 0%, #fff4d9 100%);
+    }
+
+    .quick-stat-member {
+        border-left-color: #95a5a6;
+        background: linear-gradient(135deg, #f8f9fa 0%, #eef0f3 100%);
+    }
+
+    .quick-stat-member.active {
+        border-left-color: #27ae60;
+        background: linear-gradient(135deg, #f2fcf5 0%, #e6f7ec 100%);
+    }
+
+    .quick-stat-member.pending {
+        border-left-color: #e67e22;
+        background: linear-gradient(135deg, #fffaf2 0%, #fff1dd 100%);
+    }
+
+    .quick-stat-member.expired {
+        border-left-color: #e74c3c;
+        background: linear-gradient(135deg, #fff5f4 0%, #fdecea 100%);
+    }
+
+    .quick-stat-member.active .quick-stat-info strong {
+        color: #1b8a3d;
+    }
+
+    .quick-stat-member.pending .quick-stat-info strong {
+        color: #a5761b;
+    }
+
+    .quick-stat-member.expired .quick-stat-info strong {
+        color: #c0392b;
+    }
+
+    .quick-stat-member.none .quick-stat-info strong {
+        color: #6b7280;
+    }
+
     .quick-actions-row {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -997,6 +1050,9 @@
 {% endblock %}
 
 {% block content %}
+<!-- 系统公告（滚动条 / 公告板，后台可配置） -->
+{% include 'quiz/frontend/_announcement_bar.html' %}
+
 <!-- Hero 横幅 -->
 <section class="hero">
     <h1>
@@ -1057,6 +1113,21 @@
                 <span>累计得分</span>
             </div>
         </div>
+        <a href="{% url 'starcoin:center' %}" class="quick-stat quick-stat-link quick-stat-star" title="前往星币中心">
+            <span class="quick-stat-icon">⭐</span>
+            <div class="quick-stat-info">
+                <strong>{{ star_account.balance|default:"0" }}</strong>
+                <span>星币余额</span>
+            </div>
+        </a>
+        <a href="{% url 'membership:plans' %}" class="quick-stat quick-stat-link quick-stat-member {{ profile.member_status_code }}"
+            title="查看会员状态与续费">
+            <span class="quick-stat-icon">💎</span>
+            <div class="quick-stat-info">
+                <strong>{{ profile.member_status_label }}</strong>
+                <span>{% if profile.member_expire_time and profile.member_status_code == 'active' %}会员到期 {{ profile.member_expire_time|date:"Y-m-d" }}{% else %}会员状态{% endif %}</span>
+            </div>
+        </a>
     </div>
     <div class="quick-actions-row">
         {% if role == 'student' %}

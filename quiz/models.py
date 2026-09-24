@@ -681,3 +681,92 @@ class Notification(models.Model):
         if objs:
             cls.objects.bulk_create(objs)
         return len(objs)
+
+
+# 公告缓存键：前台每次渲染都要读，命中缓存避免重复查库（内容变更由信号失效）
+ANNOUNCEMENTS_CACHE_KEY = 'site_announcements'
+
+
+class Announcement(models.Model):
+    """系统公告：后台发布，前台以滚动条（ticker）或公告板（列表）展示。
+
+    两种展示形态各司其职，互不干扰：
+    - scroll：多条公告横向无缝滚动，适合简短提示（如「今晚 22:00 系统维护」）；
+    - static：卡片式列表，适合篇幅较长、需要反复查看的公告。
+    生效时间留空即长期有效，到期后自动从前台消失（无需人工下架）。
+    """
+
+    LEVEL_INFO = 'info'
+    LEVEL_SUCCESS = 'success'
+    LEVEL_WARNING = 'warning'
+    LEVEL_DANGER = 'danger'
+    LEVEL_CHOICES = [
+        (LEVEL_INFO, '普通（蓝色）'),
+        (LEVEL_SUCCESS, '成功（绿色）'),
+        (LEVEL_WARNING, '提醒（橙色）'),
+        (LEVEL_DANGER, '重要（红色）'),
+    ]
+
+    MODE_SCROLL = 'scroll'
+    MODE_STATIC = 'static'
+    MODE_CHOICES = [
+        (MODE_SCROLL, '滚动条（横向滚动）'),
+        (MODE_STATIC, '公告板（列表展示）'),
+    ]
+
+    LEVEL_ICONS = {
+        LEVEL_INFO: '📢',
+        LEVEL_SUCCESS: '✅',
+        LEVEL_WARNING: '⚠️',
+        LEVEL_DANGER: '🚨',
+    }
+
+    title = models.CharField('公告标题', max_length=100)
+    content = models.TextField('公告内容', blank=True, default='')
+    level = models.CharField('公告级别', max_length=10, choices=LEVEL_CHOICES, default=LEVEL_INFO)
+    display_mode = models.CharField('展示形态', max_length=10, choices=MODE_CHOICES, default=MODE_SCROLL)
+    is_active = models.BooleanField('是否启用', default=True)
+    sort_order = models.IntegerField('排序', default=0, help_text='数值越小越靠前')
+    start_at = models.DateTimeField('生效时间', null=True, blank=True, help_text='留空表示立即生效')
+    end_at = models.DateTimeField('失效时间', null=True, blank=True, help_text='留空表示长期有效')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '系统公告'
+        verbose_name_plural = '系统公告'
+        ordering = ['sort_order', '-created_at']
+
+    def __str__(self):
+        return f'[{self.get_level_display()}] {self.title}'
+
+    @property
+    def icon(self):
+        """按级别取展示图标（模板中直接 {{ a.icon }} 使用）"""
+        return self.LEVEL_ICONS.get(self.level, '📢')
+
+    @property
+    def brief(self):
+        """滚动条文案：标题 +（内容摘要）"""
+        text = (self.content or '').strip().replace('\r', ' ').replace('\n', ' ')
+        if not text:
+            return self.title
+        summary = text[:60] + ('…' if len(text) > 60 else '')
+        return f'{self.title}：{summary}'
+
+    @classmethod
+    def active_now(cls):
+        """当前生效的公告（启用 + 已到生效时间 + 未过失效时间）"""
+        now = timezone.now()
+        return cls.objects.filter(is_active=True).filter(
+            models.Q(start_at__isnull=True) | models.Q(start_at__lte=now)
+        ).filter(
+            models.Q(end_at__isnull=True) | models.Q(end_at__gt=now)
+        )
+
+
+# 公告任何增删改后即时失效缓存，避免前台仍显示旧的滚动条内容
+@receiver(post_save, sender=Announcement)
+@receiver(post_delete, sender=Announcement)
+def invalidate_announcements_cache(sender, **kwargs):
+    cache.delete(ANNOUNCEMENTS_CACHE_KEY)

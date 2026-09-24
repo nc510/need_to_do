@@ -465,6 +465,9 @@ def test_paper_list(request):
         # 错题数只统计当前错题本（已消除/已掌握的题不计入）
         context['wrong_count'] = WrongQuestion.objects.filter(user=user).exclude(review_status='mastered').count()
         context['profile'] = profile
+        # 星币余额：首页状态条展示（账户不存在时按 0 处理，由 services 自动建户）
+        from starcoin.services import get_account
+        context['star_account'] = get_account(user)
         # 正确率：与榜单同一口径（答对题次 / 实际作答题次，未作答的题不计入分母），
         # 直接读 Profile 冗余计数，保证与正确率榜显示的数值完全一致
         context['accuracy_rate'] = accuracy_percent(profile.answered_correct, profile.answered_total)

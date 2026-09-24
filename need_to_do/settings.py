@@ -84,6 +84,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'quiz.context_processors.unread_notifications',
+                'quiz.context_processors.site_announcements',
             ],
         },
     },
@@ -369,6 +370,17 @@ SIMPLEUI_CONFIG = {
                     'name': '📝 班级申请',
                     'icon': 'fa-solid fa-file-signature',
                     'url': 'quiz/classapplication/'
+                }
+            ]
+        },
+        {
+            'name': '📢 公告管理',
+            'icon': 'fa-solid fa-bullhorn',
+            'models': [
+                {
+                    'name': '📢 系统公告',
+                    'icon': 'fa-solid fa-bullhorn',
+                    'url': 'quiz/announcement/'
                 }
             ]
         },
