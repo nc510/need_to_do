@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from quiz.models import Profile
+from starcoin.models import StarRechargeOrder
 
 from .alipay_client import build_pay_url, get_alipay
 from .models import Order, Plan, RechargeConfig
@@ -88,7 +89,14 @@ def alipay_return(request):
     因此这里用 alipay.trade.query 主动确认，保证会员能正常开通。
     """
     params, signature = _split_sign_params(request.GET)
-    order = Order.objects.filter(order_no=params.get('out_trade_no', '')).first()
+    order_no = params.get('out_trade_no', '')
+
+    # 星币充值订单（SC 前缀）与会员订单共用同一套支付宝回调地址，按订单号前缀分流
+    if order_no.startswith(StarRechargeOrder.ORDER_NO_PREFIX):
+        from starcoin.views import alipay_return as starcoin_alipay_return
+        return starcoin_alipay_return(request)
+
+    order = Order.objects.filter(order_no=order_no).first()
 
     if not signature:
         return render(request, 'membership/result.html', {
@@ -129,6 +137,13 @@ def alipay_return(request):
 def alipay_notify(request):
     """异步通知：验签 -> 校验金额 -> 幂等履约。"""
     params, signature = _split_sign_params(request.POST)
+    order_no = params.get('out_trade_no', '')
+
+    # 星币充值订单按前缀分流到星币侧完成验签与履约（两套订单共用同一通知地址）
+    if order_no.startswith(StarRechargeOrder.ORDER_NO_PREFIX):
+        from starcoin.views import alipay_notify as starcoin_alipay_notify
+        return starcoin_alipay_notify(request)
+
     if not signature:
         return HttpResponse('failure')
 

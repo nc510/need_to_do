@@ -1,0 +1,216 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}赠送星币 / 道具 | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .gift-wrap { max-width: 960px; }
+    .gift-card {
+        background: #fff; border: 1px solid #e3e6f0; border-radius: 6px;
+        padding: 20px 24px; margin-bottom: 18px;
+    }
+    .gift-card > h2 {
+        font-size: 15px; color: #2c3e50; margin: 0 0 14px;
+        padding-bottom: 8px; border-bottom: 1px solid #f0f2f6; font-weight: 600;
+    }
+    .gift-tip {
+        background: #f8f9fc; border-left: 3px solid #667eea; padding: 10px 14px;
+        color: #5a6474; font-size: 13px; line-height: 1.7; border-radius: 0 4px 4px 0;
+        margin-bottom: 18px;
+    }
+    .gift-row { margin-bottom: 18px; }
+    .gift-row > label {
+        display: block; font-weight: 600; color: #2c3e50;
+        margin-bottom: 6px; font-size: 13px;
+    }
+    .gift-row textarea,
+    .gift-row input[type="text"],
+    .gift-row input[type="number"],
+    .gift-row select {
+        width: 100%; max-width: 560px; padding: 6px 8px;
+        border: 1px solid #d5dae3; border-radius: 4px;
+        font-size: 13px; box-sizing: border-box; background: #fff;
+    }
+    .gift-row select[multiple] { padding: 4px; }
+    /* 班级多选：用复选框列表，勾选/取消勾选都是点击一下，不需要按住 Ctrl */
+    #id_classes {
+        max-width: 560px; max-height: 220px; overflow: auto;
+        margin: 0; padding: 10px 12px; list-style: none;
+        border: 1px solid #d5dae3; border-radius: 4px; background: #fff;
+    }
+    #id_classes li { margin: 0 0 6px; }
+    #id_classes li:last-child { margin-bottom: 0; }
+    #id_classes label {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin: 0; font-size: 13px; font-weight: 400;
+        color: #2c3e50; cursor: pointer;
+    }
+    #id_classes input[type="checkbox"] { margin: 0; cursor: pointer; }
+    .gift-toolbar { margin-bottom: 14px; }
+    .gift-back {
+        display: inline-block; padding: 7px 16px; font-size: 13px;
+        color: #2c3e50; background: #fff; text-decoration: none;
+        border: 1px solid #d5dae3; border-radius: 4px;
+    }
+    .gift-back:hover { background: #f3f5f9; border-color: #b9c0cc; }
+    .gift-row .help {
+        color: #8a94a6; font-size: 12px; margin-top: 5px; line-height: 1.6;
+        max-width: 640px;
+    }
+    .gift-row .errorlist, .errlist { color: #c0392b; font-size: 12px; margin: 0 0 6px; }
+    .gift-submit {
+        background: #4caf50; color: #fff; border: none; padding: 10px 30px;
+        border-radius: 4px; font-size: 14px; cursor: pointer;
+    }
+    .gift-submit:hover { background: #43a047; }
+    .gift-summary { font-size: 14px; color: #2c3e50; margin: 0 0 10px; }
+    .gift-ok { color: #2e7d32; }
+    .gift-bad { color: #c0392b; }
+    .gift-problems {
+        background: #fff8e1; border: 1px solid #ffeeba; border-radius: 4px;
+        padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #856404;
+    }
+    .gift-problems ul { margin: 6px 0 0; padding-left: 20px; line-height: 1.7; }
+    .gift-list-box { border: 1px solid #eef0f5; border-radius: 4px; margin-bottom: 12px; }
+    .gift-list-head {
+        background: #f8f9fc; padding: 8px 14px; font-size: 13px;
+        font-weight: 600; color: #2c3e50; border-bottom: 1px solid #eef0f5;
+    }
+    .gift-list-body { padding: 10px 14px; max-height: 240px; overflow: auto; }
+    .gift-chip {
+        display: inline-block; background: #eef7ee; color: #2e7d32;
+        border-radius: 20px; padding: 2px 10px; margin: 0 6px 6px 0; font-size: 12px;
+    }
+    .gift-fail-list {
+        margin: 0; padding: 10px 14px 10px 32px; font-size: 13px;
+        color: #c0392b; line-height: 1.8; max-height: 240px; overflow: auto;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url 'admin:starcoin_staraccount_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; 赠送星币 / 道具
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="gift-wrap">
+
+<div class="gift-toolbar">
+    <a class="gift-back" href="{% url 'admin:starcoin_staraccount_changelist' %}">← 返回星币账户列表</a>
+</div>
+
+{% if result %}
+<div class="gift-card">
+    <h2>{% if result.executed %}发放结果{% else %}未能发放{% endif %}</h2>
+
+    {% if result.executed %}
+        <p class="gift-summary">
+            本次赠送：{% if result.coins %}<b>{{ result.coins }}</b> 星币{% endif %}{% if result.coins and result.item %} ＋ {% endif %}{% if result.item %}<b>{{ result.item.name }}</b> × {{ result.quantity }}{% endif %}{% if result.reason %}（原因：{{ result.reason }}）{% endif %}
+        </p>
+        <p class="gift-summary">
+            成功 <b class="gift-ok">{{ result.success|length }}</b> 人{% if result.failed %}，失败 <b class="gift-bad">{{ result.failed|length }}</b> 人{% endif %}{% if result.notified %}，已给这些用户发送站内通知 🔔{% endif %}
+        </p>
+    {% else %}
+        <p class="gift-summary gift-bad">没有解析到任何有效的接收用户，未做任何发放。</p>
+    {% endif %}
+
+    {% if result.problems %}
+    <div class="gift-problems">
+        <div>⚠️ 以下名单未处理（请修正后重新提交）：</div>
+        <ul>
+            {% for problem in result.problems %}<li>{{ problem }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if result.success %}
+    <div class="gift-list-box">
+        <div class="gift-list-head">✅ 已发放（{{ result.success|length }} 人）</div>
+        <div class="gift-list-body">
+            {% for user in result.success %}<span class="gift-chip">{{ user.username }}{% if user.first_name %}（{{ user.first_name }}）{% endif %}</span>{% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if result.failed %}
+    <div class="gift-list-box">
+        <div class="gift-list-head">❌ 发放失败（{{ result.failed|length }} 人）</div>
+        <ul class="gift-fail-list">
+            {% for user, error in result.failed %}<li><b>{{ user.username }}</b>：{{ error }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <div class="gift-card">
+        <h2>赠送星币 / 道具</h2>
+
+        <div class="gift-tip">
+            用于针对性奖励与补偿：单人只需填一个用户名；批量可以粘贴多行名单，或直接勾选班级。<br>
+            星币与道具可同时赠送（填其中一项即可）。发放记录会写入星币流水与兑换记录，可随时对账。<br>
+            发放成功后会自动给受赠用户发送站内通知（用户登录后在「我的通知 🔔」里可见，含赠送内容与原因）。
+        </div>
+
+        {{ form.non_field_errors }}
+
+        <div class="gift-row">
+            <label for="{{ form.users.id_for_label }}">{{ form.users.label }}</label>
+            {{ form.users.errors }}
+            {{ form.users }}
+            <div class="help">{{ form.users.help_text }}</div>
+        </div>
+
+        <div class="gift-row">
+            <label for="{{ form.classes.id_for_label }}">{{ form.classes.label }}</label>
+            {{ form.classes.errors }}
+            {{ form.classes }}
+            <div class="help">{{ form.classes.help_text }}</div>
+        </div>
+
+        <div class="gift-row">
+            <label for="{{ form.coins.id_for_label }}">{{ form.coins.label }}</label>
+            {{ form.coins.errors }}
+            {{ form.coins }}
+            <div class="help">{{ form.coins.help_text }}</div>
+        </div>
+
+        <div class="gift-row">
+            <label for="{{ form.item.id_for_label }}">{{ form.item.label }}</label>
+            {{ form.item.errors }}
+            {{ form.item }}
+            <div class="help">{{ form.item.help_text }}</div>
+        </div>
+
+        <div class="gift-row">
+            <label for="{{ form.quantity.id_for_label }}">{{ form.quantity.label }}</label>
+            {{ form.quantity.errors }}
+            {{ form.quantity }}
+            <div class="help">{{ form.quantity.help_text }}</div>
+        </div>
+
+        <div class="gift-row">
+            <label for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>
+            {{ form.reason.errors }}
+            {{ form.reason }}
+            <div class="help">{{ form.reason.help_text }}</div>
+        </div>
+
+        <button type="submit" class="gift-submit"
+                onclick="return confirm('确认按以上配置发放？发放后星币/道具立即到账。');">
+            🎁 确认发放
+        </button>
+    </div>
+</form>
+
+</div>
+{% endblock %}

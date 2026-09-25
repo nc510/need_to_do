@@ -1,0 +1,18 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+    <li>
+        <a href="{% url 'admin:starcoin_gift' %}" class="addlink"
+           style="background: #4caf50; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block; margin-right: 10px;">
+            🎁 赠送星币 / 道具
+        </a>
+    </li>
+    <li>
+        <a href="{% url 'admin:starcoin_summary' %}" class="addlink"
+           style="background: #417690; color: white; padding: 10px 15px; border-radius: 4px; text-decoration: none; display: inline-block; margin-right: 10px;">
+            📊 统计汇总
+        </a>
+    </li>
+    {{ block.super }}
+{% endblock %}
