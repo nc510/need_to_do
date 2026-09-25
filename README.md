@@ -100,7 +100,7 @@ need_to_do/
 | DJANGO_DEBUG | 调试模式 | False |
 | DJANGO_ALLOWED_HOSTS | 允许的主机 | * |
 | DB_NAME | 数据库名 | need_to_do |
-| DB_USER | 数据库用户名 | root |
+| DB_USER | 数据库用户名 | dba_admin |
 | DB_PASSWORD | 数据库密码 | - |
 | DB_HOST | 数据库主机 | 127.0.0.1 |
 | DB_PORT | 数据库端口 | 3306 |

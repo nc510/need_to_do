@@ -1,5 +1,5 @@
 -- MySQL内网访问账号配置脚本
--- 执行方式: mysql -u root -p < mysql_internal_access.sql
+-- 执行方式: mysql -u dba_admin -p < mysql_internal_access.sql
 -- 或者直接在Navicat/命令行执行
 
 -- 创建专门用于内网开发的账号

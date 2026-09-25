@@ -29,7 +29,7 @@
 
 | 账号 | 权限 | 用途 |
 |------|------|------|
-| `root` | ALL | 服务器管理 |
+| `dba_admin` | ALL | 服务器管理与连接（root 已停用） |
 
 ---
 
@@ -124,7 +124,7 @@ python manage.py migrate quiz 0001_initial
 mysqlbinlog --start-datetime="2024-01-01 00:00:00" mysql-bin.000001 > recovery.sql
 
 # 2. 恢复数据
-mysql -u root -p need_to_do < recovery.sql
+mysql -u dba_admin -p need_to_do < recovery.sql
 ```
 
 ### 误执行 DDL 恢复

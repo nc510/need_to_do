@@ -100,7 +100,7 @@ DATABASES = {
     'default': {
         'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
         'NAME': os.getenv('DB_NAME', 'need_to_do'),
-        'USER': os.getenv('DB_USER', 'root'),
+        'USER': os.getenv('DB_USER', 'dba_admin'),
         # P2-9：默认密码改空占位，真实密码必须经 .env 的 DB_PASSWORD 提供
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', '127.0.0.1'),

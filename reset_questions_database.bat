@@ -4,8 +4,8 @@ title Database Reset Tool
 
 set "MYSQL_PATH=C:\Program Files\MySQL\MySQL Server 5.7\bin"
 set "DB_NAME=need_to_do"
-set "DB_USER=root"
-set "DB_PASS=Netsky121666880!"
+set "DB_USER=dba_admin"
+set "DB_PASS=Netsky88!"
 
 echo ============================================
 echo   Question Database Reset Tool
