@@ -486,6 +486,13 @@ ORDER_SYNC_MIN_AGE_SECONDS = int(os.getenv('ORDER_SYNC_MIN_AGE_SECONDS', '60'))
 # 位于 nginx 等反向代理之后时，据此识别客户端的原始协议（https）
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# Referrer 策略：百度统计靠 Referer 识别流量来源。
+# Django 3.1+ SecurityMiddleware 默认下发 Referrer-Policy: same-origin，
+# 跨域请求（hm.js 上报到 hm.baidu.com）不带 Referer，
+# 百度统计检测会报「referrer 被禁用」，来源全部落进「直接访问」。
+# origin：同源/跨域都发送源站信息（协议+域名+端口），百度统计可正常识别来源。
+SECURE_REFERRER_POLICY = os.getenv('DJANGO_SECURE_REFERRER_POLICY', 'origin')
+
 # 对外访问端口（nginx 监听端口）
 # nginx 默认 `proxy_set_header Host $host` 不会带上端口，Django 拼出的绝对地址会缺端口
 # （扫码/点链接都会落到 80 端口打不开），分享二维码等对外链接按此补回端口。
