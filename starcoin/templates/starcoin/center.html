@@ -7,7 +7,7 @@
 {% block content %}
 <div class="star-header">
     <h1>⭐ 星币中心</h1>
-    <p>充值或完成任务赚取星币，兑换心仪道具</p>
+    <p>完成任务或兑换卡密赚取星币，兑换心仪道具</p>
 </div>
 
 <div class="star-hero">
@@ -19,7 +19,7 @@
             <span class="value">+{{ account.active_earned }}</span>
         </div>
         <div class="star-substat">
-            <span class="label">充值累计</span>
+            <span class="label">兑换累计</span>
             <span class="value">+{{ account.recharge_earned }}</span>
         </div>
         <div class="star-substat">
@@ -28,7 +28,7 @@
         </div>
     </div>
     <div class="star-hero-actions">
-        <a href="{% url 'starcoin:recharge' %}">💳 充值星币</a>
+        <a href="{% url 'starcoin:recharge' %}">🎫 星币兑换</a>
         <a href="{% url 'starcoin:mall' %}">🛍️ 道具商城</a>
         <a href="{% url 'starcoin:leaderboard' %}">🏅 星耀榜</a>
     </div>
@@ -36,6 +36,7 @@
 
 <div class="star-nav">
     <a href="{% url 'starcoin:tasks' %}"><span class="ico">📋</span>任务中心</a>
+    <a href="{% url 'starcoin:recharge' %}"><span class="ico">🎫</span>星币兑换</a>
     <a href="{% url 'starcoin:mall' %}"><span class="ico">🛍️</span>道具商城</a>
     <a href="{% url 'starcoin:leaderboard' %}"><span class="ico">🏅</span>星耀榜</a>
     <a href="{% url 'starcoin:records' %}"><span class="ico">🧾</span>我的记录{% if pending_redemptions %}（{{ pending_redemptions }} 待发放）{% endif %}</a>

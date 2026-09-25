@@ -1,16 +1,31 @@
 {% extends 'quiz/frontend/base.html' %}
 {% load membership_extras %}
 
-{% block title %}星币充值 - 来斩题{% endblock %}
+{% block title %}星币兑换 - 来斩题{% endblock %}
 
 {% block extra_styles %}{% include 'starcoin/_styles.html' %}{% endblock %}
 
 {% block content %}
 <div class="star-header">
-    <h1>💳 星币充值</h1>
-    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 充值立即到账</p>
+    <h1>🎫 星币兑换</h1>
+    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 卡密兑换后立即到账</p>
 </div>
 
+<div class="star-cardkey">
+    <h3>🔑 卡密兑换</h3>
+    <p class="star-cardkey-desc">
+        在淘宝等渠道购买星币卡密后，在下方输入卡密即可兑换星币。
+    </p>
+    <form method="post" action="{% url 'starcoin:redeem_card' %}" class="star-cardkey-form">
+        {% csrf_token %}
+        <input type="text" name="code" maxlength="64" autocomplete="off"
+            placeholder="请输入卡密，如 ABCD-EFGH-JKMN-PQRS" required>
+        <button type="submit" class="star-btn star-btn-mini">立即兑换</button>
+    </form>
+    <p class="star-cardkey-tip">兑换成功后立即到账，同一个卡密只能使用一次。</p>
+</div>
+
+<h2 class="star-section-title">星币价格说明</h2>
 <div class="star-grid">
     {% for package in packages %}
     <div class="star-card">
@@ -20,10 +35,10 @@
         <div class="star-bonus">
             到账 {{ package.total_coins }} 星币{% if package.bonus_coins %}（含赠送 {{ package.bonus_coins }}）{% else %}&nbsp;{% endif %}
         </div>
-        <a href="{% url 'starcoin:buy' package.id %}" class="star-btn">立即充值</a>
+        <div class="star-card-note">对应「{{ package.total_coins }} 星币」卡密</div>
     </div>
     {% empty %}
-    <div class="star-empty" style="grid-column:1/-1">暂无可用充值套餐，请等待管理员配置</div>
+    <div class="star-empty" style="grid-column:1/-1">暂无星币套餐配置，请等待管理员配置</div>
     {% endfor %}
 </div>
 

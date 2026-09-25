@@ -14,6 +14,7 @@ urlpatterns = [
     path('items/<int:item_id>/use/', views.use_item, name='use_item'),
     path('items/hint/', views.use_hint_card, name='use_hint_card'),
     path('recharge/', views.recharge, name='recharge'),
+    path('recharge/card/redeem/', views.redeem_card, name='redeem_card'),
     path('recharge/buy/<int:package_id>/', views.buy, name='buy'),
     path('pay/<str:order_no>/', views.pay, name='pay'),
     path('alipay/return/', views.alipay_return, name='alipay_return'),

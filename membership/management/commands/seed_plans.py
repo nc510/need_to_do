@@ -5,13 +5,13 @@ from membership.models import Plan
 
 # 按套餐名幂等写入，重复执行不会产生重复数据
 PLANS = [
-    {'name': '月会员', 'price': '9.90', 'duration_days': 30, 'sort_order': 1},
-    {'name': '年会员', 'price': '99.00', 'duration_days': 365, 'sort_order': 2},
+    {'name': '壹月高级功能', 'price': '9.90', 'duration_days': 30, 'sort_order': 1},
+    {'name': '壹年高级功能', 'price': '99.00', 'duration_days': 365, 'sort_order': 2},
 ]
 
 
 class Command(BaseCommand):
-    help = '初始化会员套餐（月会员 / 年会员），可重复执行'
+    help = '初始化高级功能套餐（壹月高级功能 / 壹年高级功能），可重复执行'
 
     @transaction.atomic
     def handle(self, *args, **options):

@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -6,6 +7,12 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
+
+# 卡密字符集：剔除 0/O/1/I/L 等易混淆字符，便于用户手工输入与核对
+CARD_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
+# 卡密分组展示：4 组 × 4 位 = 16 位
+CARD_CODE_GROUPS = 4
+CARD_CODE_GROUP_LEN = 4
 
 
 class Plan(models.Model):
@@ -180,3 +187,82 @@ class Order(models.Model):
     def close(self):
         self.status = self.STATUS_CLOSED
         self.save(update_fields=['status'])
+
+
+class CardKey(models.Model):
+    """卡密：由第三方渠道（如淘宝自动发货）售出，用户在本站兑换对应权益。
+
+    高级功能卡密与星币卡密共用一张表，以 kind 区分：
+    - member：兑换后按 duration_days 开通/续期高级功能；
+    - starcoin：兑换后按 coins 到账星币。
+    卡密为一次性凭证，兑换成功即置为「已使用」，重复兑换会被拒绝。
+    """
+
+    KIND_MEMBER = 'member'
+    KIND_STARCOIN = 'starcoin'
+    KIND_CHOICES = [
+        (KIND_MEMBER, '高级功能卡密'),
+        (KIND_STARCOIN, '星币卡密'),
+    ]
+
+    STATUS_UNUSED = 'unused'
+    STATUS_USED = 'used'
+    STATUS_DISABLED = 'disabled'
+    STATUS_CHOICES = [
+        (STATUS_UNUSED, '未使用'),
+        (STATUS_USED, '已使用'),
+        (STATUS_DISABLED, '已作废'),
+    ]
+
+    # 存储口径：仅大写字母与数字（不含分隔符），兑换时按同一口径规范化后匹配
+    code = models.CharField('卡密', max_length=32, unique=True)
+    kind = models.CharField('卡密类型', max_length=10, choices=KIND_CHOICES, default=KIND_MEMBER)
+    duration_days = models.PositiveIntegerField(
+        '高级功能天数', default=0, help_text='仅高级功能卡密使用')
+    coins = models.PositiveIntegerField(
+        '到账星币', default=0, help_text='仅星币卡密使用')
+    status = models.CharField('状态', max_length=10, choices=STATUS_CHOICES, default=STATUS_UNUSED)
+    batch_no = models.CharField('批次号', max_length=32, blank=True, default='')
+    remark = models.CharField('备注', max_length=100, blank=True, default='')
+    used_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='used_card_keys', verbose_name='使用人')
+    used_at = models.DateTimeField('使用时间', null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_card_keys', verbose_name='生成人')
+    created_at = models.DateTimeField('生成时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '卡密'
+        verbose_name_plural = '卡密'
+        ordering = ['-id']
+        indexes = [models.Index(fields=['batch_no'])]
+
+    def __str__(self):
+        return f'{self.display_code}（{self.get_kind_display()} · {self.benefit_label}）'
+
+    @staticmethod
+    def generate_code():
+        """生成一个随机卡密（16 位，不含易混淆字符）"""
+        return ''.join(
+            secrets.choice(CARD_CODE_ALPHABET)
+            for _ in range(CARD_CODE_GROUPS * CARD_CODE_GROUP_LEN))
+
+    @property
+    def display_code(self):
+        """带分隔符的展示卡密，如 ABCD-EFGH-JKMN-PQRS，便于核对与抄录"""
+        code = self.code or ''
+        size = CARD_CODE_GROUP_LEN
+        return '-'.join(code[i:i + size] for i in range(0, len(code), size))
+
+    @property
+    def benefit_label(self):
+        """该卡密可兑换的权益文案"""
+        if self.kind == self.KIND_MEMBER:
+            return f'高级功能 {self.duration_days} 天'
+        return f'{self.coins} 星币'
+
+    @property
+    def is_usable(self):
+        return self.status == self.STATUS_UNUSED

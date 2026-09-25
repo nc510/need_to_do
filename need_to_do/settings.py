@@ -217,6 +217,11 @@ SIMPLEUI_CONFIG = {
                     'url': 'membership/plan/'
                 },
                 {
+                    'name': '🎫 卡密管理',
+                    'icon': 'fa-solid fa-ticket',
+                    'url': 'membership/cardkey/'
+                },
+                {
                     'name': '🧾 会员订单',
                     'icon': 'fa-solid fa-receipt',
                     'url': 'membership/order/'

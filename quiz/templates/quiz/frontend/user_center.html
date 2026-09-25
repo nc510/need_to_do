@@ -768,10 +768,10 @@
             <span class="arrow">→</span>
         </a>
         <a href="{% url 'starcoin:recharge' %}" class="action-card">
-            <span class="action-icon">💳</span>
+            <span class="action-icon">🎫</span>
             <div class="action-text">
-                <h4>星币充值</h4>
-                <p>充值星币立即到账</p>
+                <h4>星币兑换</h4>
+                <p>使用卡密兑换星币</p>
             </div>
             <span class="arrow">→</span>
         </a>
@@ -927,21 +927,20 @@
             <span>{{ user.last_login|date:"m-d H:i"|default:"首次" }}</span>
         </div>
         <div class="info-item">
-            <label>会员状态</label>
+            <label>高级功能状态</label>
             <span class="member-badge {{ profile.member_status_code }}">{{ profile.member_status_label }}</span>
         </div>
         <div class="info-item">
-            <label>会员开始时间</label>
+            <label>高级功能开始时间</label>
             <span>{{ profile.member_start_time|date:"Y-m-d H:i"|default:"未设置" }}</span>
         </div>
         <div class="info-item">
-            <label>会员到期时间</label>
+            <label>高级功能到期时间</label>
             <span>{{ profile.member_expire_time|date:"Y-m-d H:i"|default:"未设置" }}</span>
         </div>
     </div>
     <div class="member-action">
-        <a href="{% url 'membership:plans' %}" class="member-action-btn">💎
-            {% if profile.member_status_code == 'active' %}续费会员{% else %}开通会员{% endif %}</a>
+        <a href="{% url 'membership:plans' %}" class="member-action-btn">💎 解锁完整高级功能</a>
     </div>
 </div>
 {% endblock %}

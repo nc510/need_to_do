@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -9,14 +10,16 @@ from quiz.models import Profile
 from starcoin.models import StarRechargeOrder
 
 from .alipay_client import build_pay_url, get_alipay
-from .models import Order, Plan, RechargeConfig
+from .models import CardKey, Order, Plan, RechargeConfig
 from .services import (
     STATE_AMOUNT_MISMATCH,
     STATE_PAID,
     TRADE_SUCCESS_STATES,
+    CardKeyError,
     amount_matches,
     is_sync_due,
     mark_order_paid,
+    redeem_card_key,
     sync_order,
 )
 
@@ -33,7 +36,7 @@ def _split_sign_params(raw):
 
 
 def plans(request):
-    """套餐列表"""
+    """高级功能展示页：套餐时长与价格说明 + 卡密兑换入口"""
     profile = None
     if request.user.is_authenticated:
         profile = Profile.objects.filter(user=request.user).first()
@@ -42,6 +45,20 @@ def plans(request):
         'profile': profile,
         'recharge_config': RechargeConfig.get_solo(),
     })
+
+
+@login_required
+@require_POST
+def redeem_card(request):
+    """卡密兑换高级功能：核销第三方渠道（如淘宝自动发货）售出的卡密"""
+    try:
+        _card, detail = redeem_card_key(
+            request.user, request.POST.get('code', ''), kind=CardKey.KIND_MEMBER)
+    except CardKeyError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'🎉 兑换成功！{detail}')
+    return redirect('membership:plans')
 
 
 @login_required

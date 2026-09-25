@@ -12,12 +12,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from membership.alipay_client import build_pay_url, get_alipay
+from membership.models import CardKey
 from membership.services import (
     STATE_AMOUNT_MISMATCH,
     STATE_PAID,
     TRADE_SUCCESS_STATES,
+    CardKeyError,
     amount_matches,
     is_member_active,
+    redeem_card_key,
 )
 from quiz.models import ClassAssignment, Question, TestPaper
 from quiz.utils import (
@@ -390,15 +393,29 @@ def use_hint_card(request):
     })
 
 
-# ===== 充值 =====
+# ===== 星币兑换（价格说明 + 卡密兑换）=====
 
 @login_required
 def recharge(request):
-    """星币充值套餐列表"""
+    """星币兑换页：套餐价格说明 + 卡密兑换入口"""
     return render(request, 'starcoin/recharge.html', {
         'packages': StarPackage.objects.filter(is_active=True),
         'account': get_account(request.user),
     })
+
+
+@login_required
+@require_POST
+def redeem_card(request):
+    """星币卡密兑换：核销第三方渠道（如淘宝自动发货）售出的星币卡密"""
+    try:
+        _card, detail = redeem_card_key(
+            request.user, request.POST.get('code', ''), kind=CardKey.KIND_STARCOIN)
+    except CardKeyError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, f'🎉 兑换成功！{detail}')
+    return redirect('starcoin:recharge')
 
 
 @login_required

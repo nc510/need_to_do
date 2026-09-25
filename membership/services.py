@@ -2,8 +2,10 @@
 
 会员权益落在 quiz.Profile 的 member_start_time / member_expire_time 上，
 不额外维护会员状态表，与站点原有的会员机制保持一致。
+另含卡密（高级功能 / 星币）的生成与兑换：卡密由第三方渠道售出，本站只负责核销。
 """
 
+import re
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -14,7 +16,7 @@ from django.utils import timezone
 from quiz.models import Profile
 
 from .alipay_client import query_trade
-from .models import Order
+from .models import CardKey, Order
 
 # 支付宝中代表支付成功的交易状态
 TRADE_SUCCESS_STATES = ('TRADE_SUCCESS', 'TRADE_FINISHED')
@@ -168,3 +170,110 @@ def sync_pending_orders(limit=None):
         counts['total'] += 1
         counts[state] += 1
     return counts
+
+
+# ===== 卡密 =====
+
+# 卡密生成时的最大重试次数（随机码碰撞概率极低，重试仅作兜底）
+CARD_CODE_MAX_ATTEMPTS = 20
+
+# 规范化时剔除的字符：只保留数字与大写字母，用户输入的空格、连字符、全角符号都会被忽略
+_CARD_CODE_STRIP_RE = re.compile(r'[^0-9A-Z]')
+
+
+class CardKeyError(Exception):
+    """卡密业务异常（卡密无效 / 已使用 / 已作废 / 类型不符等）"""
+
+
+def normalize_card_code(raw):
+    """把用户输入的卡密规范化成存储口径（大写字母 + 数字，忽略空格与连字符）"""
+    return _CARD_CODE_STRIP_RE.sub('', (raw or '').upper())
+
+
+def _unique_card_code():
+    """生成一个库里不存在的随机卡密"""
+    for _ in range(CARD_CODE_MAX_ATTEMPTS):
+        code = CardKey.generate_code()
+        if not CardKey.objects.filter(code=code).exists():
+            return code
+    raise CardKeyError('卡密生成失败，请重试')
+
+
+def generate_card_keys(kind, quantity, *, duration_days=0, coins=0,
+                       remark='', operator=None, batch_no=''):
+    """批量生成卡密，返回 (batch_no, [CardKey])。
+
+    一次生成归属同一个批次号，便于按批次导出给第三方渠道（如淘宝自动发货）上架。
+    """
+    try:
+        quantity = int(quantity)
+    except (TypeError, ValueError):
+        raise CardKeyError('生成数量无效')
+    if quantity <= 0:
+        raise CardKeyError('生成数量必须大于 0')
+    if kind not in dict(CardKey.KIND_CHOICES):
+        raise CardKeyError('卡密类型无效')
+
+    duration_days = int(duration_days or 0)
+    coins = int(coins or 0)
+    if kind == CardKey.KIND_MEMBER and duration_days <= 0:
+        raise CardKeyError('高级功能卡密必须填写大于 0 的有效天数')
+    if kind == CardKey.KIND_STARCOIN and coins <= 0:
+        raise CardKeyError('星币卡密必须填写大于 0 的到账星币')
+
+    batch_no = batch_no or timezone.now().strftime('B%Y%m%d%H%M%S')
+    cards = []
+    with transaction.atomic():
+        for _ in range(quantity):
+            cards.append(CardKey.objects.create(
+                code=_unique_card_code(), kind=kind,
+                duration_days=duration_days if kind == CardKey.KIND_MEMBER else 0,
+                coins=coins if kind == CardKey.KIND_STARCOIN else 0,
+                batch_no=batch_no, remark=remark[:100], created_by=operator))
+    return batch_no, cards
+
+
+@transaction.atomic
+def redeem_card_key(user, raw_code, kind=None):
+    """核销卡密并立即发放权益，返回 (card, detail)。
+
+    kind 非空时校验卡密类型（避免把星币卡密填到高级功能兑换入口）；
+    全程行锁 + 事务，保证同一张卡密并发兑换只会成功一次。
+    """
+    code = normalize_card_code(raw_code)
+    if not code:
+        raise CardKeyError('请输入卡密')
+
+    card = CardKey.objects.select_for_update().filter(code=code).first()
+    if card is None:
+        raise CardKeyError('卡密无效，请核对后重新输入')
+    if kind and card.kind != kind:
+        raise CardKeyError('该卡密不适用于本页面，请到对应的兑换入口使用')
+    if card.status == CardKey.STATUS_DISABLED:
+        raise CardKeyError('该卡密已作废，请联系客服')
+    if card.status == CardKey.STATUS_USED:
+        used_at = timezone.localtime(card.used_at).strftime('%Y-%m-%d %H:%M') if card.used_at else ''
+        raise CardKeyError(f'该卡密已于 {used_at} 使用过，不能重复兑换')
+
+    if card.kind == CardKey.KIND_MEMBER:
+        if card.duration_days <= 0:
+            raise CardKeyError('该卡密配置有误，请联系客服')
+        expire = grant_membership_days(user, card.duration_days)
+        detail = (f'高级功能已延长 {card.duration_days} 天，'
+                  f'到期时间 {timezone.localtime(expire):%Y-%m-%d %H:%M}')
+    else:
+        if card.coins <= 0:
+            raise CardKeyError('该卡密配置有误，请联系客服')
+        # 延迟导入：starcoin.services 依赖本模块，模块级导入会形成循环引用
+        from starcoin.models import StarTransaction
+        from starcoin.services import earn
+        earn(user, card.coins, StarTransaction.KIND_RECHARGE, recharge=True,
+             ref_type='card_key', ref_id=card.code,
+             remark=f'卡密兑换-{card.benefit_label}')
+        detail = f'已到账 {card.coins} 星币'
+
+    card.status = CardKey.STATUS_USED
+    card.used_by = user
+    card.used_at = timezone.now()
+    card.save(update_fields=['status', 'used_by', 'used_at'])
+    return card, detail

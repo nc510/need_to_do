@@ -1,20 +1,20 @@
 {% extends 'quiz/frontend/base.html' %}
 {% load membership_extras %}
 
-{% block title %}会员套餐 - 来斩题{% endblock %}
+{% block title %}高级功能 - 来斩题{% endblock %}
 
 {% block extra_styles %}{% include 'membership/_styles.html' %}{% endblock %}
 
 {% block content %}
 <div class="mem-header">
-    <h1>💎 会员套餐</h1>
-    <p>开通会员，畅享更多学习功能</p>
+    <h1>💎 高级功能</h1>
+    <p>解锁完整高级功能，畅享更多学习权益</p>
 </div>
 
 {% if profile %}
 <div class="mem-status">
     <div>
-        <div class="mem-status-label">当前会员状态</div>
+        <div class="mem-status-label">当前高级功能状态</div>
         <div class="mem-status-value">
             <span>{{ profile.member_status_label }}</span>
             {% if profile.member_expire_time %}
@@ -28,14 +28,35 @@
 
 {% if recharge_config.is_discounted %}
 <div class="mem-promo">
-    🎉 限时优惠：会员充值享 <strong>{{ recharge_config.rate_label }}</strong>，折后价下单立即生效
+    🎉 限时优惠：高级功能享 <strong>{{ recharge_config.rate_label }}</strong>，卡密兑换后立即生效
 </div>
 {% else %}
 <div class="mem-promo mem-promo-plain">
-    💎 当前充值折扣：<strong>无折扣</strong>
+    💎 当前价格折扣：<strong>无折扣</strong>
 </div>
 {% endif %}
 
+<div class="mem-cardkey">
+    <h3>🔑 卡密兑换</h3>
+    <p class="mem-cardkey-desc">
+        在淘宝等渠道购买卡密后，在下方输入卡密即可解锁对应时长的高级功能。
+    </p>
+    {% if user.is_authenticated %}
+    <form method="post" action="{% url 'membership:redeem_card' %}" class="mem-cardkey-form">
+        {% csrf_token %}
+        <input type="text" name="code" maxlength="64" autocomplete="off"
+            placeholder="请输入卡密，如 ABCD-EFGH-JKMN-PQRS" required>
+        <button type="submit" class="mem-btn mem-btn-mini">立即兑换</button>
+    </form>
+    <p class="mem-cardkey-tip">兑换成功后立即生效，同一个卡密只能使用一次。</p>
+    {% else %}
+    <p class="mem-cardkey-tip">
+        <a href="{% url 'login' %}">登录</a> 后即可输入卡密兑换。
+    </p>
+    {% endif %}
+</div>
+
+<h2 class="mem-section-title">时长与价格说明</h2>
 <div class="mem-grid">
     {% for plan in plans %}
     <div class="mem-card">
@@ -59,8 +80,7 @@
         <div class="mem-card-origin mem-card-origin-empty"></div>
         {% endif %}
         <div class="mem-card-days">有效期 {{ plan.duration_days }} 天</div>
-        <a href="{% url 'membership:buy' plan.id %}" class="mem-btn">
-            {% if profile.member_status_code == 'active' %}立即续费{% else %}立即开通{% endif %}</a>
+        <div class="mem-card-note">对应「高级功能 {{ plan.duration_days }} 天」卡密</div>
     </div>
     {% empty %}
     <div class="mem-empty">暂无可用套餐，请稍后再来</div>

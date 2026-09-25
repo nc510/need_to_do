@@ -1,0 +1,181 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}批量生成卡密 | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .ck-wrap { max-width: 960px; }
+    .ck-card {
+        background: #fff; border: 1px solid #e3e6f0; border-radius: 6px;
+        padding: 20px 24px; margin-bottom: 18px;
+    }
+    .ck-card > h2 {
+        font-size: 15px; color: #2c3e50; margin: 0 0 14px;
+        padding-bottom: 8px; border-bottom: 1px solid #f0f2f6; font-weight: 600;
+    }
+    .ck-tip {
+        background: #f8f9fc; border-left: 3px solid #667eea; padding: 10px 14px;
+        color: #5a6474; font-size: 13px; line-height: 1.7; border-radius: 0 4px 4px 0;
+        margin-bottom: 18px;
+    }
+    .ck-row { margin-bottom: 18px; }
+    .ck-row > label {
+        display: block; font-weight: 600; color: #2c3e50;
+        margin-bottom: 6px; font-size: 13px;
+    }
+    .ck-row input[type="text"],
+    .ck-row input[type="number"],
+    .ck-row select {
+        width: 100%; max-width: 480px; padding: 6px 8px;
+        border: 1px solid #d5dae3; border-radius: 4px;
+        font-size: 13px; box-sizing: border-box; background: #fff;
+    }
+    .ck-row .help {
+        color: #8a94a6; font-size: 12px; margin-top: 5px; line-height: 1.6;
+        max-width: 640px;
+    }
+    .ck-row .errorlist, .ck-err { color: #c0392b; font-size: 12px; margin: 0 0 6px; }
+    .ck-submit {
+        background: #4caf50; color: #fff; border: none; padding: 10px 30px;
+        border-radius: 4px; font-size: 14px; cursor: pointer;
+    }
+    .ck-submit:hover { background: #43a047; }
+    .ck-toolbar { margin-bottom: 14px; }
+    .ck-back {
+        display: inline-block; padding: 7px 16px; font-size: 13px;
+        color: #2c3e50; background: #fff; text-decoration: none;
+        border: 1px solid #d5dae3; border-radius: 4px; margin-right: 8px;
+    }
+    .ck-back:hover { background: #f3f5f9; border-color: #b9c0cc; }
+    .ck-summary { font-size: 14px; color: #2c3e50; margin: 0 0 10px; }
+    .ck-ok { color: #2e7d32; font-weight: 600; }
+    .ck-code-box {
+        width: 100%; box-sizing: border-box; height: 240px; padding: 12px 14px;
+        border: 1px solid #eef0f5; border-radius: 4px; background: #fbfcfe;
+        font-family: Consolas, Monaco, monospace; font-size: 13px; line-height: 1.8;
+        color: #2c3e50; resize: vertical;
+    }
+    .ck-copy {
+        margin-top: 10px; background: #417690; color: #fff; border: none;
+        padding: 8px 18px; border-radius: 4px; font-size: 13px; cursor: pointer;
+    }
+    .ck-copy:hover { background: #34576a; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url 'admin:membership_cardkey_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; 批量生成卡密
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="ck-wrap">
+
+<div class="ck-toolbar">
+    <a class="ck-back" href="{% url 'admin:membership_cardkey_changelist' %}">← 返回卡密列表</a>
+</div>
+
+{% if result %}
+<div class="ck-card">
+    <h2>生成结果</h2>
+    <p class="ck-summary">
+        已生成 <b class="ck-ok">{{ result.count }}</b> 张卡密，批次号
+        <b>{{ result.batch_no }}</b>（{{ result.cards.0.get_kind_display }} ·
+        {{ result.cards.0.benefit_label }}）
+    </p>
+    <p class="ck-summary">
+        可直接复制下方卡密上架；
+        <a href="{% url 'admin:membership_cardkey_changelist' %}?batch_no={{ result.batch_no }}">
+            前往列表页按批次导出 txt
+        </a>。
+    </p>
+    <textarea class="ck-code-box" id="ckCodes" readonly>{% for card in result.cards %}{{ card.code }}
+{% endfor %}</textarea>
+    <button type="button" class="ck-copy" id="ckCopy">📋 复制全部卡密</button>
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <div class="ck-card">
+        <h2>批量生成卡密</h2>
+
+        <div class="ck-tip">
+            卡密用于第三方渠道（如淘宝自动发货）售出后由用户在本站兑换：<br>
+            · <b>高级功能卡密</b>：兑换后按填写天数开通/续期高级功能；<br>
+            · <b>星币卡密</b>：兑换后按填写数量到账星币。<br>
+            卡密为一次性凭证，兑换成功即失效；导出格式为每行一张（不含分隔符）。
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="ck-err">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="ck-row">
+            <label for="{{ form.kind.id_for_label }}">{{ form.kind.label }}</label>
+            {{ form.kind.errors }}
+            {{ form.kind }}
+            <div class="help">{{ form.kind.help_text }}</div>
+        </div>
+
+        <div class="ck-row">
+            <label for="{{ form.duration_days.id_for_label }}">{{ form.duration_days.label }}</label>
+            {{ form.duration_days.errors }}
+            {{ form.duration_days }}
+            <div class="help">{{ form.duration_days.help_text }}</div>
+        </div>
+
+        <div class="ck-row">
+            <label for="{{ form.coins.id_for_label }}">{{ form.coins.label }}</label>
+            {{ form.coins.errors }}
+            {{ form.coins }}
+            <div class="help">{{ form.coins.help_text }}</div>
+        </div>
+
+        <div class="ck-row">
+            <label for="{{ form.quantity.id_for_label }}">{{ form.quantity.label }}</label>
+            {{ form.quantity.errors }}
+            {{ form.quantity }}
+            <div class="help">{{ form.quantity.help_text }}</div>
+        </div>
+
+        <div class="ck-row">
+            <label for="{{ form.remark.id_for_label }}">{{ form.remark.label }}</label>
+            {{ form.remark.errors }}
+            {{ form.remark }}
+            <div class="help">{{ form.remark.help_text }}</div>
+        </div>
+
+        <button type="submit" class="ck-submit"
+                onclick="return confirm('确认按以上配置生成卡密？生成后可导出上架。');">
+            🎫 确认生成
+        </button>
+    </div>
+</form>
+
+<script>
+    (function () {
+        var button = document.getElementById('ckCopy');
+        var box = document.getElementById('ckCodes');
+        if (!button || !box) { return; }
+        button.addEventListener('click', function () {
+            box.removeAttribute('readonly');
+            box.select();
+            box.setSelectionRange(0, box.value.length);
+            var ok = false;
+            try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+            box.setAttribute('readonly', 'readonly');
+            button.textContent = ok ? '✅ 已复制' : '复制失败，请手动全选复制';
+            setTimeout(function () { button.textContent = '📋 复制全部卡密'; }, 2000);
+        });
+    })();
+</script>
+
+</div>
+{% endblock %}

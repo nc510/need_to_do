@@ -1121,11 +1121,11 @@
             </div>
         </a>
         <a href="{% url 'membership:plans' %}" class="quick-stat quick-stat-link quick-stat-member {{ profile.member_status_code }}"
-            title="查看会员状态与续费">
+            title="查看高级功能状态与卡密兑换">
             <span class="quick-stat-icon">💎</span>
             <div class="quick-stat-info">
                 <strong>{{ profile.member_status_label }}</strong>
-                <span>{% if profile.member_expire_time and profile.member_status_code == 'active' %}会员到期 {{ profile.member_expire_time|date:"Y-m-d" }}{% else %}会员状态{% endif %}</span>
+                <span>{% if profile.member_expire_time and profile.member_status_code == 'active' %}高级功能到期 {{ profile.member_expire_time|date:"Y-m-d" }}{% else %}高级功能{% endif %}</span>
             </div>
         </a>
     </div>

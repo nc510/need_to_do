@@ -7,14 +7,14 @@
 {% block content %}
 <div class="star-header">
     <h1>🧾 我的星币记录</h1>
-    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 活跃累计 {{ account.active_earned }} · 充值累计 {{ account.recharge_earned }}</p>
+    <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 活跃累计 {{ account.active_earned }} · 兑换累计 {{ account.recharge_earned }}</p>
 </div>
 
 <h2 class="star-section-title">兑换记录</h2>
 {% if redemptions %}
 <table class="star-table">
     <thead>
-        <tr><th>时间</th><th>道具</th><th>数量</th><th>使用情况</th><th>消耗星币</th><th>会员折扣</th><th>状态</th><th>处理备注</th></tr>
+        <tr><th>时间</th><th>道具</th><th>数量</th><th>使用情况</th><th>消耗星币</th><th>高级功能折扣</th><th>状态</th><th>处理备注</th></tr>
     </thead>
     <tbody>
         {% for r in redemptions %}

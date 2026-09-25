@@ -9,10 +9,10 @@
     <h1>🛍️ 星币道具商城</h1>
     <p>当前余额 <strong>{{ account.balance }}</strong> 星币 · 兑换后按道具类型自动发放</p>
     {% if is_member %}
-    <p class="star-member-bar">💎 会员生效中，兑换带折扣道具自动按会员价扣星币</p>
+    <p class="star-member-bar">💎 高级功能生效中，兑换带折扣道具自动按折扣价扣星币</p>
     {% else %}
     <p class="star-member-bar star-member-bar-off">
-        💎 开通会员即享道具折扣，<a href="{% url 'membership:plans' %}">立即开通 ↗</a>
+        💎 解锁完整高级功能即享道具折扣，<a href="{% url 'membership:plans' %}">立即解锁 ↗</a>
     </p>
     {% endif %}
 </div>
@@ -31,9 +31,9 @@
         {% if item.is_member_discounted %}
         <div class="star-member">
             {% if is_member %}
-            💎 会员 {{ item.member_discount_label }} · 已省 {{ item.member_saved_coins }} 星币
+            💎 高级功能 {{ item.member_discount_label }} · 已省 {{ item.member_saved_coins }} 星币
             {% else %}
-            💎 会员价 {{ item.member_price_coins }} 星币 · 开通立省 {{ item.member_saved_coins }} 星币
+            💎 折扣价 {{ item.member_price_coins }} 星币 · 解锁立省 {{ item.member_saved_coins }} 星币
             {% endif %}
         </div>
         {% endif %}
