@@ -370,18 +370,37 @@
         }
     </style>
 
-    <form id="test_paper_form" method="POST" action="{% url 'submit_test_paper' test_paper.id %}"
+    <form id="test_paper_form" method="POST"
+        action="{% url 'submit_test_paper' test_paper.id %}?page={{ page_obj.number }}"
         data-hint-source="paper" data-hint-ref="{{ test_paper.id }}">
         {% csrf_token %}
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="paper-pagination">
+            {% if page_obj.has_previous %}
+            <button type="submit" name="nav_page" value="{{ page_obj.previous_page_number }}"
+                class="page-nav-btn">← 上一页</button>
+            {% else %}
+            <button type="button" class="page-nav-btn" disabled>← 上一页</button>
+            {% endif %}
+            <span class="page-indicator">第 {{ page_obj.number }}/{{ page_obj.paginator.num_pages }} 页
+                · 本页 {{ questions|length }} 题 · 全卷 {{ total_questions }} 题</span>
+            {% if page_obj.has_next %}
+            <button type="submit" name="nav_page" value="{{ page_obj.next_page_number }}"
+                class="page-nav-btn">下一页 →</button>
+            {% else %}
+            <button type="button" class="page-nav-btn" disabled>下一页 →</button>
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="question-list">
-            {% for question in test_paper.questions.all %}
+            {% for question in questions %}
             <div class="question-item" data-question-id="{{ question.id }}"
-                data-question-index="{{ forloop.counter0 }}">
+                data-question-index="{{ page_start_index|add:forloop.counter0 }}">
                 <div class="question-header">
                     <span class="question-type">
                         {% if question.type == 1 %}单选题{% elif question.type == 2 %}多选题{% else %}判断题{% endif %}
                     </span>
-                    <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ forloop.counter }}]</span>
+                    <span style="color: #2ecc71; font-weight: bold; margin-right: 10px;">[{{ page_start_index|add:forloop.counter }}]</span>
                     {{ question.content }}
                 </div>
 
@@ -437,7 +456,7 @@
         <!-- 逐题答题导航 -->
         <div class="question-navigation">
             <button type="button" id="prev-question" disabled>上一题</button>
-            <span id="question-counter">1/{{ test_paper.questions.count }}</span>
+            <span id="question-counter">1/{{ questions|length }}</span>
             <button type="button" id="next-question">下一题</button>
         </div>
         <style>
@@ -445,7 +464,60 @@
                 margin: 20px 0;
                 text-align: center;
             }
+
+            /* 分页答题导航 */
+            .paper-pagination {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                margin: 18px 0;
+                padding: 12px;
+                background: #fafafa;
+                border-radius: 10px;
+            }
+
+            .paper-pagination .page-nav-btn {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #fff;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-size: 14px;
+                cursor: pointer;
+            }
+
+            .paper-pagination .page-nav-btn:disabled {
+                background: #e0e0e0;
+                color: #999;
+                cursor: not-allowed;
+            }
+
+            .paper-pagination .page-indicator {
+                color: #666;
+                font-size: 13px;
+            }
         </style>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="paper-pagination">
+            {% if page_obj.has_previous %}
+            <button type="submit" name="nav_page" value="{{ page_obj.previous_page_number }}"
+                class="page-nav-btn">← 上一页</button>
+            {% else %}
+            <button type="button" class="page-nav-btn" disabled>← 上一页</button>
+            {% endif %}
+            <span class="page-indicator">第 {{ page_obj.number }}/{{ page_obj.paginator.num_pages }} 页
+                · 本页 {{ questions|length }} 题 · 全卷 {{ total_questions }} 题</span>
+            {% if page_obj.has_next %}
+            <button type="submit" name="nav_page" value="{{ page_obj.next_page_number }}"
+                class="page-nav-btn">下一页 →</button>
+            {% else %}
+            <button type="button" class="page-nav-btn" disabled>下一页 →</button>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <button type="submit" class="submit-btn">提交答案</button>
     </form>
@@ -571,7 +643,8 @@
                 if (form) {
                     if (!form.dataset.submitted) {
                         form.dataset.submitted = '1';
-                        form.requestSubmit ? form.requestSubmit() : form.submit();
+                        // 用 submit() 交卷：requestSubmit() 可能命中「翻页」按钮而只翻页不交卷
+                        form.submit();
                     }
                 }
                 clearInterval(timer);
@@ -632,9 +705,13 @@
             if (form.dataset.submitted === '1') {
                 return;
             }
+            // 分页翻页按钮：放行由服务端暂存本页答案后跳页，不弹交卷确认
+            if (e.submitter && e.submitter.name === 'nav_page') {
+                return;
+            }
             e.preventDefault();
 
-            // 未作答题号：交卷前逐一提示，避免漏题被按答错判分
+            // 未作答题号：交卷前逐一提示当前页漏题（其他页答案已由草稿暂存）
             const unanswered = [];
             document.querySelectorAll('.question-item').forEach(function (item) {
                 if (!item.querySelector('input:checked')) {
@@ -648,7 +725,7 @@
                 const shown = unanswered.slice(0, MAX_SHOW).map(function (n) {
                     return '第' + n + '题';
                 }).join('、');
-                message = '您还有 ' + unanswered.length + ' 题未作答：' + shown
+                message = '本页还有 ' + unanswered.length + ' 题未作答：' + shown
                     + (unanswered.length > MAX_SHOW ? ' 等' : '')
                     + '。\n未作答的题将按答错处理，确定要提交试卷吗？';
             }

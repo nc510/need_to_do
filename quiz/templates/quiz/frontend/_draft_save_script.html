@@ -67,6 +67,16 @@
         return answers;
     }
 
+    // 当前页题目 id 列表：分页答题时后端据此合并（先清本页旧答案再写入），避免覆盖其他页
+    function pageQuestionIds() {
+        var ids = {};
+        document.querySelectorAll('input[type="radio"][name^="question_"], input[type="checkbox"][name^="question_"]').forEach(function (el) {
+            var parts = el.name.split('_');
+            if (parts.length >= 2 && parts[1]) ids[parts[1]] = 1;
+        });
+        return Object.keys(ids);
+    }
+
     function updateStatus() {
         if (!statusEl) return;
         if (dirty) {
@@ -91,6 +101,7 @@
         else if (typeof currentIndex !== 'undefined') idx = currentIndex;
         var fd = new FormData();
         fd.append('answers_json', JSON.stringify(answers));
+        fd.append('page_question_ids', JSON.stringify(pageQuestionIds()));
         fd.append('current_index', String(idx));
         fd.append('mode', mode);
         fd.append('csrfmiddlewaretoken', getCsrf());
@@ -236,6 +247,7 @@
             if (!Object.keys(answers).length) return;
             var fd = new FormData();
             fd.append('answers_json', JSON.stringify(answers));
+            fd.append('page_question_ids', JSON.stringify(pageQuestionIds()));
             fd.append('csrfmiddlewaretoken', getCsrf());
             if (navigator.sendBeacon) {
                 navigator.sendBeacon(SAVE_URL, fd);

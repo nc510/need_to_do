@@ -737,14 +737,14 @@
             <span class="selected-count">已选 <span id="selected-count">0</span> / {{ wrong_questions|length }} 题</span>
         </div>
         <div class="paper-limit-hint" id="paper-limit-hint"
-             data-free-limit="{{ wrong_paper_free_limit }}" data-card-count="{{ wrong_paper_card_count }}"
+             data-question-limit="{{ wrong_paper_max_questions }}" data-card-count="{{ wrong_paper_card_count }}"
              data-card-name="{{ wrong_paper_card.name|default:'组卷卡' }}"
              data-remaining-free="{{ wrong_paper_remaining_free }}"
              data-free-daily-limit="{{ wrong_paper_free_daily_limit }}">
             {% if wrong_paper_is_member %}
-            👑 高级功能不限组卷次数 · 单次最多 {{ wrong_paper_free_limit }} 题
+            👑 高级功能不限组卷次数 · 单次最多 {{ wrong_paper_max_questions }} 题
             {% else %}
-            🎟️ 今日免费组卷剩余 {{ wrong_paper_remaining_free }}/{{ wrong_paper_free_daily_limit }} 次 · 单次最多 {{ wrong_paper_free_limit }} 题
+            🎟️ 今日免费组卷剩余 {{ wrong_paper_remaining_free }}/{{ wrong_paper_free_daily_limit }} 次 · 单次最多 {{ wrong_paper_max_questions }} 题
             {% endif %}
             {% if wrong_paper_card_count %}
             · {{ wrong_paper_card.icon }}「{{ wrong_paper_card.name }}」 ×{{ wrong_paper_card_count }}（用卡当次不限题量）
@@ -978,7 +978,8 @@
 
     // 组卷额度提示：需要用卡时说明原因与消耗（无卡则提示减少选题或去商城）
     var limitHint = document.getElementById('paper-limit-hint');
-    var freeLimit = parseInt(limitHint.dataset.freeLimit, 10) || 0;
+    // 单次免卡题量上限（后台按身份配置，服务端已按当前用户取好）
+    var questionLimit = parseInt(limitHint.dataset.questionLimit, 10) || 0;
     var cardCount = parseInt(limitHint.dataset.cardCount, 10) || 0;
     // 今日剩余免费次数：-1 表示会员不限次数
     var remainingFree = parseInt(limitHint.dataset.remainingFree, 10);
@@ -990,7 +991,7 @@
 
     // 需要用卡：单次超过题量上限，或免费用户今日免费次数已用完
     function needCard(count) {
-        return count > freeLimit || (!unlimitedFree && remainingFree <= 0);
+        return count > questionLimit || (!unlimitedFree && remainingFree <= 0);
     }
 
     function cardReason(count) {
@@ -998,8 +999,8 @@
         if (!unlimitedFree && remainingFree <= 0) {
             reasons.push('今日免费组卷次数已用完（免费用户每天 ' + freeDailyLimit + ' 次）');
         }
-        if (count > freeLimit) {
-            reasons.push('已选 ' + count + ' 题 · 超出单次上限 ' + freeLimit + ' 题');
+        if (count > questionLimit) {
+            reasons.push('已选 ' + count + ' 题 · 超出单次上限 ' + questionLimit + ' 题');
         }
         return reasons.join('；');
     }

@@ -2,8 +2,12 @@
 from .views_common import *  # noqa: F401,F403
 from django.template.loader import render_to_string
 
-# 错题组卷：单次题量上限（持「回响之杖（组卷卡）」时当次不限题量）
-WRONG_PAPER_FREE_LIMIT = 10
+# 错题组卷：单次题量上限的兜底默认值（真实值由后台「错题组卷额度」按身份配置）。
+# 持「回响之杖（组卷卡）」时当次不限题量。
+WRONG_PAPER_FREE_LIMIT = 20
+
+# 公开试卷答题页：每页加载题数。分页加载可降低单次查询与渲染开销，缓解 MySQL 压力。
+PAPER_QUESTIONS_PER_PAGE = 25
 
 
 def _wrong_paper_card_state(user):
@@ -48,16 +52,19 @@ def _wrong_paper_free_used_today(user):
 
 
 def _wrong_paper_quota_state(user):
-    """返回 (是否会员, 每日免费次数上限, 今日剩余免费次数)。
+    """返回 (是否会员, 每日免费次数上限, 今日剩余免费次数, 单次免卡题量上限)。
 
-    会员组卷不限次数，剩余次数用 -1 表示「不限」；上限来自后台「错题组卷额度」。
+    会员组卷不限次数，剩余次数用 -1 表示「不限」；各项上限均来自后台「错题组卷额度」，
+    其中题量上限按身份区分（免费用户 / 高级用户各配一个）。
     """
     from starcoin.models import StarWrongPaperConfig
     from starcoin.services import is_member_active
+    config = StarWrongPaperConfig.get_solo()
     if is_member_active(user):
-        return True, 0, -1
-    limit = StarWrongPaperConfig.get_solo().free_daily_limit
-    return False, limit, max(limit - _wrong_paper_free_used_today(user), 0)
+        return True, 0, -1, config.member_max_questions
+    limit = config.free_daily_limit
+    return (False, limit, max(limit - _wrong_paper_free_used_today(user), 0),
+            config.free_max_questions)
 
 
 # 答题视图
@@ -500,6 +507,82 @@ def _can_view_unapproved_paper(test_paper, user):
     return test_paper.created_by == user.username or user.is_staff
 
 
+def _paginate_paper_questions(request, test_paper):
+    """按页取公开试卷题目并解析选项：登录用户每页 PAPER_QUESTIONS_PER_PAGE 题。
+
+    只查当前页题目，避免一次把整卷题目全部取出，降低单次请求的查询与渲染开销
+    （缓解 MySQL 压力）。未登录用户没有草稿可跨页暂存答案（且交卷需登录），
+    仍整卷一次加载，避免翻页丢答案。返回 (page_obj, 当前页题目列表)。
+    """
+    queryset = test_paper.questions.all()
+    if request.user.is_authenticated:
+        per_page = PAPER_QUESTIONS_PER_PAGE
+    else:
+        per_page = queryset.count() or 1
+    page_obj = paginate_queryset(queryset, request.GET.get('page', 1), items_per_page=per_page)
+    questions = list(page_obj.object_list)
+    for q in questions:
+        q.options = parse_options(q.options)
+    return page_obj, questions
+
+
+def _parse_page_question_ids(raw):
+    """解析前端回传的「本页题号」JSON 数组；缺失或非法时返回 None。"""
+    if not raw:
+        return None
+    try:
+        items = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(items, list):
+        return None
+    ids = [int(x) for x in items if str(x).isdigit()]
+    return ids or None
+
+
+def _apply_draft_answers(draft, answers, page_ids):
+    """把一页答案并入草稿：先清空本页旧答案，再写入本次答案。
+
+    分页答题每次只提交当前页，直接整体覆盖会丢掉其他页已答内容，故按页合并。
+    """
+    merged = dict(draft.answers or {})
+    for qid in page_ids:
+        merged.pop(str(qid), None)
+        merged.pop(qid, None)
+    merged.update({str(k): v for k, v in answers.items()})
+    draft.answers = merged
+
+
+def _ensure_draft_start_time(request, test_paper, draft):
+    """限时试卷：草稿首次建立时记录计时起点（取 session 已流逝时间换算，断线/刷新不重置）。"""
+    if draft.start_time is not None or not test_paper.duration:
+        return
+    import time as _time
+    sess_start = request.session.get('exam_start_{}'.format(test_paper.id))
+    if sess_start:
+        try:
+            elapsed = _time.time() - float(sess_start)
+            draft.start_time = timezone.now() - timedelta(seconds=max(0, elapsed))
+            return
+        except (TypeError, ValueError):
+            pass
+    draft.start_time = timezone.now()
+
+
+def _merge_paper_submit_answers(draft, page_questions, posted_answers):
+    """交卷时合并答案：历史页取草稿答案，当前页以本次提交为准。
+
+    分页答题每次只渲染一页，草稿保存了此前翻过的页；当前页可能被修改或清空，
+    故先从草稿中剔除当前页题目，再用本次 POST 覆盖，最后按整卷题集计分。
+    """
+    merged = dict(draft.answers or {}) if draft else {}
+    for q in page_questions:
+        merged.pop(str(q.id), None)
+        merged.pop(q.id, None)
+    merged.update(posted_answers)
+    return merged
+
+
 def test_paper_detail(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
     user = request.user
@@ -507,9 +590,7 @@ def test_paper_detail(request, paper_id):
         raise Http404('试卷不存在或无权访问')
     if not _can_view_unapproved_paper(test_paper, user):
         raise Http404('试卷不存在或无权访问')
-    questions = list(test_paper.questions.all())
-    for q in questions:
-        q.options = parse_options(q.options)
+    page_obj, questions = _paginate_paper_questions(request, test_paper)
 
     # ===== 答题草稿：继续测试时预填答案（公开试卷，is_wrong_paper=False）=====
     draft = None
@@ -571,6 +652,11 @@ def test_paper_detail(request, paper_id):
     return render(request, 'quiz/frontend/test_paper_detail.html', {
         'test_paper': test_paper,
         'questions': questions,
+        'page_obj': page_obj,
+        'total_questions': page_obj.paginator.count,
+        # 当前页第一题的全局序号，模板按 全局序号 = page_start_index + forloop.counter 显示
+        'page_start_index': (page_obj.number - 1) * PAPER_QUESTIONS_PER_PAGE,
+        'questions_per_page': PAPER_QUESTIONS_PER_PAGE,
         'exam_block': exam_block,
         'remaining_seconds': remaining_seconds,
         'attempt_used': attempt_used,
@@ -612,12 +698,27 @@ def submit_test_paper(request, paper_id):
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
     if not _can_view_unapproved_paper(test_paper, request.user):
         raise Http404('试卷不存在或无权访问')
-    questions = list(test_paper.questions.all())
+    page_obj, questions = _paginate_paper_questions(request, test_paper)
 
     if request.method == 'POST':
         # ===== 草稿：有草稿时计时以草稿 start_time 为准 =====
         draft = TestDraft.objects.filter(
             user=request.user, test_paper=test_paper, is_wrong_paper=False).first()
+
+        # ===== 分页翻页：不交卷，先把当前页答案并入草稿再跳转目标页 =====
+        # 草稿承担「跨页暂存」职责，保证翻页不丢已答内容
+        nav_page = request.POST.get('nav_page')
+        if nav_page and str(nav_page).isdigit():
+            posted = collect_user_answers(questions, request.POST)
+            if draft is None:
+                draft = TestDraft(
+                    user=request.user, test_paper=test_paper, is_wrong_paper=False)
+            _apply_draft_answers(draft, posted, [q.id for q in questions])
+            _ensure_draft_start_time(request, test_paper, draft)
+            draft.save()
+            return redirect('{}?page={}'.format(
+                reverse('test_paper_detail', args=[paper_id]), nav_page))
+
         # ===== P2-3 服务端校验：时间窗口 + 次数上限（防绕过）=====
         now = timezone.now()
         if test_paper.start_time and now < test_paper.start_time:
@@ -654,7 +755,10 @@ def submit_test_paper(request, paper_id):
             del request.session[sess_key]
             request.session.modified = True
         # ===== P2-3 END =====
-        user_answers = collect_user_answers(questions, request.POST)
+        # 分页答题按整卷交卷：当前页以本次 POST 为准，其余页取草稿中已保存的答案
+        all_questions = list(test_paper.questions.all())
+        posted_answers = collect_user_answers(all_questions, request.POST)
+        user_answers = _merge_paper_submit_answers(draft, questions, posted_answers)
 
         # 本次答题用时：草稿 start_time 优先（跨会话可靠），否则取 session 记录的起点
         duration_seconds = resolve_duration_seconds(
@@ -663,7 +767,7 @@ def submit_test_paper(request, paper_id):
 
         # 落库：得分 / TestRecord / AnswerRecord / 错题本 / Profile 统计（P2-2 公共函数）
         test_record, score, correct_count, wrong_count, question_results = submit_paper_records(
-            request.user, test_paper, questions, user_answers,
+            request.user, test_paper, all_questions, user_answers,
             duration_seconds=duration_seconds,
             hinted_question_ids=pop_hinted_question_ids(request, 'paper', paper_id))
 
@@ -682,19 +786,24 @@ def submit_test_paper(request, paper_id):
             'test_record': test_record,
             'duration_display': format_duration(duration_seconds),
         })
-    
-    for q in questions:
-        q.options = parse_options(q.options)
-    
+
     return render(request, 'quiz/frontend/test_paper_detail.html', {
         'test_paper': test_paper,
-        'questions': questions
+        'questions': questions,
+        'page_obj': page_obj,
+        'total_questions': page_obj.paginator.count,
+        'page_start_index': (page_obj.number - 1) * PAPER_QUESTIONS_PER_PAGE,
+        'questions_per_page': PAPER_QUESTIONS_PER_PAGE,
     })
 
 
 @login_required
 def save_draft(request, paper_id):
-    """AJAX 临时保存答题草稿（公开试卷/错题组卷共用；source=paper/wrong）"""
+    """AJAX 临时保存答题草稿（公开试卷/错题组卷共用；source=paper/wrong）
+
+    分页答题时前端会带上本页题号 page_question_ids：先清空本页旧答案再并入，
+    保证自动保存/离开保存不会丢掉其他页已作答内容。
+    """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': '无效的请求'})
     test_paper = get_object_or_404(TestPaper, pk=paper_id)
@@ -716,6 +825,8 @@ def save_draft(request, paper_id):
     for k, v in answers_raw.items():
         if str(k).isdigit() and int(k) in question_ids and isinstance(v, str) and len(v) <= 10:
             answers[str(int(k))] = v
+    # 本页题号：用于合并（缺失时按整卷覆盖，兼容未传题号的旧前端）
+    page_ids = _parse_page_question_ids(request.POST.get('page_question_ids'))
     try:
         current_index = int(request.POST.get('current_index', '0'))
     except (TypeError, ValueError):
@@ -725,26 +836,18 @@ def save_draft(request, paper_id):
         mode = 'full'
 
     draft, created = TestDraft.objects.get_or_create(
-        user=request.user, test_paper=test_paper, is_wrong_paper=is_wrong_paper,
-        defaults={'answers': answers, 'current_index': current_index, 'mode': mode})
-    if not created:
+        user=request.user, test_paper=test_paper, is_wrong_paper=is_wrong_paper)
+    if created or page_ids is None:
         draft.answers = answers
-        draft.current_index = current_index
-        draft.mode = mode
+    else:
+        _apply_draft_answers(draft, answers, page_ids)
+    draft.current_index = current_index
+    draft.mode = mode
     # 限时考试：首次保存时记录计时起点（取 session 已流逝时间换算，保证断线/刷新不重置）
-    if draft.start_time is None and test_paper.duration:
-        import time as _time
-        sess_start = request.session.get('exam_start_{}'.format(paper_id))
-        if sess_start:
-            try:
-                elapsed = _time.time() - float(sess_start)
-                draft.start_time = timezone.now() - timedelta(seconds=max(0, elapsed))
-            except (TypeError, ValueError):
-                draft.start_time = timezone.now()
-        else:
-            draft.start_time = timezone.now()
+    _ensure_draft_start_time(request, test_paper, draft)
     draft.save()
-    return JsonResponse({'success': True, 'draft_id': draft.id, 'answered_count': len(answers)})
+    return JsonResponse({'success': True, 'draft_id': draft.id,
+                         'answered_count': len(draft.answers or {})})
 
 
 @login_required
@@ -906,9 +1009,10 @@ def wrong_question_notebook(request):
     review_stats = {k: (v or 0) for k, v in review_stats.items()}
 
     # 组卷额度：会员不限次数；免费用户每天有限次免费额度（后台「错题组卷额度」配置）
-    # 单次超过 10 题一律需要用卡，用卡当次不限题量（与 create_wrong_question_paper 同口径）
+    # 单次题量上限按身份取后台配置，超出即需用卡；用卡当次不限题量（与 create_wrong_question_paper 同口径）
     _paper_card, _paper_card_count = _wrong_paper_card_state(request.user)
-    _is_member, _free_limit, _remaining_free = _wrong_paper_quota_state(request.user)
+    _is_member, _free_limit, _remaining_free, _max_questions = \
+        _wrong_paper_quota_state(request.user)
 
     return render(request, 'quiz/frontend/wrong_question_notebook.html', {
         'wrong_questions': paginated_wrong_questions,
@@ -918,7 +1022,7 @@ def wrong_question_notebook(request):
         'mastery_streak_required': MASTERY_STREAK_REQUIRED,
         # 列表里的连对进度圆点：range(2) -> [0, 1]
         'mastery_streak_range': range(MASTERY_STREAK_REQUIRED),
-        'wrong_paper_free_limit': WRONG_PAPER_FREE_LIMIT,
+        'wrong_paper_max_questions': _max_questions,
         'wrong_paper_card_count': _paper_card_count,
         # 组卷卡道具本体：前台按道具本名/图标展示（后台改名后自动跟随）
         'wrong_paper_card': _paper_card,
@@ -975,21 +1079,24 @@ def create_wrong_question_paper(request):
             return redirect('wrong_question_notebook')
 
         # 需要用卡的两种情形（服务端校验，防构造请求绕过）：
-        # 1) 单次选题超过 10 题；2) 免费用户的每日免费次数已用完
+        # 1) 单次选题超过所属身份的上限（后台按免费用户/高级用户分别配置）；
+        # 2) 免费用户的每日免费次数已用完
         card, card_count = _wrong_paper_card_state(request.user)
         # 文案用道具本名（如「回响之杖」）而非功能名，后台改名后前台自动跟随
         card_label = f'「{card.name}」' if card else '组卷卡'
-        is_member, free_limit, remaining_free = _wrong_paper_quota_state(request.user)
+        is_member, free_limit, remaining_free, max_questions = \
+            _wrong_paper_quota_state(request.user)
+        max_questions = max_questions or WRONG_PAPER_FREE_LIMIT
         no_free_quota_left = (not is_member) and remaining_free <= 0
-        need_card = len(selected_ids) > WRONG_PAPER_FREE_LIMIT or no_free_quota_left
+        need_card = len(selected_ids) > max_questions or no_free_quota_left
         use_card = False
         if need_card:
             if card is None or card_count <= 0:
                 reasons = []
                 if no_free_quota_left:
                     reasons.append(f'今日免费组卷次数已用完（免费用户每天 {free_limit} 次）')
-                if len(selected_ids) > WRONG_PAPER_FREE_LIMIT:
-                    reasons.append(f'组卷单次最多 {WRONG_PAPER_FREE_LIMIT} 题')
+                if len(selected_ids) > max_questions:
+                    reasons.append(f'组卷单次最多 {max_questions} 题')
                 messages.error(
                     request,
                     f'{"；".join(reasons)}，使用{card_label}可继续组卷且当次不限题量，可在道具商城兑换。')

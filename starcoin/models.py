@@ -507,23 +507,33 @@ class StarLoginGift(models.Model):
 
 
 class StarWrongPaperConfig(models.Model):
-    """错题组卷额度（单例）：免费用户每天可不消耗组卷卡免费组卷的次数。
+    """错题组卷额度（单例）：免费用户的每日免费次数 + 两种身份的单次免卡题量上限。
 
     组卷卡（回响之杖）的价值锚点：免费额度用完后，每次组卷消耗 1 张；
-    任何用户单次超过 10 题也必须用卡（用卡当次不限题量）；会员组卷不限次数。
+    单次选题超过所属身份的上限时也必须用卡（用卡当次不限题量）；会员组卷不限次数。
     """
 
     free_daily_limit = models.PositiveIntegerField(
         '免费用户每日免费组卷次数', default=1,
-        help_text='免费用户每天可不消耗组卷卡组卷的次数（每次最多 10 题）；'
+        help_text='免费用户每天可不消耗组卷卡组卷的次数；'
                   '0 表示关闭免费额度（每次组卷都要用卡）。会员不受此限制。')
+
+    free_max_questions = models.PositiveIntegerField(
+        '免费用户单次组卷题数上限', default=20, validators=[MinValueValidator(1)],
+        help_text='免费用户不用组卷卡时，单次组卷最多可选题数；超出必须用组卷卡（用卡当次不限题量）。')
+
+    member_max_questions = models.PositiveIntegerField(
+        '高级用户单次组卷题数上限', default=20, validators=[MinValueValidator(1)],
+        help_text='高级功能（会员）用户不用组卷卡时，单次组卷最多可选题数；超出必须用组卷卡（用卡当次不限题量）。')
 
     class Meta:
         verbose_name = '错题组卷额度'
         verbose_name_plural = '错题组卷额度'
 
     def __str__(self):
-        return f'免费用户每日免费组卷 {self.free_daily_limit} 次'
+        return (f'免费 {self.free_daily_limit} 次/日 · '
+                f'单次免卡上限：免费用户 {self.free_max_questions} 题 / '
+                f'高级用户 {self.member_max_questions} 题')
 
     def save(self, *args, **kwargs):
         # 单例：固定主键为 1，避免后台出现多条配置
