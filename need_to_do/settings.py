@@ -105,11 +105,18 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', '127.0.0.1'),
         'PORT': os.getenv('DB_PORT', '3306'),
-        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+        # 长连接：省掉每个请求的 TCP 建连与权限校验。
+        # 单进程 waitress 16 线程最多持有 16 条 MySQL 连接，安全。
+        # MySQL 侧 wait_timeout 必须大于该值（默认 28800s，满足）。
+        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '300')),
+        # 复用连接前先探活，避免用到被 MySQL 单方面断开的死连接而报 2006/2013
+        'CONN_HEALTH_CHECKS': os.getenv('DB_CONN_HEALTH_CHECKS', 'True').lower() == 'true',
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'utf8mb4',
             'use_unicode': True,
+            # 建连超时：数据库卡住时不让工作线程被长期占死
+            'connect_timeout': int(os.getenv('DB_CONNECT_TIMEOUT', '5')),
         }
     }
 }

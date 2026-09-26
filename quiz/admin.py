@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.http import HttpResponseRedirect
 from django import forms
 from django.db.models import Count
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, SiteConfig, Announcement
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, SiteConfig, Announcement, invalidate_unread_notifications
 
 admin.site.site_header = '📚 来斩题 - 在线考试系统管理后台'
 admin.site.site_title = '来斩题 - 在线考试系统'
@@ -506,11 +506,18 @@ class NotificationAdmin(admin.ModelAdmin):
     actions = ['mark_read', 'mark_unread']
 
     def mark_read(self, request, queryset):
+        recipient_ids = list(queryset.values_list('recipient_id', flat=True).distinct())
         queryset.update(is_read=True)
+        # queryset.update 不触发信号，红点缓存需按收件人逐个失效
+        for uid in recipient_ids:
+            invalidate_unread_notifications(uid)
     mark_read.short_description = '标记为已读'
 
     def mark_unread(self, request, queryset):
+        recipient_ids = list(queryset.values_list('recipient_id', flat=True).distinct())
         queryset.update(is_read=False)
+        for uid in recipient_ids:
+            invalidate_unread_notifications(uid)
     mark_unread.short_description = '标记为未读'
 
 

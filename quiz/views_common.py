@@ -200,7 +200,7 @@ class AdminTestPaperImporter(BaseTestPaperImporter):
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.sessions.models import Session
-from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, ConqueredQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, SiteConfig, MASTERY_STREAK_REQUIRED, MIN_ANSWERS_FOR_ACCURACY_RANK, strip_sequence_prefix
+from .models import Question, TestPaper, Profile, TestRecord, AnswerRecord, WrongQuestion, ConqueredQuestion, Class, ClassAdmin, ClassApplication, ClassAssignment, ClassAssignmentRecord, Subject, Chapter, Section, KnowledgePoint, Notification, TestDraft, SiteConfig, MASTERY_STREAK_REQUIRED, MIN_ANSWERS_FOR_ACCURACY_RANK, strip_sequence_prefix, invalidate_unread_notifications
 from .utils import paginate_queryset, compare_answers, calculate_score, parse_datetime_local, download_template_response, import_questions_from_excel, parse_options, share_site_url, render_leaderboard_share_image, leaderboard_share_response
 from .captcha import generate_captcha_text, generate_captcha_image
 import datetime
@@ -745,13 +745,21 @@ def _personal_cells(board_key, profile):
     return f'{profile.conquered_count} 题', f'累计得分 {profile.total_score}'
 
 
-def _build_personal_leaderboards(rankable, user=None, top_n=LEADERBOARD_TOP_N):
-    """按给定 Profile 查询集生成三张个人榜（全站榜与班内榜共用同一套口径）。
+# 榜单缓存：三张榜都是全表排序/聚合，而榜单不要求秒级一致，故缓存 60 秒。
+# 这里刻意不做「答题提交即失效」——考试高峰期逐个提交去清缓存会让缓存反复重建，
+# 反而放大数据库压力，TTL 自然过期是更稳的选择。
+LEADERBOARD_CACHE_SECONDS = 60
+SITE_LEADERBOARD_CACHE_KEY = 'site_leaderboards_snapshot'
+CLASS_LEADERBOARD_ITEMS_CACHE_KEY = 'class_leaderboards_items'
+CLASS_MEMBER_BOARD_CACHE_KEY = 'class_member_boards:{}'
 
-    rankable 为参与排名的 Profile 查询集，调用方负责名额过滤（教师/审核状态等）。
-    top_n 为 None 表示不限条数（班内榜展示全部成员）。
-    user 为登录用户时追加 me（自己在各榜的名次与数值）；未上榜或未达门槛时 me 为 None。
-    返回 [{'key', 'name', 'icon', 'entries', 'me'}]。
+
+def _personal_board_snapshot(rankable, top_n=LEADERBOARD_TOP_N):
+    """生成与访问者无关的榜单快照：[{key, name, icon, entries, ordered_ids}]。
+
+    entries 内保留 user_id（不含 is_me），ordered_ids 为完整名次序列，
+    使「我的名次」可在内存中定位；否则每次请求都要为三张榜各扫一遍全表取位次。
+    top_n 为 None（班内榜展示全部成员）时，ordered_ids 直接取自 entries。
     """
     accuracy_qs = rankable.filter(
         answered_total__gte=MIN_ANSWERS_FOR_ACCURACY_RANK).annotate(
@@ -766,12 +774,6 @@ def _build_personal_leaderboards(rankable, user=None, top_n=LEADERBOARD_TOP_N):
         BOARD_ACCURACY: accuracy_qs.order_by('-rate', '-answered_total', 'user_id'),
     }
 
-    # 当前用户的 Profile（rankable 已按角色过滤，教师/管理员自然取不到，无需再判断身份）
-    me_profile = None
-    if user is not None and user.is_authenticated:
-        me_profile = rankable.filter(user=user).first()
-    my_user_id = me_profile.user_id if me_profile else None
-
     boards = []
     for key, name, icon in LEADERBOARD_BOARDS:
         full_qs = querysets[key]
@@ -779,54 +781,87 @@ def _build_personal_leaderboards(rankable, user=None, top_n=LEADERBOARD_TOP_N):
         entries = []
         for index, profile in enumerate(entry_qs, start=1):
             value, sub = _personal_cells(key, profile)
-            entries.append({'rank': index, 'name': _display_name(profile),
+            entries.append({'rank': index, 'user_id': profile.user_id,
+                            'name': _display_name(profile),
                             'class_name': profile.class_obj.name if profile.class_obj else '',
                             'avatar_frame': profile.avatar_frame,
-                            'value': value, 'sub': sub, 'is_me': profile.user_id == my_user_id})
+                            'value': value, 'sub': sub})
         # 名次取「自己在完整榜单中的位次」，与榜单行的显示顺序严格一致。
         # 不能用「胜过多人数 + 1」：并列时它忽略次级排序（作答题次），
         # 会让卡片名次与行内名次差 1 位。
-        me = None
-        if my_user_id is not None:
+        if top_n is None:
+            ordered_ids = [entry['user_id'] for entry in entries]
+        else:
             ordered_ids = list(full_qs.values_list('user_id', flat=True))
-            if my_user_id in ordered_ids:
-                value, sub = _personal_cells(key, me_profile)
-                me = {'rank': ordered_ids.index(my_user_id) + 1, 'value': value, 'sub': sub}
-        boards.append({'key': key, 'name': name, 'icon': icon, 'entries': entries, 'me': me})
+        boards.append({'key': key, 'name': name, 'icon': icon,
+                       'entries': entries, 'ordered_ids': ordered_ids})
     return boards
 
 
-def get_site_leaderboards(user=None, top_n=LEADERBOARD_TOP_N):
-    """全站个人榜：三个榜单各取 Top N，并附带当前用户自己的排名。"""
-    # 有作答记录的学生才参与排名（班级管理员若是学生角色同样参与）
-    rankable = Profile.objects.filter(
-        role__in=RANKABLE_ROLES, answered_total__gt=0).select_related('user', 'class_obj')
-    return _build_personal_leaderboards(rankable, user, top_n)
+def _attach_my_rank(boards, user, my_profile=None):
+    """按当前访问者补齐 is_me 与「我的名次」（纯内存计算，不再查库）。
+
+    my_profile 可由调用方传入已取到的 Profile 以省一次查询；
+    是否上榜以 user_id 是否在 ordered_ids 中判定，因此传入未按榜单条件过滤的
+    Profile 也是安全的（教师、未审核用户自然不在序列中）。
+    """
+    my_user_id = None
+    if user is not None and getattr(user, 'is_authenticated', False):
+        if my_profile is None:
+            my_profile = Profile.objects.filter(user=user).first()
+        if my_profile is not None:
+            my_user_id = my_profile.user_id
+
+    for board in boards:
+        ordered_ids = board.pop('ordered_ids', None) or []
+        try:
+            rank = ordered_ids.index(my_user_id) + 1
+        except ValueError:
+            # 未上榜（无作答数据，或未达正确率门槛）
+            rank = None
+        for entry in board['entries']:
+            entry['is_me'] = entry['user_id'] == my_user_id
+        if rank is None:
+            board['me'] = None
+        else:
+            value, sub = _personal_cells(board['key'], my_profile)
+            board['me'] = {'rank': rank, 'value': value, 'sub': sub}
+    return boards
 
 
-def get_class_member_leaderboards(class_obj, user=None):
+def get_site_leaderboards(user=None, top_n=LEADERBOARD_TOP_N, my_profile=None):
+    """全站个人榜：三个榜单各取 Top N，并附带当前用户自己的排名。
+
+    榜单快照与访问者无关，缓存 60 秒；「我的名次」在内存中定位。
+    """
+    boards = cache.get(SITE_LEADERBOARD_CACHE_KEY)
+    if boards is None:
+        # 有作答记录的学生才参与排名（班级管理员若是学生角色同样参与）
+        rankable = Profile.objects.filter(
+            role__in=RANKABLE_ROLES, answered_total__gt=0).select_related('user', 'class_obj')
+        boards = _personal_board_snapshot(rankable, top_n)
+        cache.set(SITE_LEADERBOARD_CACHE_KEY, boards, LEADERBOARD_CACHE_SECONDS)
+    return _attach_my_rank(boards, user, my_profile)
+
+
+def get_class_member_leaderboards(class_obj, user=None, my_profile=None):
     """班内个人榜：本班审核通过的学生之间排名，展示全部成员（不截断）。
 
     口径与全站个人榜一致，便于学生对照自己在班级与全站的位置。
     """
-    rankable = Profile.objects.filter(
-        class_obj=class_obj, approval_status=1, role__in=RANKABLE_ROLES,
-        answered_total__gt=0).select_related('user', 'class_obj')
-    return _build_personal_leaderboards(rankable, user, top_n=None)
+    key = CLASS_MEMBER_BOARD_CACHE_KEY.format(class_obj.pk)
+    boards = cache.get(key)
+    if boards is None:
+        rankable = Profile.objects.filter(
+            class_obj=class_obj, approval_status=1, role__in=RANKABLE_ROLES,
+            answered_total__gt=0).select_related('user', 'class_obj')
+        boards = _personal_board_snapshot(rankable, top_n=None)
+        cache.set(key, boards, LEADERBOARD_CACHE_SECONDS)
+    return _attach_my_rank(boards, user, my_profile)
 
 
-def get_class_leaderboards(my_class_ids=None):
-    """班级榜：把班级成员的数据聚合成班级分数，班级之间排名。
-
-    仅统计审核通过的学生（教师与未审核用户不计入）。
-    班级榜排序按累计总量，同时给出人均值，避免只看班级人数。
-    正确率榜沿用个人榜门槛：班级累计作答题次达标才参与排名，未达标的班级单独列出。
-    my_class_ids：当前用户所属（管理员或学生身份）的全部班级ID集合，
-    一个用户可能同时属于多个班级，这些班级都会被标记为 is_mine。
-    返回 [{'key', 'name', 'icon', 'entries', 'unranked', 'me'}]。
-    """
-    # 归一化为集合：None/可迭代对象均可；is_mine 按成员归属判断（支持多班级）
-    my_class_ids = set(my_class_ids or [])
+def _class_aggregate_items():
+    """班级维度的成员数与各项累计值（与访问者无关，可缓存）"""
     rows = (Profile.objects.filter(
                 class_obj__isnull=False, approval_status=1, role__in=RANKABLE_ROLES)
             .values('class_obj_id')
@@ -859,6 +894,26 @@ def get_class_leaderboards(my_class_ids=None):
             'conquered_avg': round(conquered / members, 1) if members else 0,
             'score_avg': round(score / members, 1) if members else 0,
         })
+    return items
+
+
+def get_class_leaderboards(my_class_ids=None):
+    """班级榜：把班级成员的数据聚合成班级分数，班级之间排名。
+
+    仅统计审核通过的学生（教师与未审核用户不计入）。
+    班级榜排序按累计总量，同时给出人均值，避免只看班级人数。
+    正确率榜沿用个人榜门槛：班级累计作答题次达标才参与排名，未达标的班级单独列出。
+    my_class_ids：当前用户所属（管理员或学生身份）的全部班级ID集合，
+    一个用户可能同时属于多个班级，这些班级都会被标记为 is_mine。
+    返回 [{'key', 'name', 'icon', 'entries', 'unranked', 'me'}]。
+    """
+    # 归一化为集合：None/可迭代对象均可；is_mine 按成员归属判断（支持多班级）
+    my_class_ids = set(my_class_ids or [])
+    # 班级聚合与访问者无关，缓存 60 秒；is_mine / me 每次按当前用户即时计算
+    items = cache.get(CLASS_LEADERBOARD_ITEMS_CACHE_KEY)
+    if items is None:
+        items = _class_aggregate_items()
+        cache.set(CLASS_LEADERBOARD_ITEMS_CACHE_KEY, items, LEADERBOARD_CACHE_SECONDS)
 
     def make_entry(rank, item, value, detail):
         return {

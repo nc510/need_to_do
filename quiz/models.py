@@ -385,6 +385,12 @@ class TestRecord(models.Model):
         verbose_name = '答题记录'
         verbose_name_plural = '答题记录'
         ordering = ['-completed_at']
+        indexes = [
+            # 首页「我的完成进度」（用户 + 试卷集合去重计数）
+            models.Index(fields=['user', 'test_paper'], name='idx_record_user_paper'),
+            # 个人答题历史 / 成绩趋势（用户 + 完成时间倒序）
+            models.Index(fields=['user', 'completed_at'], name='idx_record_user_time'),
+        ]
 
     def __str__(self):
         if self.test_paper:
@@ -443,6 +449,10 @@ class WrongQuestion(models.Model):
         verbose_name_plural = '错题本'
         # 一个用户一个题目只能出现一次
         unique_together = ('user', 'question')
+        indexes = [
+            # 按复习状态过滤/计数：首页错题数、错题本页、用户中心的复习分布与薄弱知识点
+            models.Index(fields=['user', 'review_status'], name='idx_wrong_user_status'),
+        ]
 
     def __str__(self):
         return f'{self.user.username} - {self.question.content}'
@@ -659,6 +669,12 @@ class Notification(models.Model):
         verbose_name = '通知'
         verbose_name_plural = '通知'
         ordering = ['-created_at']
+        indexes = [
+            # 导航栏红点（收件人 + 未读）
+            models.Index(fields=['recipient', 'is_read'], name='idx_noti_recip_read'),
+            # 通知列表（收件人 + 时间倒序）
+            models.Index(fields=['recipient', 'created_at'], name='idx_noti_recip_time'),
+        ]
 
     def __str__(self):
         return f'{self.recipient.username} - {self.title}'
@@ -680,7 +696,29 @@ class Notification(models.Model):
         ) for r in recipients if r]
         if objs:
             cls.objects.bulk_create(objs)
+            # bulk_create 不触发 post_save 信号，需在此显式失效红点缓存
+            for uid in {obj.recipient_id for obj in objs}:
+                invalidate_unread_notifications(uid)
         return len(objs)
+
+
+# 未读通知数缓存键：导航栏🔔红点每次渲染都要读，命中缓存可省掉每请求一次 count。
+# 通知的新增/删除走信号，批量写与 queryset.update 不走信号，故在对应调用处显式失效，
+# 保证红点在上述所有写入路径后都即时刷新。
+UNREAD_NOTIFICATIONS_CACHE_KEY = 'unread_notifications:{}'
+
+
+def invalidate_unread_notifications(user_id):
+    """清除某用户的未读通知数缓存（红点即时失效）"""
+    if user_id:
+        cache.delete(UNREAD_NOTIFICATIONS_CACHE_KEY.format(user_id))
+
+
+@receiver(post_save, sender=Notification)
+@receiver(post_delete, sender=Notification)
+def invalidate_unread_notifications_on_write(sender, instance, **kwargs):
+    """单条通知新增/修改/删除后即时失效（含后台列表内联编辑 is_read）"""
+    invalidate_unread_notifications(instance.recipient_id)
 
 
 # 公告缓存键：前台每次渲染都要读，命中缓存避免重复查库（内容变更由信号失效）

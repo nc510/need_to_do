@@ -33,7 +33,10 @@ urlpatterns = [
     path('favicon.ico', favicon_view),
 ]
 
-# 提供静态文件服务（Whitenoise/runserver/waitress 均适用）
-urlpatterns += [
-    re_path(r'^static/(?P<path>.*)$', static_serve, {'document_root': settings.STATIC_ROOT}),
-]
+# 静态文件兜底服务：仅开发模式（DEBUG=True）生效。
+# 生产环境由 nginx 直接接管 /static/（见 nginx 配置），Django 只处理动态请求，
+# 避免生产流量走 django.views.static（无缓存协商、占用 waitress 工作线程）。
+if settings.DEBUG:
+    urlpatterns += [
+        re_path(r'^static/(?P<path>.*)$', static_serve, {'document_root': settings.STATIC_ROOT}),
+    ]

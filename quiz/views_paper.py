@@ -192,7 +192,48 @@ def _chapter_label(number, title):
     return '第{}章 {}'.format(number, cleaned) if number else cleaned
 
 
-def _paper_category_nav(visible, subject_key, chapter_key, topic_key, params, path):
+# 分类导航 / 出题人选项的缓存时长：与榜单同口径 60 秒（秒级一致并不必要，
+# 且不做写入即失效，避免考试高峰期缓存被反复重建）
+PAPER_FACET_CACHE_SECONDS = 60
+
+
+def _paper_visibility_scope(user):
+    """分类筛选的可见性作用域，用于跨用户复用缓存。
+
+    可见试卷 = 已发布且审核通过的公开卷 ∪ 自己创建的同条件私有卷。
+    仅当后者存在时结果才与「公开集合」不同，否则所有学生共用同一份缓存。
+    """
+    if user.is_staff:
+        return 'staff'
+    if not user.is_authenticated:
+        return 'anon'
+    has_private_listed = TestPaper.objects.filter(
+        is_published=True, is_wrong_paper=False,
+        review_status=TestPaper.REVIEW_APPROVED,
+        is_public=False, created_by=user.username).exists()
+    return 'u:' + user.username if has_private_listed else 'pub'
+
+
+def _paper_category_nav(visible, scope, subject_key, chapter_key, topic_key, params, path):
+    """分类导航三行（学科 / 章节 / 知识点）。
+
+    计数结果只取决于「可见集合 + 三个分类参数 + 其余查询串（决定 chip 链接）」，
+    故以此为缓存键复用 60 秒；命中时省掉 4~8 次聚合查询。
+    """
+    other_params = params.copy()
+    for field in ('subject', 'chapter', 'topic'):
+        other_params.pop(field, None)
+    cache_key = 'paper_nav:{}:{}:{}:{}:{}'.format(
+        scope, subject_key, chapter_key, topic_key, other_params.urlencode())
+    nav = cache.get(cache_key)
+    if nav is None:
+        nav = _build_paper_category_nav(
+            visible, subject_key, chapter_key, topic_key, params, path)
+        cache.set(cache_key, nav, PAPER_FACET_CACHE_SECONDS)
+    return nav
+
+
+def _build_paper_category_nav(visible, subject_key, chapter_key, topic_key, params, path):
     """构造分类导航三行（学科 / 章节 / 知识点）。
 
     visible 为当前可见试卷集合（不受关键词搜索与分类筛选影响），计数逐级收敛：
@@ -286,18 +327,23 @@ def _paper_category_nav(visible, subject_key, chapter_key, topic_key, params, pa
     ]
 
 
-def _paper_author_options(visible, author):
+def _paper_author_options(visible, scope):
     """出题人下拉选项：取自当前可见试卷集合，带份数（不随分类与搜索变化）。
 
     text 已在服务端拼好「名字（N）」：模板只做单行输出，
     避免 `{{ opt.name }}（{{ opt.count }}）` 被格式化折行。
+    选项仅取决于可见集合，故按作用域缓存 60 秒。
     """
-    options = [{'key': '', 'text': '全部出题人'}]
-    rows = visible.exclude(created_by__isnull=True).exclude(created_by='').values(
-        'created_by').annotate(n=Count('id')).order_by('-n', 'created_by')
-    for row in rows:
-        options.append({'key': row['created_by'],
-                        'text': '{}（{}）'.format(row['created_by'], row['n'])})
+    cache_key = 'paper_authors:' + scope
+    options = cache.get(cache_key)
+    if options is None:
+        options = [{'key': '', 'text': '全部出题人'}]
+        rows = visible.exclude(created_by__isnull=True).exclude(created_by='').values(
+            'created_by').annotate(n=Count('id')).order_by('-n', 'created_by')
+        for row in rows:
+            options.append({'key': row['created_by'],
+                            'text': '{}（{}）'.format(row['created_by'], row['n'])})
+        cache.set(cache_key, options, PAPER_FACET_CACHE_SECONDS)
     return options
 
 
@@ -417,6 +463,9 @@ def test_paper_list(request):
     page_params = request.GET.copy()
     page_params.pop('page', None)
 
+    # 分类筛选的可见性作用域：用于跨用户复用分类导航 / 出题人选项缓存
+    facet_scope = _paper_visibility_scope(user)
+
     context = {
         'test_papers': paginated_test_papers,
         'search': search,
@@ -426,11 +475,11 @@ def test_paper_list(request):
         'chapter_key': chapter_key,
         'topic_key': topic_key,
         'author': author,
-        # 分类导航三行（学科/章节/知识点）与出题人选项：计数基于可见集合
+        # 分类导航三行（学科/章节/知识点）与出题人选项：计数基于可见集合，缓存 60 秒
         'category_nav': _paper_category_nav(
-            progress_base, subject_key, chapter_key, topic_key,
+            progress_base, facet_scope, subject_key, chapter_key, topic_key,
             page_params, request.path),
-        'author_options': _paper_author_options(progress_base, author),
+        'author_options': _paper_author_options(progress_base, facet_scope),
         'has_filter': bool(search or author or chapter_key or topic_key
                            or subject_key != 'all' or sort != 'oldest'
                            or status != 'all'),
@@ -464,6 +513,7 @@ def test_paper_list(request):
     context['total_questions'] = hero_stats['total_questions']
 
     # 登录用户个性化数据（错题数 + profile 统计）
+    profile = None
     if user.is_authenticated:
         try:
             profile = user.profile
@@ -490,7 +540,8 @@ def test_paper_list(request):
             progress_done * 100 / progress_total) if progress_total else 0
 
     # 全站排行榜（个人榜）：三个榜单各取 Top N，登录用户额外带自己的名次
-    context['site_boards'] = get_site_leaderboards(user)
+    # profile 已在上面取到，传入可省掉一次重复查询
+    context['site_boards'] = get_site_leaderboards(user, my_profile=profile)
     context['min_answers'] = MIN_ANSWERS_FOR_ACCURACY_RANK
 
     return render(request, 'quiz/frontend/test_paper_list.html', context)

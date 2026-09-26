@@ -2,7 +2,7 @@
 django==3.2.23
 
 # Database
-pymysql==1.1.1  # MySQL (���ؿ���)
+mysqlclient==2.3.0  # MySQL (���ؿ���)
 psycopg2-binary==2.9.9  # PostgreSQL (Railway ��������)
 
 # Excel Processing
